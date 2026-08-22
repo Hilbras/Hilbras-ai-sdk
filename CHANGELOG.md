@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-08-23
+
+### Added
+
+#### Intelligent Model Router
+
+Let Hilbras pick the best model for your task — no more guessing which provider/model to use:
+
+```typescript
+// Old way — developer picks model manually
+client.stream({ provider: "OpenAI", model: "gpt-5.6-sol", messages });
+
+// New way — Hilbras picks the best model
+client.stream({ task: "coding", messages, policy: { maxCost: 0.05 } });
+```
+
+**Features:**
+- Evaluates all registered providers and BUILTIN_MODELS catalog
+- Filters by capabilities (vision, tools, reasoning, structured output)
+- Filters by cost, context window, budget tier, speed preference
+- Scores candidates by task type, cost efficiency, and provider preference
+- Returns ranked results or a single best match
+
+```typescript
+// Direct router access
+const result = client.router.best({ task: "coding", needsTools: true, budget: "medium" });
+console.log(result.provider, result.model, result.score);
+```
+
+#### Structured Output with Auto-Repair
+
+Define a schema, Hilbras validates + auto-repairs invalid JSON:
+
+```typescript
+import { z } from "zod";
+
+const UserProfile = z.object({
+  name: z.string(),
+  age: z.number(),
+  email: z.string().email(),
+});
+
+const user = await client.complete({
+  provider: "OpenAI",
+  model: "gpt-5.6-sol",
+  messages: [{ role: "user", content: "Create a user profile for John, age 24" }],
+  output: { schema: UserProfile, maxRepairAttempts: 2 },
+});
+// user is typed as { name: string; age: number; email: string }
+```
+
+**Features:**
+- Works with Zod, Valibot, or any `.safeParse()` validator
+- Auto-repair: on validation failure, sends repair prompt with error details
+- Provider-specific JSON mode (OpenAI `response_format`, Google `responseMimeType`)
+- Smart JSON extraction from markdown fences and surrounding text
+- Typed results via generics (`complete<T>(...)`)
+
+#### New Types
+
+- `TaskRequirement` — describes what a task needs
+- `RoutingResult` — the router's decision
+- `SchemaValidator` — interface for schema validation
+- `StructuredOutputConfig` — config for structured output
+- `ValidationError` — thrown when structured output fails after repair attempts
+
+### Changed
+
+- `stream()` and `complete()` now accept optional `provider`/`model` (routing mode) OR explicit `provider`+`model` (backward compatible)
+- `complete()` is now generic: `complete<T>()` returns typed results when `output` is provided
+- Client maintains a `ModelRouter` instance, updated automatically when providers are added/removed
+- 32 new tests (146 → 178 total)
+
+---
+
 ## [0.4.0] - 2026-08-22
 
 ### Added

@@ -33,6 +33,7 @@ export {
   InvalidFormatError,
   ConfigurationError,
   CircuitBreakerOpenError,
+  ValidationError,
 } from "./errors/index.js";
 
 // ─── Providers ──────────────────────────────────────────────────────────────
@@ -42,6 +43,14 @@ export type { AdapterFactory } from "./providers/adapter-registry.js";
 
 // ─── Provider Contract ──────────────────────────────────────────────────────
 export type { AIProvider, AdapterConfig, GenerateParams } from "./types/adapter.js";
+
+// ─── Model Router ───────────────────────────────────────────────────────────
+export { ModelRouter } from "./router/model-router.js";
+export type { TaskRequirement, RoutingResult } from "./types/router.js";
+
+// ─── Structured Output ──────────────────────────────────────────────────────
+export type { SchemaValidator, StructuredOutputConfig } from "./types/schema.js";
+export { extractJson, buildJsonSystemInstruction, buildRepairPrompt, buildJsonModeParams } from "./output/structured.js";
 
 // ─── Transport ──────────────────────────────────────────────────────────────
 export type { Transport, TransportRequestInit } from "./transport/transport.js";

@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.4.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.5.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-146%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-178%20passing-brightgreen" alt="tests">
 </p>
 
 <h1 align="center">@hilbras/sdk</h1>
@@ -352,10 +352,44 @@ npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```
 
+## Model Router
+
+Let Hilbras pick the best model for your task:
+
+```typescript
+// Hilbras evaluates all providers and picks the best match
+client.stream({ task: "coding", messages, policy: { maxCost: 0.05 } });
+
+// Or access the router directly
+const best = client.router.best({ task: "coding", needsTools: true, budget: "medium" });
+console.log(best.provider, best.model, best.score);
+```
+
+The router filters by capabilities, cost, context window, and speed — then scores by task type.
+
+## Structured Output
+
+Define a schema, Hilbras validates and auto-repairs invalid JSON:
+
+```typescript
+import { z } from "zod";
+
+const user = await client.complete({
+  provider: "OpenAI",
+  model: "gpt-5.6-sol",
+  messages: [{ role: "user", content: "Create a user profile for John, age 24" }],
+  output: { schema: z.object({ name: z.string(), age: z.number() }) },
+});
+// user is typed as { name: string; age: number }
+```
+
+Works with Zod, Valibot, or any `.safeParse()` validator. On validation failure, Hilbras automatically sends a repair prompt and retries.
+
 ## Version History
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| [v0.5.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.5.0) | 2026-08-23 | Model Router, Structured Output with auto-repair, 178 tests |
 | [v0.4.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.4.0) | 2026-08-22 | Execution Policies, SDKConfig wiring, 146 tests |
 | [v0.3.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.3.0) | 2026-08-22 | AIProvider contract, plugin registry, 2026 model catalog |
 | [v0.2.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.2.0) | 2026-08-22 | All-adapter complete(), timeout enforcement, docs |

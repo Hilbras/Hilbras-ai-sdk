@@ -16,18 +16,22 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { Transport } from "../transport/transport.js";
-import type { ExecutionPolicy, ResolvedPolicy } from "../types/policy.js";
+import type { ExecutionPolicy } from "../types/policy.js";
+import type { TaskRequirement } from "../types/router.js";
+import type { StructuredOutputConfig } from "../types/schema.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { FetchTransport } from "../transport/fetch.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
 import { createRetryConfig, shouldRetry, shouldRetryNetworkError } from "../reliability/retry.js";
 import { calculateBackoff, sleep } from "../reliability/backoff.js";
-import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError } from "../errors/index.js";
+import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError, ValidationError } from "../errors/index.js";
 import { createTimeoutSignal } from "../reliability/timeout.js";
 import { sdkLogger } from "../logging/logger.js";
 import { AdapterRegistry, getDefaultAdapterRegistry } from "../providers/adapter-registry.js";
 import { dictToMessage } from "../types/messages.js";
 import { resolvePolicy } from "../reliability/presets.js";
+import { ModelRouter } from "../router/model-router.js";
+import { buildJsonSystemInstruction, buildRepairPrompt, extractJson, buildJsonModeParams } from "../output/structured.js";
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
@@ -44,11 +48,13 @@ export class HilbrasClient implements AsyncDisposable {
   private _adapterRegistry: AdapterRegistry;
   private _adapters = new Map<string, AIProvider>();
   private _defaultPolicy: ExecutionPolicy | undefined;
+  private _router: ModelRouter;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
     this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
     this._defaultPolicy = config?.policy;
+    this._router = new ModelRouter();
   }
 
   // ─── Provider Management ────────────────────────────────────────────────
@@ -59,11 +65,13 @@ export class HilbrasClient implements AsyncDisposable {
       provider: config,
       transport: this._transport,
     }));
+    this._router.updateProviders(this._registry.list().map((p) => p.name));
   }
 
   removeProvider(name: string): void {
     this._registry.remove(name);
     this._adapters.delete(name);
+    this._router.updateProviders(this._registry.list().map((p) => p.name));
   }
 
   getProvider(name: string) {
@@ -79,6 +87,11 @@ export class HilbrasClient implements AsyncDisposable {
     return this._adapterRegistry;
   }
 
+  /** Access the model router */
+  get router(): ModelRouter {
+    return this._router;
+  }
+
   findModel(modelId: string) {
     return this._registry.findModel(modelId);
   }
@@ -89,6 +102,49 @@ export class HilbrasClient implements AsyncDisposable {
     const adapter = this._adapters.get(providerName);
     if (!adapter) throw new ProviderNotFoundError(providerName);
     return adapter;
+  }
+
+  // ─── Provider/Model Resolution ──────────────────────────────────────────
+
+  private _resolveProviderModel(params: {
+    provider?: string;
+    model?: string;
+    task?: string;
+    needsVision?: boolean;
+    needsTools?: boolean;
+    needsReasoning?: boolean;
+    needsStructuredOutput?: boolean;
+    maxCost?: number;
+    budget?: "low" | "medium" | "high";
+    excludeModels?: string[];
+    preferredProvider?: string;
+  }): { providerName: string; modelId: string } {
+    // If explicit provider + model, use them directly
+    if (params.provider && params.model) {
+      return { providerName: params.provider, modelId: params.model };
+    }
+
+    // Route via the model router
+    const result = this._router.best({
+      task: params.task,
+      needsVision: params.needsVision,
+      needsTools: params.needsTools,
+      needsReasoning: params.needsReasoning,
+      needsStructuredOutput: params.needsStructuredOutput,
+      maxCost: params.maxCost,
+      budget: params.budget,
+      excludeModels: params.excludeModels,
+      preferredProvider: params.preferredProvider,
+    });
+
+    if (!result) {
+      throw new Error(
+        "No model found matching the given requirements. " +
+        "Try relaxing constraints or registering more providers."
+      );
+    }
+
+    return { providerName: result.provider, modelId: result.model };
   }
 
   // ─── Message Normalization ──────────────────────────────────────────────
@@ -105,8 +161,8 @@ export class HilbrasClient implements AsyncDisposable {
   // ─── Streaming ──────────────────────────────────────────────────────────
 
   async *stream(params: {
-    provider: string;
-    model: string;
+    provider?: string;
+    model?: string;
     messages: Array<Record<string, unknown> | Message>;
     temperature?: number;
     maxTokens?: number;
@@ -115,25 +171,37 @@ export class HilbrasClient implements AsyncDisposable {
     signal?: AbortSignal;
     /** Per-request execution policy (overrides client default) */
     policy?: ExecutionPolicy;
+    /** Task requirements for automatic model routing (when provider/model are omitted) */
+    task?: string;
+    needsVision?: boolean;
+    needsTools?: boolean;
+    needsReasoning?: boolean;
+    needsStructuredOutput?: boolean;
+    maxCost?: number;
+    budget?: "low" | "medium" | "high";
+    excludeModels?: string[];
+    preferredProvider?: string;
   }): AsyncGenerator<StreamChunk> {
-    const providerConfig = this._registry.getOrThrow(params.provider);
-    const model = providerConfig.models.find((m) => m.id === params.model);
-    if (!model) throw new ModelNotFoundError(params.model, params.provider);
+    // Resolve provider + model — either explicit or via router
+    const { providerName, modelId } = this._resolveProviderModel(params);
+    const providerConfig = this._registry.getOrThrow(providerName);
+    const model = providerConfig.models.find((m) => m.id === modelId);
+    if (!model) throw new ModelNotFoundError(modelId, providerName);
 
-    const adapter = this._getAdapter(params.provider);
+    const adapter = this._getAdapter(providerName);
     const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
 
     // Circuit breaker (if enabled)
     let circuitBreaker = undefined;
     if (resolved.circuitBreaker.enabled) {
-      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(params.provider, {
+      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(providerName, {
         failureThreshold: resolved.circuitBreaker.failureThreshold,
         successThreshold: resolved.circuitBreaker.successThreshold,
         timeoutMs: resolved.circuitBreaker.timeoutMs,
         halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
       });
       if (!circuitBreaker.isAvailable()) {
-        throw new CircuitBreakerOpenError(params.provider);
+        throw new CircuitBreakerOpenError(providerName);
       }
     }
 
@@ -153,7 +221,7 @@ export class HilbrasClient implements AsyncDisposable {
     for (let attempt = 0; ; attempt++) {
       try {
         const gen = adapter.stream({
-          model: params.model,
+          model: modelId,
           messages,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
@@ -190,9 +258,9 @@ export class HilbrasClient implements AsyncDisposable {
 
   // ─── Non-Streaming Completion ───────────────────────────────────────────
 
-  async complete(params: {
-    provider: string;
-    model: string;
+  async complete<T = string>(params: {
+    provider?: string;
+    model?: string;
     messages: Array<Record<string, unknown> | Message>;
     temperature?: number;
     maxTokens?: number;
@@ -201,25 +269,41 @@ export class HilbrasClient implements AsyncDisposable {
     signal?: AbortSignal;
     /** Per-request execution policy (overrides client default) */
     policy?: ExecutionPolicy;
-  }): Promise<string> {
-    const providerConfig = this._registry.getOrThrow(params.provider);
-    const model = providerConfig.models.find((m) => m.id === params.model);
-    if (!model) throw new ModelNotFoundError(params.model, params.provider);
+    /** Structured output config — validates and auto-repairs */
+    output?: StructuredOutputConfig<T>;
+    /** Task requirements for automatic model routing (when provider/model are omitted) */
+    task?: string;
+    needsVision?: boolean;
+    needsTools?: boolean;
+    needsReasoning?: boolean;
+    needsStructuredOutput?: boolean;
+    maxCost?: number;
+    budget?: "low" | "medium" | "high";
+    excludeModels?: string[];
+    preferredProvider?: string;
+  }): Promise<T> {
+    // Resolve provider + model — either explicit or via router
+    const resolved_ = this._resolveProviderModel(params);
+    const providerConfig = this._registry.getOrThrow(resolved_.providerName);
+    const model = providerConfig.models.find((m) => m.id === resolved_.modelId);
+    if (!model) throw new ModelNotFoundError(resolved_.modelId, resolved_.providerName);
+    const providerName = resolved_.providerName;
+    const modelId = resolved_.modelId;
 
-    const adapter = this._getAdapter(params.provider);
+    const adapter = this._getAdapter(providerName);
     const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
 
     // Circuit breaker (if enabled)
     let circuitBreaker = undefined;
     if (resolved.circuitBreaker.enabled) {
-      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(params.provider, {
+      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(providerName, {
         failureThreshold: resolved.circuitBreaker.failureThreshold,
         successThreshold: resolved.circuitBreaker.successThreshold,
         timeoutMs: resolved.circuitBreaker.timeoutMs,
         halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
       });
       if (!circuitBreaker.isAvailable()) {
-        throw new CircuitBreakerOpenError(params.provider);
+        throw new CircuitBreakerOpenError(providerName);
       }
     }
 
@@ -236,20 +320,81 @@ export class HilbrasClient implements AsyncDisposable {
       ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, params.signal)
       : params.signal;
 
+    // Structured output setup
+    const outputConfig = params.output;
+    let structuredMessages = [...messages];
+    let structuredExtra = { ...params.extra };
+
+    if (outputConfig) {
+      // Add JSON mode params for the provider
+      const jsonModeParams = buildJsonModeParams(adapter.id);
+      structuredExtra = { ...structuredExtra, ...jsonModeParams };
+
+      // Add system instruction for JSON output
+      const schemaDesc = buildJsonSystemInstruction(outputConfig.schema as never);
+      structuredMessages = [
+        { role: "system", content: buildJsonSystemInstruction(outputConfig.schema as never) },
+        ...messages,
+      ];
+    }
+
+    const maxRepairAttempts = outputConfig?.maxRepairAttempts ?? 2;
+
     for (let attempt = 0; ; attempt++) {
       try {
         const result = await adapter.complete({
-          model: params.model,
-          messages,
+          model: modelId,
+          messages: structuredMessages,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
           tools: params.tools,
-          extra: params.extra,
+          extra: structuredExtra,
           signal,
         });
         circuitBreaker?.recordSuccess();
-        return result;
+
+        // If no structured output, return raw string
+        if (!outputConfig) {
+          return result as T;
+        }
+
+        // Validate structured output
+        const json = extractJson(result);
+        const parsed = JSON.parse(json);
+        const validation = outputConfig.schema.safeParse(parsed);
+        if (validation.success) {
+          return validation.data;
+        }
+
+        // Validation failed — attempt repair
+        if (attempt < maxRepairAttempts) {
+          const repairPrompt = buildRepairPrompt(
+            validation.error,
+            result,
+            buildJsonSystemInstruction(outputConfig.schema as never),
+            outputConfig.repairInstructions,
+          );
+          // Replace last user message with repair prompt
+          const lastUserIdx = structuredMessages.map((m) => m.role).lastIndexOf("user");
+          if (lastUserIdx >= 0) {
+            structuredMessages = [
+              ...structuredMessages.slice(0, lastUserIdx),
+              { role: "user", content: repairPrompt },
+            ];
+          } else {
+            structuredMessages = [...structuredMessages, { role: "user", content: repairPrompt }];
+          }
+          continue;
+        }
+
+        // Exhausted repair attempts
+        throw new ValidationError(maxRepairAttempts + 1, validation.error, result);
       } catch (err: unknown) {
+        // Don't retry validation errors through the retry loop
+        if (err instanceof ValidationError) {
+          throw err;
+        }
+
         const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
         const status = (err as { status?: number }).status;
 

@@ -71,3 +71,15 @@ export class CircuitBreakerOpenError extends HilbrasSdkError {
     this.name = "CircuitBreakerOpenError";
   }
 }
+
+export class ValidationError extends HilbrasSdkError {
+  constructor(
+    public readonly attempts: number,
+    public readonly lastError: unknown,
+    public readonly lastRaw: string,
+  ) {
+    const msg = lastError instanceof Error ? lastError.message : String(lastError);
+    super(`Structured output validation failed after ${attempts} attempt(s): ${msg.slice(0, 200)}`);
+    this.name = "ValidationError";
+  }
+}
