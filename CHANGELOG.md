@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.2] - 2026-08-23
+
+### Added
+
+#### Observability Hooks
+
+Structured telemetry hooks for observing every request lifecycle event:
+
+```typescript
+const client = new HilbrasClient();
+
+// Request completion
+client.on("request.completed", (event) => {
+  console.log(`${event.provider}/${event.model} took ${event.durationMs}ms`);
+  console.log(`Tokens: ${event.inputTokens}/${event.outputTokens}`);
+});
+
+// Retries
+client.on("request.retrying", (event) => {
+  console.log(`Attempt ${event.attempt}: retrying after ${event.delayMs}ms (${event.reason})`);
+});
+
+// Routing decisions
+client.on("routing.resolved", (event) => {
+  console.log(`Router picked ${event.model} (score: ${event.score})`);
+});
+
+// Circuit breaker
+client.on("circuit_breaker.open", (event) => {
+  console.log(`Circuit breaker open for ${event.provider}`);
+});
+
+// Schema validation
+client.on("structured.validate.pass", () => console.log("Schema valid"));
+client.on("structured.validate.fail", (e) => console.log(`Schema failed: ${e.error}`));
+
+// Stream first chunk latency
+client.on("stream.first_chunk", (e) => console.log(`First chunk: ${e.latencyMs}ms`));
+```
+
+**Events emitted:**
+
+| Event | When |
+|---|---|
+| `request.start` | Request initiated |
+| `routing.resolved` | Router picked a model (or explicit bypass) |
+| `request.completed` | Success with latency, tokens, cost |
+| `request.failed` | Failure after all retries |
+| `request.retrying` | Before retry sleep |
+| `circuit_breaker.open` | Circuit breaker blocked the request |
+| `structured.validate.pass` | Schema validation succeeded |
+| `structured.validate.fail` | Schema validation failed |
+| `stream.first_chunk` | First chunk yielded in stream |
+
+**Features:**
+- Zero overhead when no listeners attached
+- Typed events with `requestId` for correlation
+- `on()` returns unsubscribe function
+- `off()` and `removeAll()` for cleanup
+- Swallows listener errors (never breaks the SDK)
+
+### Changed
+
+- 10 new tests (181 → 191 total)
+
+---
+
 ## [0.5.1] - 2026-08-23
 
 ### Fixed

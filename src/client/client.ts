@@ -32,6 +32,8 @@ import { dictToMessage } from "../types/messages.js";
 import { resolvePolicy } from "../reliability/presets.js";
 import { ModelRouter } from "../router/model-router.js";
 import { buildJsonSystemInstruction, buildRepairPrompt, extractJson, buildJsonModeParams } from "../output/structured.js";
+import { ClientHooks } from "./hooks.js";
+import type { HookEvent, HookEventType, HookListener } from "../types/observability.js";
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
@@ -49,12 +51,37 @@ export class HilbrasClient implements AsyncDisposable {
   private _adapters = new Map<string, AIProvider>();
   private _defaultPolicy: ExecutionPolicy | undefined;
   private _router: ModelRouter;
+  private _hooks = new ClientHooks();
+  private _requestCounter = 0;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
     this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
     this._defaultPolicy = config?.policy;
     this._router = new ModelRouter();
+  }
+
+  /** Subscribe to lifecycle events. Returns an unsubscribe function. */
+  on<T extends HookEvent = HookEvent>(event: T["type"], listener: HookListener<T>): () => void {
+    return this._hooks.on(event, listener);
+  }
+
+  /** Remove a specific listener */
+  off(event: HookEventType, listener: HookListener): void {
+    this._hooks.off(event, listener);
+  }
+
+  /** Remove all listeners */
+  removeAllListeners(event?: HookEventType): void {
+    this._hooks.removeAll(event);
+  }
+
+  private _nextRequestId(): string {
+    return `req_${++this._requestCounter}`;
+  }
+
+  private _emit(event: HookEvent): void {
+    this._hooks.emit(event);
   }
 
   // ─── Provider Management ────────────────────────────────────────────────
@@ -186,11 +213,22 @@ export class HilbrasClient implements AsyncDisposable {
     excludeModels?: string[];
     preferredProvider?: string;
   }): AsyncGenerator<StreamChunk> {
+    const requestId = this._nextRequestId();
+    const startTime = performance.now();
+    let inputTokens: number | undefined;
+    let outputTokens: number | undefined;
+    let firstChunkEmitted = false;
+    let adapterStartTime = 0;
+
+    this._emit({ type: "request.start", requestId, timestamp: startTime, provider: params.provider, model: params.model, task: params.task });
+
     // Resolve provider + model — either explicit or via router
     const { providerName, modelId } = this._resolveProviderModel(params);
     const providerConfig = this._registry.getOrThrow(providerName);
     const model = providerConfig.models.find((m) => m.id === modelId);
     if (!model) throw new ModelNotFoundError(modelId, providerName);
+
+    this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
     const adapter = this._getAdapter(providerName);
     const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
@@ -205,6 +243,7 @@ export class HilbrasClient implements AsyncDisposable {
         halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
       });
       if (!circuitBreaker.isAvailable()) {
+        this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
         throw new CircuitBreakerOpenError(providerName);
       }
     }
@@ -224,6 +263,7 @@ export class HilbrasClient implements AsyncDisposable {
 
     for (let attempt = 0; ; attempt++) {
       try {
+        adapterStartTime = performance.now();
         const gen = adapter.stream({
           model: modelId,
           messages,
@@ -235,10 +275,21 @@ export class HilbrasClient implements AsyncDisposable {
         });
 
         for await (const chunk of gen) {
+          // Track first chunk latency
+          if (!firstChunkEmitted) {
+            firstChunkEmitted = true;
+            this._emit({ type: "stream.first_chunk", requestId, timestamp: performance.now(), latencyMs: performance.now() - adapterStartTime });
+          }
+          // Track usage tokens
+          if (chunk.type === "usage") {
+            inputTokens = (chunk as { inputTokens?: number }).inputTokens;
+            outputTokens = (chunk as { outputTokens?: number }).outputTokens;
+          }
           yield chunk;
         }
 
         circuitBreaker?.recordSuccess();
+        this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, inputTokens, outputTokens, structuredOutput: false });
         return;
       } catch (err: unknown) {
         // Check if we should retry
@@ -246,15 +297,20 @@ export class HilbrasClient implements AsyncDisposable {
         const status = (err as { status?: number }).status;
 
         if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt, resolved.backoff));
+          const delay = calculateBackoff(attempt, resolved.backoff);
+          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
+          await sleep(delay);
           continue;
         }
         if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt, resolved.backoff));
+          const delay = calculateBackoff(attempt, resolved.backoff);
+          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
+          await sleep(delay);
           continue;
         }
 
         circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
+        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
         throw err;
       }
     }
@@ -286,6 +342,11 @@ export class HilbrasClient implements AsyncDisposable {
     excludeModels?: string[];
     preferredProvider?: string;
   }): Promise<T> {
+    const requestId = this._nextRequestId();
+    const startTime = performance.now();
+
+    this._emit({ type: "request.start", requestId, timestamp: startTime, provider: params.provider, model: params.model, task: params.task });
+
     // Resolve provider + model — either explicit or via router
     const resolved_ = this._resolveProviderModel({ ...params, hasOutput: !!params.output });
     const providerConfig = this._registry.getOrThrow(resolved_.providerName);
@@ -293,6 +354,8 @@ export class HilbrasClient implements AsyncDisposable {
     if (!model) throw new ModelNotFoundError(resolved_.modelId, resolved_.providerName);
     const providerName = resolved_.providerName;
     const modelId = resolved_.modelId;
+
+    this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
     const adapter = this._getAdapter(providerName);
     const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
@@ -307,6 +370,7 @@ export class HilbrasClient implements AsyncDisposable {
         halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
       });
       if (!circuitBreaker.isAvailable()) {
+        this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
         throw new CircuitBreakerOpenError(providerName);
       }
     }
@@ -359,6 +423,7 @@ export class HilbrasClient implements AsyncDisposable {
 
         // If no structured output, return raw string
         if (!outputConfig) {
+          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: false });
           return result as T;
         }
 
@@ -367,10 +432,13 @@ export class HilbrasClient implements AsyncDisposable {
         const parsed = JSON.parse(json);
         const validation = outputConfig.schema.safeParse(parsed);
         if (validation.success) {
+          this._emit({ type: "structured.validate.pass", requestId, timestamp: performance.now() });
+          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: true });
           return validation.data;
         }
 
         // Validation failed — attempt repair
+        this._emit({ type: "structured.validate.fail", requestId, timestamp: performance.now(), attempt, error: validation.error instanceof Error ? validation.error.message : String(validation.error) });
         if (attempt < maxRepairAttempts) {
           const repairPrompt = buildRepairPrompt(
             validation.error,
@@ -392,6 +460,7 @@ export class HilbrasClient implements AsyncDisposable {
         }
 
         // Exhausted repair attempts
+        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: "Validation failed after repair attempts" });
         throw new ValidationError(maxRepairAttempts + 1, validation.error, result);
       } catch (err: unknown) {
         // Don't retry validation errors through the retry loop
@@ -403,15 +472,20 @@ export class HilbrasClient implements AsyncDisposable {
         const status = (err as { status?: number }).status;
 
         if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt, resolved.backoff));
+          const delay = calculateBackoff(attempt, resolved.backoff);
+          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
+          await sleep(delay);
           continue;
         }
         if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt, resolved.backoff));
+          const delay = calculateBackoff(attempt, resolved.backoff);
+          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
+          await sleep(delay);
           continue;
         }
 
         circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
+        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
         throw err;
       }
     }

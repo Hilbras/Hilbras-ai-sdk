@@ -44,6 +44,9 @@ export type { AdapterFactory } from "./providers/adapter-registry.js";
 // ─── Provider Contract ──────────────────────────────────────────────────────
 export type { AIProvider, AdapterConfig, GenerateParams } from "./types/adapter.js";
 
+// ─── Observability ──────────────────────────────────────────────────────────
+export type { HookEvent, HookEventType, HookListener, RequestStartEvent, RoutingResolvedEvent, RequestCompletedEvent, RequestFailedEvent, RetryEvent, CircuitBreakerOpenEvent, ValidationPassEvent, ValidationFailEvent, StreamFirstChunkEvent } from "./types/observability.js";
+
 // ─── Model Router ───────────────────────────────────────────────────────────
 export { ModelRouter } from "./router/model-router.js";
 export type { TaskRequirement, RoutingResult } from "./types/router.js";
