@@ -1,0 +1,78 @@
+{
+  "name": "@hilbras/sdk",
+  "version": "0.2.0",
+  "description": "Standalone LLM Client SDK for Hilbras — provider abstraction, streaming, tool schemas, and reliability primitives.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./adapters/openai": {
+      "import": "./dist/adapters/openai.js",
+      "types": "./dist/adapters/openai.d.ts"
+    },
+    "./adapters/anthropic": {
+      "import": "./dist/adapters/anthropic.js",
+      "types": "./dist/adapters/anthropic.d.ts"
+    },
+    "./adapters/google-genai": {
+      "import": "./dist/adapters/google-genai.js",
+      "types": "./dist/adapters/google-genai.d.ts"
+    },
+    "./adapters/azure": {
+      "import": "./dist/adapters/azure.js",
+      "types": "./dist/adapters/azure.d.ts"
+    },
+    "./adapters/groq": {
+      "import": "./dist/adapters/groq.js",
+      "types": "./dist/adapters/groq.d.ts"
+    },
+    "./adapters/ollama": {
+      "import": "./dist/adapters/ollama.js",
+      "types": "./dist/adapters/ollama.d.ts"
+    },
+    "./tokens": {
+      "import": "./dist/tokens/counter.js",
+      "types": "./dist/tokens/counter.d.ts"
+    },
+    "./config": {
+      "import": "./dist/config/config.js",
+      "types": "./dist/config/config.d.ts"
+    },
+    "./transport": {
+      "import": "./dist/transport/transport.js",
+      "types": "./dist/transport/transport.d.ts"
+    },
+    "./transport/fetch": {
+      "import": "./dist/transport/fetch.js",
+      "types": "./dist/transport/fetch.d.ts"
+    },
+    "./reliability/*": {
+      "import": "./dist/reliability/*.js",
+      "types": "./dist/reliability/*.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint src/"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "oxlint": "^1.79.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
