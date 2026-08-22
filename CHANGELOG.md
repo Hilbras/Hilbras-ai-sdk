@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-08-22
+
+### Added
+
+#### Execution Policies
+
+New `ExecutionPolicy` system for controlling reliability, timeout, retry, backoff, and circuit breaker behavior — both globally and per-request:
+
+```typescript
+// Named preset
+client.stream({ ..., policy: { preset: "production" } });
+
+// Custom policy
+client.stream({ ..., policy: { retry: { maxRetries: 5 }, timeout: { requestTimeoutMs: 10_000 } } });
+
+// Preset with overrides
+client.stream({ ..., policy: { preset: "maximum", circuitBreaker: { enabled: false } } });
+```
+
+**5 built-in presets:**
+
+| Preset | Retries | Timeout | Circuit Breaker | Use case |
+|--------|---------|---------|-----------------|----------|
+| `balanced` | 3 | 60s | On (5 failures) | Default — most apps |
+| `production` | 5 | 120s | On (5 failures) | Conservative, reliable |
+| `fast` | 1 | 15s | On (3 failures) | Latency-sensitive |
+| `cheap` | 10 | 300s | Off | Cost matters more than speed |
+| `maximum` | 10 | 300s | On (10 failures) | Critical operations |
+
+**Per-request policy overrides client default:**
+
+```typescript
+const client = new HilbrasClient({ policy: { preset: "production" } });
+// This request uses fast policy instead
+await client.complete({ ..., policy: { preset: "fast" } });
+```
+
+#### SDKConfig Integration
+
+`SDKConfig` reliability fields (`maxRetries`, `requestTimeoutMs`, `circuitBreakerEnabled`, `circuitBreakerThreshold`, `circuitBreakerResetMs`) are now wired to the actual runtime via the policy system:
+
+```typescript
+import { loadConfig } from "@hilbras/sdk";
+
+const config = loadConfig({ configPath: "./hilbras.config.json" });
+const client = new HilbrasClient({ sdkConfig: config });
+```
+
+Priority chain: `per-request policy > client default > SDKConfig > balanced preset`
+
+#### New Exports
+
+- `ExecutionPolicy`, `ResolvedPolicy`, `PolicyPreset` types
+- `resolvePolicy()`, `getPreset()` functions
+
+### Fixed
+
+- `SDKConfig` reliability fields were disconnected from runtime — now wired through policy system
+- Circuit breaker config (`failureThreshold`, `timeoutMs`, etc.) was always hardcoded — now configurable
+- Retry config (`maxRetries`, `retryableStatuses`) was always hardcoded — now configurable
+- Backoff config (`baseDelayMs`, `maxDelayMs`, `jitter`) was always hardcoded — now configurable
+
+### Changed
+
+- `HilbrasClient` constructor accepts optional `policy` and `sdkConfig`
+- `stream()` and `complete()` accept optional per-request `policy`
+- 16 new policy tests (130 → 146 total)
+
+---
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

@@ -16,6 +16,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { Transport } from "../transport/transport.js";
+import type { ExecutionPolicy, ResolvedPolicy } from "../types/policy.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { FetchTransport } from "../transport/fetch.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
@@ -26,12 +27,15 @@ import { createTimeoutSignal } from "../reliability/timeout.js";
 import { sdkLogger } from "../logging/logger.js";
 import { AdapterRegistry, getDefaultAdapterRegistry } from "../providers/adapter-registry.js";
 import { dictToMessage } from "../types/messages.js";
+import { resolvePolicy } from "../reliability/presets.js";
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
   transport?: Transport;
   /** Custom adapter registry (default: built-in registry with openai, anthropic, etc.) */
   adapterRegistry?: AdapterRegistry;
+  /** Default execution policy for all requests (can be overridden per-request) */
+  policy?: ExecutionPolicy;
 }
 
 export class HilbrasClient implements AsyncDisposable {
@@ -39,10 +43,12 @@ export class HilbrasClient implements AsyncDisposable {
   private _transport: Transport;
   private _adapterRegistry: AdapterRegistry;
   private _adapters = new Map<string, AIProvider>();
+  private _defaultPolicy: ExecutionPolicy | undefined;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
     this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
+    this._defaultPolicy = config?.policy;
   }
 
   // ─── Provider Management ────────────────────────────────────────────────
@@ -107,23 +113,39 @@ export class HilbrasClient implements AsyncDisposable {
     tools?: Tool[];
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
+    /** Per-request execution policy (overrides client default) */
+    policy?: ExecutionPolicy;
   }): AsyncGenerator<StreamChunk> {
     const providerConfig = this._registry.getOrThrow(params.provider);
     const model = providerConfig.models.find((m) => m.id === params.model);
     if (!model) throw new ModelNotFoundError(params.model, params.provider);
 
     const adapter = this._getAdapter(params.provider);
-    const circuitBreaker = getCircuitBreakerRegistry().getOrCreate(params.provider);
+    const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
 
-    if (!circuitBreaker.isAvailable()) {
-      throw new CircuitBreakerOpenError(params.provider);
+    // Circuit breaker (if enabled)
+    let circuitBreaker = undefined;
+    if (resolved.circuitBreaker.enabled) {
+      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(params.provider, {
+        failureThreshold: resolved.circuitBreaker.failureThreshold,
+        successThreshold: resolved.circuitBreaker.successThreshold,
+        timeoutMs: resolved.circuitBreaker.timeoutMs,
+        halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
+      });
+      if (!circuitBreaker.isAvailable()) {
+        throw new CircuitBreakerOpenError(params.provider);
+      }
     }
 
     const messages = this._normalizeMessages(params.messages);
-    const retryConfig = createRetryConfig();
+    const retryConfig = createRetryConfig({
+      maxRetries: resolved.retry.maxRetries,
+      retryableStatuses: resolved.retry.retryableStatuses,
+      retryableNetworkErrors: resolved.retry.retryableNetworkErrors,
+    });
 
-    // Build a timeout signal if the provider has a configured timeout
-    const timeoutMs = providerConfig.timeout;
+    // Build timeout signal from policy (falls back to provider config)
+    const timeoutMs = resolved.timeout.requestTimeoutMs || providerConfig.timeout;
     const signal = timeoutMs
       ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, params.signal)
       : params.signal;
@@ -144,7 +166,7 @@ export class HilbrasClient implements AsyncDisposable {
           yield chunk;
         }
 
-        circuitBreaker.recordSuccess();
+        circuitBreaker?.recordSuccess();
         return;
       } catch (err: unknown) {
         // Check if we should retry
@@ -152,15 +174,15 @@ export class HilbrasClient implements AsyncDisposable {
         const status = (err as { status?: number }).status;
 
         if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt));
+          await sleep(calculateBackoff(attempt, resolved.backoff));
           continue;
         }
         if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt));
+          await sleep(calculateBackoff(attempt, resolved.backoff));
           continue;
         }
 
-        circuitBreaker.recordFailure(err instanceof Error ? err : undefined);
+        circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
         throw err;
       }
     }
@@ -177,23 +199,39 @@ export class HilbrasClient implements AsyncDisposable {
     tools?: Tool[];
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
+    /** Per-request execution policy (overrides client default) */
+    policy?: ExecutionPolicy;
   }): Promise<string> {
     const providerConfig = this._registry.getOrThrow(params.provider);
     const model = providerConfig.models.find((m) => m.id === params.model);
     if (!model) throw new ModelNotFoundError(params.model, params.provider);
 
     const adapter = this._getAdapter(params.provider);
-    const circuitBreaker = getCircuitBreakerRegistry().getOrCreate(params.provider);
+    const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
 
-    if (!circuitBreaker.isAvailable()) {
-      throw new CircuitBreakerOpenError(params.provider);
+    // Circuit breaker (if enabled)
+    let circuitBreaker = undefined;
+    if (resolved.circuitBreaker.enabled) {
+      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(params.provider, {
+        failureThreshold: resolved.circuitBreaker.failureThreshold,
+        successThreshold: resolved.circuitBreaker.successThreshold,
+        timeoutMs: resolved.circuitBreaker.timeoutMs,
+        halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
+      });
+      if (!circuitBreaker.isAvailable()) {
+        throw new CircuitBreakerOpenError(params.provider);
+      }
     }
 
     const messages = this._normalizeMessages(params.messages);
-    const retryConfig = createRetryConfig();
+    const retryConfig = createRetryConfig({
+      maxRetries: resolved.retry.maxRetries,
+      retryableStatuses: resolved.retry.retryableStatuses,
+      retryableNetworkErrors: resolved.retry.retryableNetworkErrors,
+    });
 
-    // Build a timeout signal if the provider has a configured timeout
-    const timeoutMs = providerConfig.timeout;
+    // Build timeout signal from policy (falls back to provider config)
+    const timeoutMs = resolved.timeout.requestTimeoutMs || providerConfig.timeout;
     const signal = timeoutMs
       ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, params.signal)
       : params.signal;
@@ -209,22 +247,22 @@ export class HilbrasClient implements AsyncDisposable {
           extra: params.extra,
           signal,
         });
-        circuitBreaker.recordSuccess();
+        circuitBreaker?.recordSuccess();
         return result;
       } catch (err: unknown) {
         const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
         const status = (err as { status?: number }).status;
 
         if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt));
+          await sleep(calculateBackoff(attempt, resolved.backoff));
           continue;
         }
         if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-          await sleep(calculateBackoff(attempt));
+          await sleep(calculateBackoff(attempt, resolved.backoff));
           continue;
         }
 
-        circuitBreaker.recordFailure(err instanceof Error ? err : undefined);
+        circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
         throw err;
       }
     }
