@@ -1,23 +1,48 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-97%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-130%20passing-brightgreen" alt="tests">
 </p>
 
 <h1 align="center">@hilbras/sdk</h1>
 
 <p align="center">
-  <strong>Provider-agnostic LLM client SDK for Node, Bun, Deno, and browsers.</strong><br>
-  Streaming, tool calling, circuit breaker, retry, reasoning normalization, and more — zero runtime dependencies.
+  <strong>Provider-agnostic AI infrastructure SDK.</strong><br>
+  One interface. Any provider. Intelligent execution. Zero runtime dependencies.
 </p>
 
 ---
 
-## Why another LLM SDK?
+## Why this SDK?
 
-Most LLM SDKs lock you into one provider. This SDK gives you a **single interface** to talk to OpenAI, Anthropic, Google Gemini, Azure OpenAI, Groq, and Ollama — with automatic retries, circuit breakers, streaming, tool-call parsing, and reasoning normalization baked in.
+The market is crowded with LLM SDKs that just wrap provider APIs. Hilbras SDK goes further — it abstracts **model selection, reliability, cost, and provider differences** so your application doesn't have to.
+
+```text
+Application
+     │
+     ▼
+┌─────────────────────────────────────────┐
+│             @hilbras/sdk                │
+│                                         │
+│ Universal Provider Contract             │
+│ Plugin Registry                         │
+│ Streaming & Tool Calling                │
+│ Reasoning Normalization                 │
+│ Circuit Breaker & Retry                 │
+│ Token Counting & Cost Estimation        │
+│ Prompt Caching                          │
+│ Graceful Degradation                    │
+│ Middleware Pipeline                      │
+└────────────────────┬────────────────────┘
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+     OpenAI      Anthropic      Gemini
+        │            │            │
+      Groq         Ollama       Custom
+```
 
 **Zero runtime dependencies.** Runs everywhere: Node 18+, Bun, Deno, browsers, VS Code extensions, CLIs.
 
@@ -40,7 +65,7 @@ client.addProvider({
   authentication: { type: "bearer", apiKey: process.env.OPENAI_API_KEY! },
   adapter: "openai",
   models: [
-    { id: "gpt-4.1", contextWindow: 1_048_576, maxOutputTokens: 32_768,
+    { id: "gpt-5.6-sol", contextWindow: 1_048_576, maxOutputTokens: 131_072,
       capabilities: { streaming: true, tools: true, vision: true, reasoning: true, structuredOutput: true, parallelTools: true, systemPrompts: true } },
   ],
 });
@@ -48,7 +73,7 @@ client.addProvider({
 // Streaming
 for await (const chunk of client.stream({
   provider: "OpenAI",
-  model: "gpt-4.1",
+  model: "gpt-5.6-sol",
   messages: [{ role: "user", content: "Hello!" }],
 })) {
   if (chunk.type === "text") process.stdout.write(chunk.text);
@@ -57,32 +82,85 @@ for await (const chunk of client.stream({
 // Non-streaming
 const reply = await client.complete({
   provider: "OpenAI",
-  model: "gpt-4.1",
+  model: "gpt-5.6-sol",
   messages: [{ role: "user", content: "Hello!" }],
 });
 ```
 
 ## Supported Providers
 
-| Provider | Adapter | Streaming | Tool Calls | Reasoning | Notes |
-|----------|---------|-----------|------------|-----------|-------|
-| **OpenAI** | `openai` | ✅ | ✅ native + text-embedded | ✅ | GPT-4.1, o3, o4-mini, etc. |
-| **Anthropic** | `anthropic` | ✅ | ✅ native | ✅ | Claude Opus 4, Sonnet 4, etc. |
-| **Google Gemini** | `google-genai` | ✅ | ✅ native | ✅ | Gemini 2.5 Pro/Flash |
-| **Azure OpenAI** | `azure` | ✅ | ✅ native | ✅ | Deployment routing, api-key auth |
-| **Groq** | `groq` | ✅ | ✅ text-embedded | ✅ | Ultra-fast inference, Llama 4 |
-| **Ollama** | `ollama` | ✅ | ✅ text-embedded | ✅ | Local models, no API key |
+| Provider | Adapter | Streaming | Tool Calls | Reasoning | Models |
+|----------|---------|-----------|------------|-----------|--------|
+| **OpenAI** | `openai` | ✅ | ✅ native + text-embedded | ✅ | GPT-5.6 Sol/Terra/Luna, o3, o4-mini |
+| **Anthropic** | `anthropic` | ✅ | ✅ native | ✅ | Claude Fable 5, Opus 5, Sonnet 5, Haiku 4.5 |
+| **Google Gemini** | `google-genai` | ✅ | ✅ native | ✅ | Gemini 3.7/3.6/3.5 Flash, 3.1 Pro |
+| **Azure OpenAI** | `azure` | ✅ | ✅ native | ✅ | GPT-5.6 Sol/Terra, o3 |
+| **Groq** | `groq` | ✅ | ✅ text-embedded | ✅ | GPT-OSS 120B, MiniMax M2.7, Qwen 3.6 |
+| **Ollama** | `ollama` | ✅ | ✅ text-embedded | ✅ | Llama 4, Qwen 3, DeepSeek R1 |
+
+## Universal Provider Contract
+
+All adapters implement the `AIProvider` interface — the foundation for the plugin system:
+
+```typescript
+import type { AIProvider } from "@hilbras/sdk/adapter";
+
+class MyCustomAdapter implements AIProvider {
+  readonly id = "my-provider";
+
+  async *stream(params: GenerateParams) {
+    // Your provider logic
+  }
+
+  async complete(params: GenerateParams): Promise<string> {
+    // Your provider logic
+  }
+}
+```
+
+## Plugin System
+
+Register custom providers without modifying the SDK:
+
+```typescript
+import { HilbrasClient, getDefaultAdapterRegistry } from "@hilbras/sdk";
+
+const client = new HilbrasClient();
+
+// Register a custom adapter
+client.adapterRegistry.register("mistral", (config) => new MistralAdapter(config));
+
+// Use it like any built-in provider
+client.addProvider({
+  name: "Mistral",
+  baseUrl: "https://api.mistral.ai/v1",
+  authentication: { type: "bearer", apiKey: "..." },
+  adapter: "mistral" as any,
+  models: [],
+});
+```
+
+Or create a minimal registry with only what you need:
+
+```typescript
+import { AdapterRegistry, OpenAIAdapter } from "@hilbras/sdk";
+
+const registry = new AdapterRegistry();
+registry.register("openai", (config) => new OpenAIAdapter(config));
+
+const client = new HilbrasClient({ adapterRegistry: registry });
+```
 
 ## Features
 
 ### Tool Calling
 
-Works with providers that support native function calling AND models that emit tool calls as text (Qwen/Hermes-style `<tool_call>` markup):
+Works with native function calling AND text-embedded `<tool_call>` markup:
 
 ```typescript
 const chunks = client.stream({
   provider: "OpenAI",
-  model: "gpt-4.1",
+  model: "gpt-5.6-sol",
   messages: [{ role: "user", content: "Read /etc/hosts" }],
   tools: [{
     type: "function",
@@ -107,10 +185,7 @@ for await (const chunk of chunks) {
 
 ### Reasoning / Thinking
 
-Automatically detects and normalizes reasoning content from multiple formats:
-
-- **Native fields:** `reasoning_content`, `thinking` deltas (DeepSeek, Qwen)
-- **Tag-based:** `<thinking>...</thinking>`, `<reasoning>...</reasoning>` markup
+Automatically detects and normalizes reasoning from native fields and `<thinking>`/`<reasoning>` tags:
 
 ```typescript
 for await (const chunk of client.stream({ ... })) {
@@ -124,76 +199,47 @@ for await (const chunk of client.stream({ ... })) {
 
 ### Circuit Breaker
 
-Automatically stops hammering a failing provider after 5 consecutive failures, then half-opens to test recovery:
+Stops hammering a failing provider after 5 consecutive failures, then half-opens to test recovery:
 
 ```typescript
 import { getCircuitBreakerRegistry } from "@hilbras/sdk";
 
-// Inspect state
 const cb = getCircuitBreakerRegistry().getOrCreate("OpenAI");
 console.log(cb.state);  // "closed" | "open" | "half_open"
-console.log(cb.stats);  // { failureCount, successCount, ... }
-```
-
-### Retry with Backoff
-
-Exponential backoff with jitter for 429, 500, 502, 503, 504 errors:
-
-```typescript
-import { createRetryConfig } from "@hilbras/sdk";
-
-const retryConfig = createRetryConfig({
-  maxRetries: 5,
-  retryableStatuses: new Set([429, 500, 502, 503, 504]),
-  retryableNetworkErrors: true,
-});
 ```
 
 ### Token Counting & Cost Estimation
 
 ```typescript
-import { estimateTokens, estimateCost, estimateMessageTokens } from "@hilbras/sdk";
+import { estimateTokens, estimateCost } from "@hilbras/sdk";
 
 estimateTokens("Hello, world!");  // ~4 tokens
 
-const cost = estimateCost(1000, 500, "openai", "gpt-4.1");
-// { inputCost: 0.002, outputCost: 0.004, totalCost: 0.006, currency: "USD" }
+const cost = estimateCost(1000, 500, "openai", "gpt-5.6-sol");
+// { inputCost: 0.004, outputCost: 0.01, totalCost: 0.014, currency: "USD" }
 ```
 
 ### Prompt Caching
 
-Mark messages for caching (Anthropic, OpenAI):
-
 ```typescript
 import { cacheSystemMessage, autoCache } from "@hilbras/sdk";
 
-// Cache the system message
 const cached = cacheSystemMessage(messages);
-
-// Auto-cache system + first user message
 const auto = autoCache(messages);
 ```
 
 ### Graceful Degradation
 
-When a request fails (context overflow, media too large), progressively strip content:
+Progressively strips content when requests fail:
 
 ```typescript
-import { withDegradation, createDegradationChain } from "@hilbras/sdk";
+import { withDegradation } from "@hilbras/sdk";
 
-const { response, level } = await withDegradation(
-  transport,
-  url,
-  messages,
-  (msgs) => ({ method: "POST", body: JSON.stringify({ messages: msgs }) }),
-);
-console.log(`Succeeded at degradation level: ${level}`);
+const { response, level } = await withDegradation(transport, url, messages, buildRequest);
 // "normal" → "media-degraded" → "media-stripped" → "history-truncated"
 ```
 
 ### Middleware
-
-Intercept and transform requests:
 
 ```typescript
 import { composeMiddlewares, authMiddleware, loggingMiddleware, retryMiddleware } from "@hilbras/sdk";
@@ -205,80 +251,23 @@ const pipeline = composeMiddlewares(
 );
 ```
 
-### Configuration
-
-Layered config with precedence: **runtime > env vars > file > defaults**:
-
-```typescript
-import { loadConfig } from "@hilbras/sdk";
-
-const config = loadConfig({
-  configPath: "./hilbras.config.json",
-  overrides: { temperature: 0.5 },
-});
-```
-
-Environment variables (prefix `HILBRAS_`):
-```
-HILBRAS_DEFAULT_PROVIDER=openai
-HILBRAS_DEFAULT_MODEL=gpt-4.1
-HILBRAS_TEMPERATURE=0.7
-HILBRAS_MAX_TOKENS=4096
-HILBRAS_LOG_LEVEL=debug
-HILBRAS_TIMEOUT=60000
-```
-
-## Architecture
-
-```
-@hilbras/sdk
-├── client/          # HilbrasClient — main entry point
-├── adapters/        # Provider-specific wire format converters
-│   ├── openai.ts    # OpenAI Chat Completions API
-│   ├── anthropic.ts # Anthropic Messages API
-│   ├── google-genai.ts  # Google Gemini API
-│   ├── azure.ts     # Azure OpenAI (deployment routing)
-│   ├── groq.ts      # Groq (OpenAI-compatible, fast inference)
-│   ├── ollama.ts    # Ollama (local models)
-│   └── text-tool-call-parser.ts  # <tool_call> markup parser
-├── transport/       # HTTP abstraction (Fetch, WebSocket)
-├── reliability/     # Circuit breaker, retry, backoff, timeout, degradation
-├── middleware/       # Request pipeline (auth, logging, caching, rate-limit)
-├── tokens/          # Token counting, prompt caching, cost estimation
-├── config/          # Layered config, prompt builder
-├── credentials/     # Secret resolution
-├── reasoning/       # Thinking/reasoning tag normalizer
-├── errors/          # Typed error hierarchy
-├── logging/         # Redacting logger
-├── types/           # Canonical message, tool, stream, model types
-└── catalog/         # Built-in model catalog
-```
-
 ## Subpath Imports
-
-For tree-shaking, import specific modules:
 
 ```typescript
 import { HilbrasClient } from "@hilbras/sdk";                          // Full SDK
 import { OpenAIAdapter } from "@hilbras/sdk/adapters/openai";          // Single adapter
+import type { AIProvider } from "@hilbras/sdk/adapter";                // Provider contract
 import { estimateTokens } from "@hilbras/sdk/tokens";                  // Token utilities
 import { loadConfig } from "@hilbras/sdk/config";                      // Config
 import { FetchTransport } from "@hilbras/sdk/transport/fetch";         // Transport
-import { CircuitBreaker } from "@hilbras/sdk/reliability/circuit-breaker"; // Reliability
 ```
 
 ## Error Handling
 
-All errors extend `HilbrasSdkError` for easy catching:
+All errors extend `HilbrasSdkError`:
 
 ```typescript
-import {
-  HilbrasSdkError,
-  ProviderNotFoundError,
-  ModelNotFoundError,
-  ProviderRequestError,
-  CircuitBreakerOpenError,
-} from "@hilbras/sdk";
+import { HilbrasSdkError, ProviderRequestError, CircuitBreakerOpenError } from "@hilbras/sdk";
 
 try {
   for await (const chunk of client.stream({ ... })) { ... }
@@ -287,10 +276,34 @@ try {
     console.error(`Provider ${err.providerName} is circuit-broken`);
   } else if (err instanceof ProviderRequestError) {
     console.error(`HTTP ${err.status} from ${err.providerName}: ${err.body}`);
-  } else if (err instanceof HilbrasSdkError) {
-    console.error(err.message);
   }
 }
+```
+
+## Architecture
+
+```text
+@hilbras/sdk
+├── types/adapter.ts          # AIProvider contract, AdapterConfig, GenerateParams
+├── client/client.ts          # HilbrasClient — main entry point
+├── providers/
+│   ├── registry.ts           # ProviderRegistry
+│   └── adapter-registry.ts   # Plugin system — AdapterRegistry
+├── adapters/                 # Provider wire-format converters
+│   ├── openai.ts, anthropic.ts, google-genai.ts
+│   ├── azure.ts, groq.ts, ollama.ts
+│   └── text-tool-call-parser.ts
+├── transport/                # HTTP abstraction (Fetch, WebSocket)
+├── reliability/              # Circuit breaker, retry, backoff, timeout, degradation
+├── middleware/                # Auth, logging, caching, rate-limit
+├── tokens/                   # Token counting, prompt caching, cost estimation
+├── config/                   # Layered config, prompt builder
+├── credentials/              # Secret resolution
+├── reasoning/                # Thinking/reasoning tag normalizer
+├── errors/                   # Typed error hierarchy
+├── logging/                  # Redacting logger
+├── types/                    # Canonical message, tool, stream, model types
+└── catalog/                  # Built-in model catalog (50+ models)
 ```
 
 ## Development
@@ -298,22 +311,20 @@ try {
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run tests (97 tests)
+npm test             # Run tests (130 tests)
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```
 
-## Tests
+## Version History
 
-97 tests across 11 test files covering:
-- All 6 provider adapters (streaming + non-streaming)
-- Text-embedded tool call parsing (XML + JSON)
-- Circuit breaker state machine
-- Retry policies
-- Token counting and cost estimation
-- Config loading (env, file, overrides)
-- Middleware pipeline (auth, logging, retry, cache, rate-limit)
-- Graceful degradation chain
+| Version | Date | Highlights |
+|---------|------|-----------|
+| [v0.3.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.3.0) | 2026-08-22 | AIProvider contract, plugin registry, 2026 model catalog |
+| [v0.2.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.2.0) | 2026-08-22 | All-adapter complete(), timeout enforcement, docs |
+| v0.1.0 | 2026-07-21 | Initial release |
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ## License
 
