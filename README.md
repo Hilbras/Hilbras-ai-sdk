@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.4.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-130%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-146%20passing-brightgreen" alt="tests">
 </p>
 
 <h1 align="center">@hilbras/sdk</h1>
@@ -97,6 +97,42 @@ const reply = await client.complete({
 | **Azure OpenAI** | `azure` | ✅ | ✅ native | ✅ | GPT-5.6 Sol/Terra, o3 |
 | **Groq** | `groq` | ✅ | ✅ text-embedded | ✅ | GPT-OSS 120B, MiniMax M2.7, Qwen 3.6 |
 | **Ollama** | `ollama` | ✅ | ✅ text-embedded | ✅ | Llama 4, Qwen 3, DeepSeek R1 |
+
+## Execution Policies
+
+Control reliability, timeout, retry, backoff, and circuit breaker — globally or per-request:
+
+```typescript
+// Named preset
+client.stream({ ..., policy: { preset: "production" } });
+
+// Custom policy
+client.stream({ ..., policy: { retry: { maxRetries: 5 }, timeout: { requestTimeoutMs: 10_000 } } });
+
+// Preset with overrides
+client.stream({ ..., policy: { preset: "maximum", circuitBreaker: { enabled: false } } });
+```
+
+### Presets
+
+| Preset | Retries | Timeout | Circuit Breaker | Use case |
+|--------|---------|---------|-----------------|----------|
+| `balanced` | 3 | 60s | On (5 failures) | Default — most apps |
+| `production` | 5 | 120s | On (5 failures) | Conservative, reliable |
+| `fast` | 1 | 15s | On (3 failures) | Latency-sensitive |
+| `cheap` | 10 | 300s | Off | Cost > speed |
+| `maximum` | 10 | 300s | On (10 failures) | Critical operations |
+
+### SDKConfig Integration
+
+```typescript
+import { HilbrasClient, loadConfig } from "@hilbras/sdk";
+
+const config = loadConfig({ configPath: "./hilbras.config.json" });
+const client = new HilbrasClient({ sdkConfig: config });
+```
+
+Priority: `per-request policy > client default > SDKConfig > balanced preset`
 
 ## Universal Provider Contract
 
@@ -320,6 +356,7 @@ npm run lint         # Lint with oxlint
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| [v0.4.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.4.0) | 2026-08-22 | Execution Policies, SDKConfig wiring, 146 tests |
 | [v0.3.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.3.0) | 2026-08-22 | AIProvider contract, plugin registry, 2026 model catalog |
 | [v0.2.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.2.0) | 2026-08-22 | All-adapter complete(), timeout enforcement, docs |
 | v0.1.0 | 2026-07-21 | Initial release |
