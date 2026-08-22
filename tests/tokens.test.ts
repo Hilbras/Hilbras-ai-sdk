@@ -28,12 +28,12 @@ describe("Token estimation", () => {
 });
 
 describe("Cost estimation", () => {
-  it("calculates cost for GPT-4o", () => {
-    const cost = estimateCost(1000, 500, "openai", "gpt-4o");
-    // 1000 tokens × $2.50/1M = $0.0025
-    // 500 tokens × $10/1M = $0.005
-    expect(cost.inputCost).toBeCloseTo(0.0025, 6);
-    expect(cost.outputCost).toBeCloseTo(0.005, 6);
+  it("calculates cost for GPT-5.6 Sol", () => {
+    const cost = estimateCost(1000, 500, "openai", "gpt-5.6-sol");
+    // 1000 tokens × $4.00/1M = $0.004
+    // 500 tokens × $20/1M = $0.01
+    expect(cost.inputCost).toBeCloseTo(0.004, 6);
+    expect(cost.outputCost).toBeCloseTo(0.01, 6);
     expect(cost.currency).toBe("USD");
   });
 

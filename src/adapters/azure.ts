@@ -15,17 +15,17 @@ import type { ProviderConfig } from "../types/providers.js";
 import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
+import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 
-export interface AzureAdapterConfig {
-  provider: ProviderConfig;
-  transport: Transport;
+export interface AzureAdapterConfig extends AdapterConfig {
   deployment?: string;
   apiVersion?: string;
 }
 
-export class AzureAdapter {
+export class AzureAdapter implements AIProvider {
+  readonly id = "azure";
   private _provider: ProviderConfig;
   private _transport: Transport;
   private _deployment: string;

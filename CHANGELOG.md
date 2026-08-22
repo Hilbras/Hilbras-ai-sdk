@@ -7,7 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.0] - 2025-08-22
+## [0.3.0] - 2026-08-22
+
+### Added
+
+#### Universal Provider Contract (`AIProvider` Interface)
+- New `AIProvider` interface defines the universal contract all adapters implement:
+  ```typescript
+  interface AIProvider {
+    readonly id: string;
+    stream(params: GenerateParams): AsyncGenerator<StreamChunk>;
+    complete(params: GenerateParams): Promise<string>;
+  }
+  ```
+- New `AdapterConfig` shared type for adapter constructors
+- New `GenerateParams` type for stream/complete parameters
+- All 6 adapters now declare `implements AIProvider` with a `readonly id`
+
+#### Plugin Registration System (`AdapterRegistry`)
+- New `AdapterRegistry` class for registering adapter factories by ID
+- `getDefaultAdapterRegistry()` returns a registry pre-loaded with all 6 built-in adapters
+- Third-party adapters can be registered without modifying SDK core:
+  ```typescript
+  import { AdapterRegistry } from "@hilbras/sdk";
+  const registry = getDefaultAdapterRegistry();
+  registry.register("mistral", (config) => new MistralAdapter(config));
+  ```
+- `HilbrasClient` accepts optional `adapterRegistry` config
+- `HilbrasClient.adapterRegistry` getter for accessing the registry
+
+#### Subpath Export
+- `@hilbras/sdk/adapter` — imports the `AIProvider`, `AdapterConfig`, `GenerateParams` types
+
+### Fixed
+- Removed phantom `"responses"` from `AdapterName` type (no adapter implementation existed)
+- Removed `"responses"` from `APIFormat` type
+- Client no longer uses `any` casts — adapters are typed as `AIProvider` with compile-time safety
+- Client no longer imports all 6 adapter classes directly — uses the registry instead
+
+### Changed
+- All 6 adapters now have `readonly id` property (e.g. `"openai"`, `"anthropic"`)
+- Adapter config types (`OpenAIAdapterConfig`, `AnthropicAdapterConfig`, etc.) now alias or extend `AdapterConfig`
+- `HilbrasClient` constructor accepts `adapterRegistry` option for custom plugin registries
+
+---
+
+## [0.2.0] - 2026-08-22
 
 ### Added
 
@@ -62,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.0] - 2025-07-21
+## [0.1.0] - 2026-07-21
 
 ### Added
 

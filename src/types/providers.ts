@@ -5,7 +5,7 @@
 import type { Model } from "./models.js";
 
 /** Supported API wire formats */
-export type APIFormat = "openai" | "anthropic" | "responses" | "google-genai";
+export type APIFormat = "openai" | "anthropic" | "google-genai";
 
 /** Authentication method for a provider */
 export type Authentication =
@@ -14,7 +14,7 @@ export type Authentication =
   | { type: "none" };
 
 /** Which adapter to use for a provider */
-export type AdapterName = "openai" | "anthropic" | "responses" | "google-genai" | "azure" | "groq" | "ollama";
+export type AdapterName = "openai" | "anthropic" | "google-genai" | "azure" | "groq" | "ollama";
 
 /** Minimal provider configuration */
 export interface ProviderConfig {

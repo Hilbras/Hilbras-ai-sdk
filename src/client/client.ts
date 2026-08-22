@@ -10,7 +10,8 @@
  *   for await (const chunk of client.stream({ provider: "OpenAI", model: "gpt-4", messages })) { ... }
  */
 
-import type { ProviderConfig, AdapterName } from "../types/providers.js";
+import type { ProviderConfig } from "../types/providers.js";
+import type { AIProvider } from "../types/adapter.js";
 import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
@@ -22,44 +23,36 @@ import { createRetryConfig, shouldRetry, shouldRetryNetworkError } from "../reli
 import { calculateBackoff, sleep } from "../reliability/backoff.js";
 import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError } from "../errors/index.js";
 import { createTimeoutSignal } from "../reliability/timeout.js";
-import { OpenAIAdapter } from "../adapters/openai.js";
 import { sdkLogger } from "../logging/logger.js";
-import { AnthropicAdapter } from "../adapters/anthropic.js";
-import { GoogleGenAIAdapter } from "../adapters/google-genai.js";
-import { AzureAdapter } from "../adapters/azure.js";
-import { GroqAdapter } from "../adapters/groq.js";
-import { OllamaAdapter } from "../adapters/ollama.js";
+import { AdapterRegistry, getDefaultAdapterRegistry } from "../providers/adapter-registry.js";
 import { dictToMessage } from "../types/messages.js";
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
   transport?: Transport;
+  /** Custom adapter registry (default: built-in registry with openai, anthropic, etc.) */
+  adapterRegistry?: AdapterRegistry;
 }
 
 export class HilbrasClient implements AsyncDisposable {
   private _registry = new ProviderRegistry();
   private _transport: Transport;
-  private _adapters = new Map<string, OpenAIAdapter>();
+  private _adapterRegistry: AdapterRegistry;
+  private _adapters = new Map<string, AIProvider>();
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
+    this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
   }
 
   // ─── Provider Management ────────────────────────────────────────────────
 
   addProvider(config: ProviderConfig): void {
     this._registry.add(config);
-    // Create adapter for this provider
-    const ADAPTER_MAP: Record<string, any> = {
-      openai: OpenAIAdapter, anthropic: AnthropicAdapter,
-      "google-genai": GoogleGenAIAdapter, azure: AzureAdapter,
-      groq: GroqAdapter, ollama: OllamaAdapter,
-    };
-    const adapterClass = ADAPTER_MAP[config.adapter] ?? OpenAIAdapter;
-    this._adapters.set(config.name, new (adapterClass as any)({
+    this._adapters.set(config.name, this._adapterRegistry.create(config.adapter, {
       provider: config,
       transport: this._transport,
-    }) as any);
+    }));
   }
 
   removeProvider(name: string): void {
@@ -75,13 +68,18 @@ export class HilbrasClient implements AsyncDisposable {
     return this._registry.list();
   }
 
+  /** Access the adapter registry for plugins */
+  get adapterRegistry(): AdapterRegistry {
+    return this._adapterRegistry;
+  }
+
   findModel(modelId: string) {
     return this._registry.findModel(modelId);
   }
 
   // ─── Adapter Lookup ─────────────────────────────────────────────────────
 
-  private _getAdapter(providerName: string): OpenAIAdapter {
+  private _getAdapter(providerName: string): AIProvider {
     const adapter = this._adapters.get(providerName);
     if (!adapter) throw new ProviderNotFoundError(providerName);
     return adapter;

@@ -37,6 +37,11 @@ export {
 
 // ─── Providers ──────────────────────────────────────────────────────────────
 export { ProviderRegistry } from "./providers/registry.js";
+export { AdapterRegistry, getDefaultAdapterRegistry } from "./providers/adapter-registry.js";
+export type { AdapterFactory } from "./providers/adapter-registry.js";
+
+// ─── Provider Contract ──────────────────────────────────────────────────────
+export type { AIProvider, AdapterConfig, GenerateParams } from "./types/adapter.js";
 
 // ─── Transport ──────────────────────────────────────────────────────────────
 export type { Transport, TransportRequestInit } from "./transport/transport.js";

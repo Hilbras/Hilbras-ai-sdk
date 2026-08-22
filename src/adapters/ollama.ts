@@ -16,19 +16,18 @@ import type { ProviderConfig } from "../types/providers.js";
 import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
+import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 
-export interface OllamaAdapterConfig {
-  provider: ProviderConfig;
-  transport: Transport;
-}
+export type OllamaAdapterConfig = AdapterConfig;
 
 /**
  * OllamaAdapter — OpenAI-compatible adapter for Ollama local models.
  * No API key needed. Supports text-embedded tool calls via the SDK's parser.
  */
-export class OllamaAdapter {
+export class OllamaAdapter implements AIProvider {
+  readonly id = "ollama";
   private _provider: ProviderConfig;
   private _transport: Transport;
   private _reasoningNormalizer = new ReasoningNormalizer();
