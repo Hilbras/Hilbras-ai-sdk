@@ -118,19 +118,23 @@ export class HilbrasClient implements AsyncDisposable {
     budget?: "low" | "medium" | "high";
     excludeModels?: string[];
     preferredProvider?: string;
+    hasOutput?: boolean;
   }): { providerName: string; modelId: string } {
     // If explicit provider + model, use them directly
     if (params.provider && params.model) {
       return { providerName: params.provider, modelId: params.model };
     }
 
+    // Auto-connect: structured output requirement → router capability filter
+    const needsStructured = params.needsStructuredOutput ?? params.hasOutput ?? false;
+
     // Route via the model router
     const result = this._router.best({
-      task: params.task,
+      task: params.task as import("../types/router.js").TaskType | undefined,
       needsVision: params.needsVision,
       needsTools: params.needsTools,
       needsReasoning: params.needsReasoning,
-      needsStructuredOutput: params.needsStructuredOutput,
+      needsStructuredOutput: needsStructured,
       maxCost: params.maxCost,
       budget: params.budget,
       excludeModels: params.excludeModels,
@@ -283,7 +287,7 @@ export class HilbrasClient implements AsyncDisposable {
     preferredProvider?: string;
   }): Promise<T> {
     // Resolve provider + model — either explicit or via router
-    const resolved_ = this._resolveProviderModel(params);
+    const resolved_ = this._resolveProviderModel({ ...params, hasOutput: !!params.output });
     const providerConfig = this._registry.getOrThrow(resolved_.providerName);
     const model = providerConfig.models.find((m) => m.id === resolved_.modelId);
     if (!model) throw new ModelNotFoundError(resolved_.modelId, resolved_.providerName);

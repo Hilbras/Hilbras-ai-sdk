@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.1] - 2026-08-23
+
+### Fixed
+
+Based on architectural review — 5 mandatory improvements:
+
+#### Explainable Routing
+
+`RoutingResult` now includes human-readable `reasons` and rejected `candidates`:
+
+```typescript
+const result = client.router.best({ task: "coding", needsTools: true });
+console.log(result.reasons);
+// ["Supports required tools", "Within budget ($0.004 of $0.05)", "Preferred provider (openai)"]
+
+console.log(result.candidates);
+// [{ model: "llama3.1", score: 0, rejectionReason: "Missing required capability: tools" }]
+```
+
+#### TaskType Taxonomy
+
+`task` now uses a controlled type instead of arbitrary strings:
+
+```typescript
+type TaskType = "coding" | "reasoning" | "analysis" | "writing" |
+  "translation" | "summarization" | "extraction" | "classification" | "general";
+```
+
+Each task type has specific scoring weights (coding favors tools+reasoning, writing favors cost, etc.)
+
+#### Auto-Connect Output → Router
+
+When `output` is provided to `complete()`, the router automatically filters for models with `structuredOutput` capability. No need to manually set `needsStructuredOutput: true`.
+
+```typescript
+// Router automatically selects a structured-output-capable model
+await client.complete({ task: "coding", messages, output: { schema: MySchema } });
+```
+
+#### Enhanced RoutingResult
+
+```typescript
+interface RoutingResult {
+  provider: string;
+  model: string;
+  entry: ModelEntry;
+  score: number;
+  estimatedCost: number;
+  reasons: string[];           // NEW — human-readable selection reasons
+  candidates?: RejectedCandidate[];  // NEW — rejected models with reasons
+}
+```
+
+#### Architecture Naming
+
+Renamed to "Policy-Based Model Router" — accurately reflects the deterministic, rule-based nature. Will evolve to "Intelligent Model Router" when benchmark and telemetry data are available.
+
+### Changed
+
+- 3 new tests (178 → 181 total)
+
+---
+
 ## [0.5.0] - 2026-08-23
 
 ### Added

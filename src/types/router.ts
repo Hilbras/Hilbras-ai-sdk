@@ -4,16 +4,29 @@
  * Describes what a task needs so the router can pick the best model
  * across all registered providers.
  *
- * Usage:
- *   client.stream({ task: "coding", messages, policy: { maxCost: 0.05 } });
+ * The router is "policy-based" for v0.5.x — deterministic, explainable
+ * routing based on constraints and scoring. Will evolve into data-driven
+ * "intelligent" routing once benchmark and telemetry data are available.
  */
 
 import type { ModelEntry } from "../catalog/models.js";
 
+/** Controlled task taxonomy — each task type has associated scoring weights */
+export type TaskType =
+  | "coding"
+  | "reasoning"
+  | "analysis"
+  | "writing"
+  | "translation"
+  | "summarization"
+  | "extraction"
+  | "classification"
+  | "general";
+
 /** What the developer needs — the router evaluates all models against this */
 export interface TaskRequirement {
-  /** Task category — influences scoring ("coding", "writing", "analysis", "translation", "general") */
-  task?: string;
+  /** Task category — influences scoring weights */
+  task?: TaskType;
 
   /** Required capabilities — models missing these are excluded */
   needsVision?: boolean;
@@ -40,7 +53,15 @@ export interface TaskRequirement {
   preferredProvider?: string;
 }
 
-/** A routing decision — the best model for the given requirements */
+/** A candidate that was evaluated but not selected */
+export interface RejectedCandidate {
+  provider: string;
+  model: string;
+  score: number;
+  rejectionReason: string;
+}
+
+/** A routing decision — explainable, with full audit trail */
 export interface RoutingResult {
   /** Which provider to use */
   provider: string;
@@ -52,4 +73,8 @@ export interface RoutingResult {
   score: number;
   /** Estimated cost per request in USD */
   estimatedCost: number;
+  /** Human-readable reasons why this model was selected */
+  reasons: string[];
+  /** Other candidates that were evaluated and why they were rejected */
+  candidates?: RejectedCandidate[];
 }

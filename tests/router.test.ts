@@ -93,7 +93,7 @@ describe("ModelRouter", () => {
     }
   });
 
-  it("all results have valid RoutingResult shape", () => {
+  it("all results have valid RoutingResult shape with reasons", () => {
     const results = router.evaluate({ task: "general" });
     for (const r of results.slice(0, 5)) {
       expect(typeof r.provider).toBe("string");
@@ -102,6 +102,36 @@ describe("ModelRouter", () => {
       expect(typeof r.estimatedCost).toBe("number");
       expect(r.entry).toBeDefined();
       expect(typeof r.entry.contextWindow).toBe("number");
+      // Explainable routing — reasons array
+      expect(Array.isArray(r.reasons)).toBe(true);
+      expect(r.reasons.length).toBeGreaterThan(0);
     }
+  });
+
+  it("includes rejected candidates with reasons", () => {
+    const results = router.evaluate({ needsVision: true, maxCost: 0.001 });
+    expect(results.length).toBeGreaterThan(0);
+    const best = results[0];
+    // Should have candidates array with rejected models
+    expect(Array.isArray(best.candidates)).toBe(true);
+    const rejected = best.candidates!.filter((c) => c.rejectionReason);
+    expect(rejected.length).toBeGreaterThan(0);
+    // Each rejection has a reason
+    for (const r of rejected) {
+      expect(typeof r.rejectionReason).toBe("string");
+      expect(r.rejectionReason.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("reasons reflect task requirements", () => {
+    const results = router.evaluate({ needsTools: true, task: "coding" });
+    expect(results.length).toBeGreaterThan(0);
+    const reasons = results[0].reasons;
+    expect(reasons.some((r) => r.includes("tools"))).toBe(true);
+  });
+
+  it("can suppress candidates in evaluate()", () => {
+    const results = router.evaluate({ task: "coding" }, false);
+    expect(results[0].candidates).toBeUndefined();
   });
 });
