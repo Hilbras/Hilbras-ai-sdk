@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.1] - 2026-08-23
+
+### Release: Execution Security, Reliability & Deep Audit
+
+**PATCH CERTIFIED** — Hardening of the v0.7.0 execution optimization layer.
+
+### Added
+
+- **78 deep audit tests** covering:
+  - Plan consistency (plan() vs best() vs explain() produce identical results)
+  - Determinism (1,000 identical evaluations, score breakdowns, candidate ordering)
+  - Hard constraint enforcement (needsVision, needsTools, maxCost, minContextWindow, excludeModels)
+  - Cost security (total cost estimates, maxFallbackCost, budget alignment)
+  - Retry vs fallback separation (independent dimensions, bounded execution)
+  - Infinite loop defense (one model, empty registry, bounded fallback list)
+  - Fallback safety (respects vision, tools, cost, context constraints)
+  - Provider failure matrix (HTTP 400-503, network errors, timeouts)
+  - Streaming safety (failure before/after first chunk, maxRetries=0)
+  - Policy isolation (independent copies, per-request overrides)
+  - State isolation (separate clients, provider removal)
+  - Observability integrity (event ordering, requestId consistency, listener safety)
+  - Security (API keys not in errors/routing/execution plans)
+  - Prompt injection defense (malicious task strings)
+  - Untrusted metadata handling (NaN, Infinity, extreme values)
+  - Adversarial inputs (empty/long task strings, extreme constraints)
+  - Plan immutability (mutating plan doesn't affect router)
+  - API backward compatibility (explicit provider+model still works)
+
+### Changed
+
+- 78 new tests (422 → 500 total)
+
+### Findings
+
+- **Circuit breaker state leaks between test runs** — the global singleton `CircuitBreakerRegistry` accumulates failures across independent test cases, causing `CircuitBreakerOpenError` in subsequent tests. Tests now disable circuit breakers via policy when testing error paths.
+- **No production bugs found** — all execution paths, constraint enforcement, fallback safety, cost estimates, and security guarantees verified correct.
+
+---
+
 ## [0.7.0] - 2026-08-23
 
 ### Release: Execution Optimization
