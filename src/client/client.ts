@@ -119,6 +119,18 @@ export class HilbrasClient implements AsyncDisposable {
     return this._router;
   }
 
+  /**
+   * Explain a routing decision — returns the best model with full audit trail.
+   * Always includes rejected candidates for debugging.
+   *
+   * @example
+   * const decision = client.explain({ task: "coding", needsTools: true, maxCost: 0.05 });
+   * console.log(decision.reasons);
+   */
+  explain(requirements: TaskRequirement): import("../types/router.js").RoutingResult | null {
+    return this._router.explain(requirements);
+  }
+
   findModel(modelId: string) {
     return this._registry.findModel(modelId);
   }

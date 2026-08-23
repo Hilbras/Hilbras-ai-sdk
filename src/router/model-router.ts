@@ -98,6 +98,20 @@ export class ModelRouter {
     return results.length > 0 ? results[0] : null;
   }
 
+  /**
+   * Explain a routing decision — returns the best model with full audit trail.
+   * Always includes rejected candidates for debugging.
+   *
+   * @example
+   * const decision = client.router.explain({ task: "coding", needsTools: true, maxCost: 0.05 });
+   * console.log(decision.reasons);  // ["Supports required tools", "Within budget"]
+   * console.log(decision.candidates); // [{ model: "...", rejectionReason: "..." }]
+   */
+  explain(requirements: TaskRequirement): RoutingResult | null {
+    const results = this.evaluate(requirements, true);
+    return results.length > 0 ? results[0] : null;
+  }
+
   // ─── Filtering with Rejection Reasons ──────────────────────────────────
 
   private _filterWithRejection(req: TaskRequirement): { accepted: ModelEntry[]; rejected: RejectedCandidate[] } {

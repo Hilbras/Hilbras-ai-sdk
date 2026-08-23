@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-08-23
+
+### Release: Intelligent Execution
+
+Hilbras SDK is now an **AI Execution Engine** — not just a provider wrapper.
+
+```typescript
+const result = await client.complete({
+  task: "coding",
+  messages,
+  policy: { maxCost: 0.05, maxLatency: "fast" },
+  output: { schema: UserProfile },
+});
+```
+
+Internally, Hilbras:
+1. Understands the request requirements
+2. Determines structured output is required
+3. Discovers compatible models across all providers
+4. Eliminates models violating hard constraints
+5. Scores the remaining candidates deterministically
+6. Selects the best model with full explainability
+7. Executes through the appropriate provider
+8. Validates the response against the schema
+9. Automatically repairs invalid output
+10. Returns a strongly typed result
+
+### Added
+
+#### `explain()` Method
+
+Standalone routing explanation for debugging:
+
+```typescript
+const decision = client.explain({
+  task: "coding",
+  needsTools: true,
+  maxCost: 0.05,
+});
+
+console.log(decision.reasons);
+// ["Supports required tools", "Within budget ($0.004 of $0.05)"]
+
+console.log(decision.candidates);
+// [{ model: "...", rejectionReason: "Missing required capability: tools" }]
+```
+
+#### Integration Test Suite
+
+New `tests/intelligent-execution.test.ts` covering:
+- Full router pipeline (hard constraints, soft preferences, deterministic scoring)
+- Explainable decisions with reasons and candidates
+- Structured output pipeline (schema abstraction, validation, repair)
+- Backward compatibility (explicit provider+model bypasses router)
+- Router ↔ structured output integration
+- Execution policy integration
+
+### Changed
+
+- 15 new tests (191 → 206 total)
+
+---
+
 ## [0.5.2] - 2026-08-23
 
 ### Added
