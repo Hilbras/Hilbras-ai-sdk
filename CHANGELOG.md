@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.2] - 2026-08-23
+
+### Release: Provider Contract & Integration Certification
+
+### Fixed
+
+- **OpenAI adapter `complete()` crash on non-JSON responses** — calling `res.json()` on a non-JSON response body caused `SyntaxError` to propagate unhandled. Now gracefully returns empty string with a try/catch around JSON parsing.
+
+### Added
+
+- **116 provider contract tests** (`tests/provider-contract.test.ts`) — comprehensive certification across all 6 adapters:
+  - AIProvider contract compliance (id, stream, complete)
+  - Canonical response normalization (OpenAI → Anthropic → Google → Azure → Groq → Ollama)
+  - `complete()` contract: normal text, empty response, missing fields, null content
+  - `stream()` contract: text chunks, ordering, completion
+  - Tool calling: native tool calls, text-embedded `<tool_call>` markup, malformed arguments
+  - Error normalization: HTTP 400/401/403/404/408/429/500/502/503, network errors, timeouts
+  - Error contract: status code preserved, provider name preserved, body preserved
+  - Timeout behavior: `complete()` and `stream()` both handle AbortError
+  - Malformed responses: non-JSON body, unexpected structure, empty stream
+  - Provider isolation: failure in one provider doesn't affect others
+  - Concurrent provider calls: independent execution
+  - Failure injection across all HTTP status codes
+
+### Changed
+
+- 116 new tests (275 → 391 total)
+
+---
+
 ## [0.6.1] - 2026-08-23
 
 ### Fixed

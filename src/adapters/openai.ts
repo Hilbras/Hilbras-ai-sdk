@@ -349,7 +349,13 @@ export class OpenAIAdapter implements AIProvider {
       throw new ProviderRequestError(res.status, errorBody, this._provider.name);
     }
 
-    const data = await res.json() as Record<string, unknown>;
+    let data: Record<string, unknown>;
+    try {
+      data = await res.json() as Record<string, unknown>;
+    } catch {
+      // Non-JSON response — return empty string rather than crashing
+      return "";
+    }
     const choices = data.choices as Array<Record<string, unknown>> | undefined;
     if (!choices?.length) return "";
     const message = choices[0].message as Record<string, unknown> | undefined;

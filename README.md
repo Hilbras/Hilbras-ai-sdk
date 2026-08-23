@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.6.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.6.2-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-206%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-391%20passing-brightgreen" alt="tests">
 </p>
 
 <h1 align="center">@hilbras/sdk</h1>
@@ -484,7 +484,7 @@ import { FetchTransport } from "@hilbras/sdk/transport/fetch";         // Transp
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run tests (206 tests)
+npm test             # Run tests (391 tests)
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```
@@ -493,6 +493,8 @@ npm run lint         # Lint with oxlint
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| [v0.6.2](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.6.2) | 2026-08-23 | Provider contract certification, 116 contract tests, 391 total |
+| [v0.6.1](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.6.1) | 2026-08-23 | Production audit, bug fix, 275 tests |
 | [v0.6.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.6.0) | 2026-08-23 | Intelligent Execution, explain(), 206 tests |
 | [v0.5.2](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.5.2) | 2026-08-23 | Observability Hooks, typed lifecycle events, 191 tests |
 | [v0.5.1](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.5.1) | 2026-08-23 | Explainable routing, TaskType taxonomy, output→router auto-connect |
