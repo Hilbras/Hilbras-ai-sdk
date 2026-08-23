@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.1] - 2026-08-23
+
+### Fixed
+
+- **Router crash on invalid task type** — passing an unknown task string (e.g. `"coding; DROP TABLE"`) to the router caused `TypeError: Cannot read properties of undefined (reading 'reasoning')` because `TASK_WEIGHTS[unknownTask]` returned `undefined`. Now falls back to `TASK_WEIGHTS.general`.
+
+### Added
+
+- **69 production audit tests** covering adversarial edge cases:
+  - Client edge cases (missing provider/model, empty messages, dispose)
+  - Router destruction (extreme costs, excluded models, contradictory requirements)
+  - Router scoring (NaN/Infinity checks, bounds, hard > soft constraints)
+  - Structured output attacks (empty/null/BOM/escaped/nested JSON)
+  - Schema safety (throwing validators, missing safeParse)
+  - Observability attack (listener errors don't break SDK)
+  - Concurrency (10 concurrent requests, ID uniqueness)
+  - Security (API key not in errors, injection)
+  - Fuzz testing (extreme values, negative budgets)
+  - Policy mutation safety (independent copies)
+  - State isolation (separate clients, provider removal)
+- **Clean install verification** — package installs from tarball, all imports work, zero runtime deps
+
+### Changed
+
+- 69 new tests (206 → 275 total)
+
+---
+
 ## [0.6.0] - 2026-08-23
 
 ### Release: Intelligent Execution

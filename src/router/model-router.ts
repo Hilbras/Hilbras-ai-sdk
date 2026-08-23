@@ -186,7 +186,7 @@ export class ModelRouter {
   // ─── Scoring ────────────────────────────────────────────────────────────
 
   private _score(entry: ModelEntry, req: TaskRequirement): { score: number; reasons: string[] } {
-    const weights = TASK_WEIGHTS[req.task ?? "general"];
+    const weights = TASK_WEIGHTS[req.task ?? "general"] ?? TASK_WEIGHTS.general;
     const reasons: string[] = [];
     let score = 0;
 
