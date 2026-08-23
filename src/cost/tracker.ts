@@ -80,12 +80,12 @@ export class BudgetTracker {
 
       if (pct >= 1 && !this._budgetExceededFired) {
         this._budgetExceededFired = true;
-        this._budget.onBudgetExceeded?.(this.report());
+        try { this._budget.onBudgetExceeded?.(this.report()); } catch { /* notification-only — errors must not corrupt accounting */ }
       }
 
       if (pct >= 0.8 && !this._budgetWarningFired) {
         this._budgetWarningFired = true;
-        this._budget.onBudgetWarning?.(this.report());
+        try { this._budget.onBudgetWarning?.(this.report()); } catch { /* notification-only — errors must not corrupt accounting */ }
       }
     }
   }

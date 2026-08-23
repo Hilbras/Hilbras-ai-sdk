@@ -98,8 +98,8 @@ export function estimateCost(
 
   const pricing = PRICING[model] ?? PRICING[`${provider}/${model}`] ?? { input: 0, output: 0 };
 
-  const inputCost = (inputTokens / 1_000_000) * pricing.input;
-  const outputCost = (outputTokens / 1_000_000) * pricing.output;
+  const inputCost = Math.max(0, (inputTokens / 1_000_000) * pricing.input);
+  const outputCost = Math.max(0, (outputTokens / 1_000_000) * pricing.output);
 
   return {
     inputCost,

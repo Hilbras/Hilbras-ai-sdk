@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.1] - 2026-08-23
+
+### Fixed
+
+- **`estimateCost` produced negative cost with negative token counts** — `(-100 / 1_000_000) * price` produced negative values. Fixed with `Math.max(0, ...)` guard. Severity: MEDIUM.
+- **BudgetTracker callbacks not wrapped in try/catch** — `onBudgetWarning` and `onBudgetExceeded` callbacks that throw would corrupt budget accounting. Now wrapped in try/catch (notification-only semantics). Severity: HIGH.
+- **`require()` in ESM tests** — replaced with proper ESM imports.
+
+### Added
+
+- **74 deep cost audit tests** covering:
+  - Money correctness (NaN, Infinity, negative, floating point precision)
+  - Budget boundary enforcement (exact limits, 99.9%, 100.1%)
+  - Session budget enforcement (sequential, concurrent)
+  - Per-request budget enforcement
+  - Model pricing integrity (known, unknown, zero, negative tokens)
+  - Estimated vs actual cost semantics
+  - Callback safety (throwing callbacks don't corrupt accounting)
+  - Cost report integrity (byProvider, byPhase reconciliation)
+  - Client lifecycle (independent clients, reset, report immutability)
+  - Router + cost integration
+  - Security (no API key leakage, no prompt injection)
+  - Adversarial inputs (NaN, Infinity, extreme values, negative budgets)
+  - Determinism (100-iteration identical results)
+  - Invariant testing (7 mathematical invariants verified)
+
+### Changed
+
+- 74 new tests (566 → 640 total)
+
+---
+
 ## [0.8.0] - 2026-08-23
 
 ### Release: Cost-Aware Execution
