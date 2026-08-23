@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.7.1-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.8.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-500%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-566%20passing-brightgreen" alt="tests">
 </p>
 
 <h1 align="center">@hilbras/sdk</h1>
@@ -484,15 +484,43 @@ import { FetchTransport } from "@hilbras/sdk/transport/fetch";         // Transp
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run tests (422 tests)
+npm test             # Run tests (566 tests)
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```
+
+## 💰 Cost-Aware Execution
+
+Track costs, enforce budgets, and get complete cost visibility:
+
+```typescript
+const client = new HilbrasClient({
+  budget: {
+    sessionBudget: 1.00,       // Max total cost for the session
+    perRequestBudget: 0.10,    // Max cost per individual request
+    onBudgetWarning: (report) => console.warn(`80% budget used`),
+    onBudgetExceeded: (report) => console.error(`Budget exhausted`),
+  },
+});
+
+// After requests, get the full cost report
+const report = client.costReport();
+console.log(`Total spent: $${report.totalActual}`);
+console.log(`Remaining: $${report.remainingBudget}`);
+console.log(`By provider:`, report.byProvider);
+```
+
+**How it works:**
+- Per-request budget check before execution (rejects if exceeded)
+- Session-level cumulative tracking with warning/exceeded callbacks
+- Zero overhead when no budget is configured
+- Integrates with existing execution policies and fallback
 
 ## Version History
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| [v0.8.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.8.0) | 2026-08-23 | Cost-Aware Execution, BudgetTracker, 566 tests |
 | [v0.7.1](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.7.1) | 2026-08-23 | Deep audit, 78 audit tests, 500 total, patch certified |
 | [v0.7.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.7.0) | 2026-08-23 | Execution optimization, fallback, 9-dimension scoring, 422 tests |
 | [v0.6.2](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.6.2) | 2026-08-23 | Provider contract certification, 116 contract tests, 391 total |

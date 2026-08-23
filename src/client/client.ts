@@ -34,6 +34,9 @@ import { ModelRouter } from "../router/model-router.js";
 import { buildJsonSystemInstruction, buildRepairPrompt, extractJson, buildJsonModeParams } from "../output/structured.js";
 import { ClientHooks } from "./hooks.js";
 import type { HookEvent, HookEventType, HookListener } from "../types/observability.js";
+import { BudgetTracker } from "../cost/tracker.js";
+import type { BudgetConfig, CostEvent, CostReport } from "../cost/types.js";
+import { estimateTokens } from "../tokens/counter.js";
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
@@ -42,6 +45,8 @@ export interface HilbrasClientConfig {
   adapterRegistry?: AdapterRegistry;
   /** Default execution policy for all requests (can be overridden per-request) */
   policy?: ExecutionPolicy;
+  /** Budget configuration for cost tracking and enforcement */
+  budget?: BudgetConfig;
 }
 
 export class HilbrasClient implements AsyncDisposable {
@@ -53,12 +58,14 @@ export class HilbrasClient implements AsyncDisposable {
   private _router: ModelRouter;
   private _hooks = new ClientHooks();
   private _requestCounter = 0;
+  private _budgetTracker: BudgetTracker;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
     this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
     this._defaultPolicy = config?.policy;
     this._router = new ModelRouter();
+    this._budgetTracker = new BudgetTracker(config?.budget);
   }
 
   /** Subscribe to lifecycle events. Returns an unsubscribe function. */
@@ -152,6 +159,17 @@ export class HilbrasClient implements AsyncDisposable {
       .slice(0, 3)
       .map((r) => ({ provider: r.provider, model: r.model }));
   }
+
+  // ─── Cost Tracking ──────────────────────────────────────────────────────
+
+  /** Access the cost tracker */
+  get cost(): BudgetTracker { return this._budgetTracker; }
+
+  /** Get the current cost report */
+  costReport(): CostReport { return this._budgetTracker.report(); }
+
+  /** Check if budget is exhausted */
+  isBudgetExhausted(): boolean { return this._budgetTracker.isBudgetExhausted(); }
 
   findModel(modelId: string) {
     return this._registry.findModel(modelId);
@@ -457,6 +475,15 @@ export class HilbrasClient implements AsyncDisposable {
 
     const maxRepairAttempts = outputConfig?.maxRepairAttempts ?? 2;
 
+    // Budget check before execution
+    const estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
+    if (this._budgetTracker.wouldExceedBudget(estimatedCost)) {
+      throw new Error(`Request would exceed per-request budget ($${estimatedCost.toFixed(4)})`);
+    }
+    if (this._budgetTracker.isBudgetExhausted()) {
+      throw new Error("Session budget exhausted");
+    }
+
     for (let attempt = 0; ; attempt++) {
       try {
         const result = await adapter.complete({
@@ -472,6 +499,7 @@ export class HilbrasClient implements AsyncDisposable {
 
         // If no structured output, return raw string
         if (!outputConfig) {
+          this._budgetTracker.record({ requestId, provider: providerName, model: modelId, phase: "execute", estimatedCost, actualCost: estimatedCost, timestamp: performance.now() });
           this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: false });
           return result as T;
         }
@@ -481,6 +509,7 @@ export class HilbrasClient implements AsyncDisposable {
         const parsed = JSON.parse(json);
         const validation = outputConfig.schema.safeParse(parsed);
         if (validation.success) {
+          this._budgetTracker.record({ requestId, provider: providerName, model: modelId, phase: "execute", estimatedCost, actualCost: estimatedCost, timestamp: performance.now() });
           this._emit({ type: "structured.validate.pass", requestId, timestamp: performance.now() });
           this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: true });
           return validation.data;

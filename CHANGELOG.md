@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2026-08-23
+
+### Release: Cost-Aware Execution
+
+Developer describes intent and budget. Hilbras executes intelligently within constraints.
+
+### Added
+
+#### BudgetTracker
+
+Tracks costs across requests and enforces budget limits:
+
+```typescript
+import { HilbrasClient } from "@hilbras/sdk";
+
+const client = new HilbrasClient({
+  budget: {
+    sessionBudget: 1.00,       // Max total cost for the session
+    perRequestBudget: 0.10,    // Max cost per individual request
+    onBudgetWarning: (report) => console.warn(`80% budget used`),
+    onBudgetExceeded: (report) => console.error(`Budget exhausted`),
+  },
+});
+```
+
+#### Cost Tracking
+
+Every request records cost events with full lifecycle:
+
+```typescript
+client.record({ requestId, provider, model, phase: "execute", estimatedCost, actualCost });
+
+const report = client.costReport();
+// { totalEstimated, totalActual, requestCount, byProvider, byPhase, budgetExceeded, remainingBudget }
+```
+
+#### Budget Enforcement
+
+- **Per-request budget:** Requests exceeding the limit are rejected before execution
+- **Session budget:** Cumulative tracking with warning (80%) and exceeded callbacks
+- **Zero overhead:** No cost when budget is not configured
+
+```typescript
+// Budget exceeded — throws before making API call
+await client.complete({ ... }).catch(err => {
+  if (err.message.includes("budget")) { /* handle */ }
+});
+```
+
+#### Cost Reporting
+
+```typescript
+const report = client.costReport();
+console.log(report.totalActual);      // Total spent
+console.log(report.remainingBudget);   // Remaining budget
+console.log(report.byProvider);        // Breakdown by provider
+console.log(report.byPhase);           // Breakdown by phase (execute, retry, fallback)
+```
+
+#### Client API
+
+```typescript
+client.cost                     // BudgetTracker instance
+client.costReport()             // Current cost report
+client.isBudgetExhausted()      // Check if budget is exhausted
+```
+
+### Changed
+
+- Budget enforcement integrated into `complete()` execution path
+- 29 new tests (537 → 566 total)
+
+---
+
 ## [0.7.1] - 2026-08-23
 
 ### Release: Execution Security, Reliability & Deep Audit

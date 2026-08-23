@@ -55,6 +55,10 @@ export type { TaskRequirement, RoutingResult } from "./types/router.js";
 export type { SchemaValidator, StructuredOutputConfig } from "./types/schema.js";
 export { extractJson, buildJsonSystemInstruction, buildRepairPrompt, buildJsonModeParams } from "./output/structured.js";
 
+// ─── Cost Optimization ──────────────────────────────────────────────────────
+export { BudgetTracker } from "./cost/tracker.js";
+export type { CostEvent, CostReport, BudgetConfig } from "./cost/types.js";
+
 // ─── Transport ──────────────────────────────────────────────────────────────
 export type { Transport, TransportRequestInit } from "./transport/transport.js";
 export { FetchTransport } from "./transport/fetch.js";
