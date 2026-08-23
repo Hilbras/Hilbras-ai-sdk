@@ -73,6 +73,7 @@ export type { TimeoutConfig } from "./reliability/timeout.js";
 export { calculateBackoff, sleep } from "./reliability/backoff.js";
 export { resolvePolicy, getPreset } from "./reliability/presets.js";
 export type { ExecutionPolicy, ResolvedPolicy, PolicyPreset } from "./types/policy.js";
+export type { ExecutionPlan, ExecutionCandidate, ScoreBreakdown } from "./types/execution.js";
 export { composeMiddlewares, authMiddleware, loggingMiddleware, retryMiddleware, rateLimitMiddleware, cacheMiddleware } from "./middleware/middleware.js";
 export type { Middleware, MiddlewareContext } from "./middleware/middleware.js";
 export { withDegradation, createDegradationChain } from "./reliability/degradation.js";

@@ -17,6 +17,7 @@
 
 import type { TaskRequirement, RoutingResult, RejectedCandidate, TaskType } from "../types/router.js";
 import type { ModelEntry } from "../catalog/models.js";
+import type { ScoreBreakdown } from "../types/execution.js";
 import { BUILTIN_MODELS } from "../catalog/models.js";
 import { estimateCost } from "../tokens/counter.js";
 
@@ -75,11 +76,18 @@ export class ModelRouter {
     if (accepted.length === 0) return [];
 
     const scored = accepted.map((entry) => {
-      const { score, reasons } = this._score(entry, requirements);
-      return { entry, score, reasons };
+      const { score, reasons, breakdown } = this._score(entry, requirements);
+      return { entry, score, reasons, breakdown };
     });
 
     scored.sort((a, b) => b.score - a.score);
+
+    // Build fallback candidates from accepted models (excluding primary)
+    const fallbacks = scored.slice(1, 6).map((s) => ({
+      provider: s.entry.provider,
+      model: s.entry.id,
+      score: s.score,
+    }));
 
     return scored.map((s, i) => ({
       provider: s.entry.provider,
@@ -89,6 +97,8 @@ export class ModelRouter {
       estimatedCost: this._estimateCost(s.entry),
       reasons: s.reasons,
       candidates: includeCandidates ? rejected : undefined,
+      scoreBreakdown: s.breakdown,
+      fallbacks: i === 0 && includeCandidates ? fallbacks : undefined,
     }));
   }
 
@@ -110,6 +120,40 @@ export class ModelRouter {
   explain(requirements: TaskRequirement): RoutingResult | null {
     const results = this.evaluate(requirements, true);
     return results.length > 0 ? results[0] : null;
+  }
+
+  /**
+   * Create an execution plan — the full decision about how to execute a request.
+   * Includes primary model, fallbacks, cost estimates, and reasoning.
+   */
+  plan(requirements: TaskRequirement, requestId: string, estimatedRetries = 1, estimatedRepairs = 0): import("../types/execution.js").ExecutionPlan | null {
+    const results = this.evaluate(requirements, true);
+    if (results.length === 0) return null;
+
+    const primary = results[0];
+    const fallbacks = (primary.fallbacks ?? []);
+    const allCandidates = [
+      { provider: primary.provider, model: primary.model, score: primary.score, estimatedCost: primary.estimatedCost, reasons: primary.reasons },
+      ...fallbacks.map((f) => ({ provider: f.provider, model: f.model, score: f.score, estimatedCost: 0, reasons: [f.rejectionReason ?? ""] })),
+    ];
+
+    // Estimate total cost: primary + retries + repairs + possible fallback
+    const retryCostPerAttempt = primary.estimatedCost * 0.8; // Assume retries are slightly cheaper (backoff reduces load)
+    const repairCostPerAttempt = primary.estimatedCost * 0.5; // Repairs send less data
+    const estimatedTotalCost =
+      primary.estimatedCost
+      + (retryCostPerAttempt * estimatedRetries)
+      + (repairCostPerAttempt * estimatedRepairs);
+
+    return {
+      requestId,
+      primary: allCandidates[0],
+      fallbacks: allCandidates.slice(1),
+      allCandidates,
+      estimatedTotalCost,
+      policy: {},
+      reasoning: primary.reasons,
+    };
   }
 
   // ─── Filtering with Rejection Reasons ──────────────────────────────────
@@ -185,10 +229,9 @@ export class ModelRouter {
 
   // ─── Scoring ────────────────────────────────────────────────────────────
 
-  private _score(entry: ModelEntry, req: TaskRequirement): { score: number; reasons: string[] } {
+  private _score(entry: ModelEntry, req: TaskRequirement): { score: number; reasons: string[]; breakdown: ScoreBreakdown } {
     const weights = TASK_WEIGHTS[req.task ?? "general"] ?? TASK_WEIGHTS.general;
     const reasons: string[] = [];
-    let score = 0;
 
     // Capability score (0-100)
     let capCount = 0;
@@ -198,54 +241,119 @@ export class ModelRouter {
     if (entry.capabilities.reasoning) capCount++;
     if (entry.capabilities.structuredOutput) capCount++;
     if (entry.capabilities.parallelTools) capCount++;
-    const capScore = (capCount / 6) * 100;
+    const capabilityFit = (capCount / 6) * 100;
 
     if (req.needsTools && entry.capabilities.tools) reasons.push("Supports required tools");
     if (req.needsVision && entry.capabilities.vision) reasons.push("Supports required vision");
     if (req.needsReasoning && entry.capabilities.reasoning) reasons.push("Supports required reasoning");
     if (req.needsStructuredOutput && entry.capabilities.structuredOutput) reasons.push("Supports structured output");
 
+    // Task fit score (0-100) — how well the model's capabilities match the task
+    const taskFit = this._computeTaskFit(entry, req);
+
+    // Context fit score (0-100)
+    const contextFit = this._computeContextFit(entry, req);
+
     // Cost score (0-100) — lower cost = higher score
     const cost = this._estimateCost(entry);
-    const costScore = cost === 0 ? 100 : Math.max(0, 100 - (cost * 2000));
+    const costEfficiency = cost === 0 ? 100 : Math.max(0, 100 - (cost * 2000));
 
     if (req.maxCost && cost <= req.maxCost) reasons.push(`Within budget ($${cost.toFixed(4)} of $${req.maxCost})`);
     else if (req.budget) reasons.push(`Within ${req.budget} budget`);
 
-    // Speed score (0-100) — smaller context = faster
-    const speedScore = Math.max(0, 100 - (entry.contextWindow / 20_000));
+    // Latency score (0-100) — smaller context = faster
+    const latency = Math.max(0, 100 - (entry.contextWindow / 20_000));
 
     if (req.maxLatency && req.maxLatency !== "any") {
       const maxContext = LATENCY_CONTEXT_MAX[req.maxLatency] ?? Infinity;
       if (entry.contextWindow <= maxContext) reasons.push(`Meets ${req.maxLatency} latency preference`);
     }
 
-    // Reasoning bonus
-    const reasoningBonus = (req.needsReasoning && entry.capabilities.reasoning) ? 20 : 0;
+    // Budget alignment (0-100)
+    const budgetAlignment = this._computeBudgetAlignment(entry, req);
 
-    // Weighted combination
-    score = (capScore * (weights.reasoning + weights.tools + weights.structured) / 100)
-          + (costScore * weights.cost / 100)
-          + (speedScore * weights.speed / 100)
-          + reasoningBonus;
+    // Provider preference bonus (0-10)
+    const providerPreference = (req.preferredProvider && entry.provider === req.preferredProvider) ? 5 : 0;
+    if (providerPreference > 0) reasons.push(`Preferred provider (${entry.provider})`);
 
-    // Provider preference bonus
-    if (req.preferredProvider && entry.provider === req.preferredProvider) {
-      score += 5;
-      reasons.push(`Preferred provider (${entry.provider})`);
-    }
+    // Structured output fit (0-10)
+    const structuredOutputFit = (req.needsStructuredOutput && entry.capabilities.structuredOutput) ? 10 : 0;
+
+    // Tool fit (0-10)
+    const toolFit = (req.needsTools && entry.capabilities.tools) ? 10 : 0;
 
     // Context window reason
     if (req.minContextWindow && entry.contextWindow >= req.minContextWindow) {
       reasons.push(`Context window sufficient (${entry.contextWindow.toLocaleString()} tokens)`);
     }
 
-    // Clamp to 0-100
-    score = Math.min(100, Math.max(0, Math.round(score * 10) / 10));
+    // Weighted combination
+    const finalScore = (capabilityFit * (weights.reasoning + weights.tools + weights.structured) / 100)
+          + (taskFit * 10 / 100)
+          + (contextFit * 10 / 100)
+          + (costEfficiency * weights.cost / 100)
+          + (latency * weights.speed / 100)
+          + (budgetAlignment * 10 / 100)
+          + providerPreference
+          + structuredOutputFit
+          + toolFit;
+
+    const breakdown: ScoreBreakdown = {
+      capabilityFit: Math.round(capabilityFit),
+      taskFit: Math.round(taskFit),
+      contextFit: Math.round(contextFit),
+      costEfficiency: Math.round(costEfficiency),
+      latency: Math.round(latency),
+      budgetAlignment: Math.round(budgetAlignment),
+      providerPreference,
+      structuredOutputFit,
+      toolFit,
+      finalScore: Math.min(100, Math.max(0, Math.round(finalScore * 10) / 10)),
+    };
+
+    const score = breakdown.finalScore;
 
     if (reasons.length === 0) reasons.push("Best available match");
 
-    return { score, reasons };
+    return { score, reasons, breakdown };
+  }
+
+  // ─── Scoring Helpers ─────────────────────────────────────────────────────
+
+  private _computeTaskFit(entry: ModelEntry, req: TaskRequirement): number {
+    let fit = 50; // baseline
+    if (req.task === "coding" && entry.capabilities.tools) fit += 30;
+    if (req.task === "coding" && entry.capabilities.reasoning) fit += 20;
+    if (req.task === "reasoning" && entry.capabilities.reasoning) fit += 40;
+    if (req.task === "analysis" && entry.capabilities.reasoning) fit += 20;
+    if (req.task === "analysis" && entry.capabilities.structuredOutput) fit += 20;
+    if (req.task === "writing" && entry.capabilities.structuredOutput) fit += 10;
+    if (req.task === "extraction" && entry.capabilities.structuredOutput) fit += 30;
+    return Math.min(100, fit);
+  }
+
+  private _computeContextFit(entry: ModelEntry, req: TaskRequirement): number {
+    if (!req.minContextWindow) return 70; // No preference
+    const ratio = entry.contextWindow / req.minContextWindow;
+    if (ratio >= 2) return 100; // Much larger than needed
+    if (ratio >= 1) return 80; // Sufficient
+    if (ratio >= 0.5) return 40; // Tight
+    return 10; // Too small (should be filtered, but handle gracefully)
+  }
+
+  private _computeBudgetAlignment(entry: ModelEntry, req: TaskRequirement): number {
+    if (!req.budget) return 50; // No preference
+    const cost = this._estimateCost(entry);
+    const BUDGET_SCORES: Record<string, { max: number; score: number }> = {
+      low: { max: 0.01, score: 90 },
+      medium: { max: 0.05, score: 70 },
+      high: { max: Infinity, score: 50 },
+    };
+    const tier = BUDGET_SCORES[req.budget] ?? BUDGET_SCORES.high;
+    if (cost <= tier.max * 0.3) return 100; // Well under budget
+    if (cost <= tier.max * 0.6) return 75;  // Moderate
+    if (cost <= tier.max) return 50;        // At budget
+    return 20;                              // Over budget (should be filtered)
   }
 
   // ─── Cost Estimation ────────────────────────────────────────────────────

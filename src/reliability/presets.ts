@@ -15,6 +15,8 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
    * Good for most applications.
    */
   balanced: {
+    allowFallback: false,
+    maxFallbackCost: null,
     retry: { maxRetries: 3, retryableStatuses: new Set([429, 500, 502, 503, 504]), retryableNetworkErrors: true },
     backoff: { baseDelayMs: 500, maxDelayMs: 30_000, jitter: 0.3 },
     timeout: { requestTimeoutMs: 60_000 },
@@ -26,6 +28,8 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
    * More retries, longer timeout, circuit breaker on.
    */
   production: {
+    allowFallback: true,
+    maxFallbackCost: null,
     retry: { maxRetries: 5, retryableStatuses: new Set([429, 500, 502, 503, 504]), retryableNetworkErrors: true },
     backoff: { baseDelayMs: 1_000, maxDelayMs: 60_000, jitter: 0.3 },
     timeout: { requestTimeoutMs: 120_000 },
@@ -37,6 +41,8 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
    * Good for latency-sensitive applications.
    */
   fast: {
+    allowFallback: true,
+    maxFallbackCost: null,
     retry: { maxRetries: 1, retryableStatuses: new Set([429, 502, 503]), retryableNetworkErrors: false },
     backoff: { baseDelayMs: 200, maxDelayMs: 2_000, jitter: 0.1 },
     timeout: { requestTimeoutMs: 15_000 },
@@ -48,6 +54,8 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
    * Good when cost matters more than latency.
    */
   cheap: {
+    allowFallback: true,
+    maxFallbackCost: null,
     retry: { maxRetries: 10, retryableStatuses: new Set([429, 500, 502, 503, 504, 408, 429]), retryableNetworkErrors: true },
     backoff: { baseDelayMs: 2_000, maxDelayMs: 120_000, jitter: 0.5 },
     timeout: { requestTimeoutMs: 300_000 },
@@ -59,6 +67,8 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
    * Good for critical operations that must succeed.
    */
   maximum: {
+    allowFallback: true,
+    maxFallbackCost: null,
     retry: { maxRetries: 10, retryableStatuses: new Set([429, 500, 502, 503, 504, 408, 413, 429, 507]), retryableNetworkErrors: true },
     backoff: { baseDelayMs: 1_000, maxDelayMs: 60_000, jitter: 0.3 },
     timeout: { requestTimeoutMs: 300_000 },
@@ -74,11 +84,13 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
  * Priority: individual field overrides > preset > balanced defaults.
  */
 export function resolvePolicy(policy?: ExecutionPolicy): ResolvedPolicy {
-  if (!policy) return { ...PRESETS.balanced };
+  if (!policy) return { ...PRESETS.balanced, retry: { ...PRESETS.balanced.retry, retryableStatuses: new Set(PRESETS.balanced.retry.retryableStatuses) }, backoff: { ...PRESETS.balanced.backoff }, timeout: { ...PRESETS.balanced.timeout }, circuitBreaker: { ...PRESETS.balanced.circuitBreaker } };
 
   // Start with a deep copy of the named preset (or balanced)
   const src = policy.preset ? PRESETS[policy.preset] : PRESETS.balanced;
   const base: ResolvedPolicy = {
+    allowFallback: src.allowFallback,
+    maxFallbackCost: src.maxFallbackCost,
     retry: { ...src.retry, retryableStatuses: new Set(src.retry.retryableStatuses) },
     backoff: { ...src.backoff },
     timeout: { ...src.timeout },
@@ -113,6 +125,10 @@ export function resolvePolicy(policy?: ExecutionPolicy): ResolvedPolicy {
     if (policy.circuitBreaker.halfOpenMaxCalls !== undefined) base.circuitBreaker.halfOpenMaxCalls = policy.circuitBreaker.halfOpenMaxCalls;
   }
 
+  // Apply fallback overrides
+  if (policy.allowFallback !== undefined) base.allowFallback = policy.allowFallback;
+  if (policy.maxFallbackCost !== undefined) base.maxFallbackCost = policy.maxFallbackCost;
+
   return base;
 }
 
@@ -123,6 +139,8 @@ export function resolvePolicy(policy?: ExecutionPolicy): ResolvedPolicy {
 export function getPreset(name: PolicyPreset): ResolvedPolicy {
   const src = PRESETS[name];
   return {
+    allowFallback: src.allowFallback,
+    maxFallbackCost: src.maxFallbackCost,
     retry: { ...src.retry, retryableStatuses: new Set(src.retry.retryableStatuses) },
     backoff: { ...src.backoff },
     timeout: { ...src.timeout },

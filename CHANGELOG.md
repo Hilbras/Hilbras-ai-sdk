@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-08-23
+
+### Release: Execution Optimization
+
+Hilbras SDK now intelligently optimizes how AI requests are executed — selecting models, managing fallbacks, estimating costs, and explaining decisions.
+
+### Added
+
+#### Execution Plan
+
+New `plan()` method on the router and client returns the full execution decision:
+
+```typescript
+const plan = client.plan({
+  task: "coding",
+  messages,
+  policy: { allowFallback: true, maxCost: 0.05 },
+});
+
+console.log(plan.primary.model);        // Best model
+console.log(plan.estimatedTotalCost);    // Primary + retry + repair estimate
+console.log(plan.fallbacks);             // Alternative models
+console.log(plan.reasoning);             // Why this model was selected
+```
+
+#### Enhanced Scoring (9 dimensions)
+
+Router scoring now includes detailed breakdown:
+
+```typescript
+const result = router.best({ task: "coding", needsTools: true });
+console.log(result.scoreBreakdown);
+// {
+//   capabilityFit: 83,    // How well capabilities match
+//   taskFit: 95,          // Task-specific compatibility
+//   contextFit: 80,       // Context window fit
+//   costEfficiency: 70,   // Cost relative to budget
+//   latency: 65,          // Speed preference
+//   budgetAlignment: 75,  // Budget tier alignment
+//   providerPreference: 5, // Preferred provider bonus
+//   structuredOutputFit: 0, // Structured output compatibility
+//   toolFit: 10,          // Tool support
+//   finalScore: 82.4
+// }
+```
+
+#### Automatic Fallback
+
+When `allowFallback: true` in the execution policy, the client automatically tries alternative models on failure:
+
+```typescript
+const result = await client.complete({
+  task: "coding",
+  messages,
+  policy: {
+    allowFallback: true,
+    maxCost: 0.05,
+    retry: { maxRetries: 3 },
+  },
+});
+```
+
+**Fallback safety:**
+- Fallback candidates respect all hard constraints (capabilities, cost, context)
+- Fallback respects execution policies
+- Fallback is policy-driven, not unlimited
+- Observability events emitted for each fallback attempt
+
+**Preset defaults:**
+| Preset | allowFallback |
+|--------|--------------|
+| `balanced` | false |
+| `production` | true |
+| `fast` | true |
+| `cheap` | true |
+| `maximum` | true |
+
+#### Fallback Observability
+
+```typescript
+client.on("fallback.started", (event) => {
+  console.log(`Falling back from ${event.originalModel} to ${event.fallbackModel}`);
+});
+```
+
+### Changed
+
+- `RoutingResult` now includes `scoreBreakdown` and `fallbacks` fields
+- `RejectedCandidate.rejectionReason` is now optional (fallback candidates don't have rejection reasons)
+- ResolvedPolicy now includes `allowFallback` and `maxFallbackCost` fields
+- 31 new tests (391 → 422 total)
+
+---
+
 ## [0.6.2] - 2026-08-23
 
 ### Release: Provider Contract & Integration Certification

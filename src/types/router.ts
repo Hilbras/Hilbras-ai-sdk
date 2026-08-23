@@ -10,6 +10,7 @@
  */
 
 import type { ModelEntry } from "../catalog/models.js";
+import type { ScoreBreakdown } from "./execution.js";
 
 /** Controlled task taxonomy — each task type has associated scoring weights */
 export type TaskType =
@@ -58,7 +59,7 @@ export interface RejectedCandidate {
   provider: string;
   model: string;
   score: number;
-  rejectionReason: string;
+  rejectionReason?: string;
 }
 
 /** A routing decision — explainable, with full audit trail */
@@ -77,4 +78,8 @@ export interface RoutingResult {
   reasons: string[];
   /** Other candidates that were evaluated and why they were rejected */
   candidates?: RejectedCandidate[];
+  /** Detailed score breakdown for explainability */
+  scoreBreakdown?: ScoreBreakdown;
+  /** Fallback candidates in priority order */
+  fallbacks?: RejectedCandidate[];
 }

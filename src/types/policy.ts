@@ -23,6 +23,12 @@ export interface ExecutionPolicy {
   /** Named preset (resolved to full config). Individual fields override preset values. */
   preset?: PolicyPreset;
 
+  /** Whether to allow automatic fallback to alternative models on failure */
+  allowFallback?: boolean;
+
+  /** Maximum cost for fallback candidates (overrides maxCost for fallbacks) */
+  maxFallbackCost?: number;
+
   /** Retry configuration */
   retry?: {
     /** Max retry attempts */
@@ -66,6 +72,8 @@ export interface ExecutionPolicy {
 
 /** Resolved policy — all fields filled in after preset resolution */
 export interface ResolvedPolicy {
+  allowFallback: boolean;
+  maxFallbackCost: number | null;
   retry: {
     maxRetries: number;
     retryableStatuses: Set<number>;

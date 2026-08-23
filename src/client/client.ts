@@ -131,6 +131,28 @@ export class HilbrasClient implements AsyncDisposable {
     return this._router.explain(requirements);
   }
 
+  /**
+   * Create an execution plan — the full decision about how to execute a request.
+   * Includes primary model, fallbacks, cost estimates, and reasoning.
+   *
+   * @example
+   * const plan = client.plan({ task: "coding", messages, policy: { allowFallback: true } });
+   * console.log(plan.estimatedTotalCost);
+   */
+  plan(requirements: TaskRequirement & { messages?: Array<Record<string, unknown> | Message> }): import("../types/execution.js").ExecutionPlan | null {
+    const requestId = this._nextRequestId();
+    return this._router.plan(requirements, requestId);
+  }
+
+  /** Get fallback candidates for a failed request */
+  private _getFallbacks(excludeModels: string[], requirements: { task?: string; needsVision?: boolean; needsTools?: boolean; needsReasoning?: boolean; needsStructuredOutput?: boolean; maxCost?: number; budget?: "low" | "medium" | "high"; excludeModels?: string[]; preferredProvider?: string }): Array<{ provider: string; model: string }> {
+    const results = this._router.evaluate(requirements as TaskRequirement, false);
+    return results
+      .filter((r) => !excludeModels.includes(r.model))
+      .slice(0, 3)
+      .map((r) => ({ provider: r.provider, model: r.model }));
+  }
+
   findModel(modelId: string) {
     return this._registry.findModel(modelId);
   }
@@ -321,6 +343,21 @@ export class HilbrasClient implements AsyncDisposable {
           continue;
         }
 
+        // Try fallback if allowed and we have candidates
+        if (resolved.allowFallback && attempt >= retryConfig.maxRetries) {
+          const fallbacks = this._getFallbacks([modelId], params);
+          for (const fb of fallbacks) {
+            this._emit({ type: "fallback.started", requestId, timestamp: performance.now(), originalProvider: providerName, originalModel: modelId, fallbackProvider: fb.provider, fallbackModel: fb.model });
+            try {
+              const fbAdapter = this._getAdapter(fb.provider);
+              const gen = fbAdapter.stream({ model: fb.model, messages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: params.extra, signal });
+              for await (const chunk of gen) { yield chunk; }
+              this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, inputTokens, outputTokens, structuredOutput: false });
+              return;
+            } catch { /* fallback also failed — continue to next */ }
+          }
+        }
+
         circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
         this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
         throw err;
@@ -494,6 +531,24 @@ export class HilbrasClient implements AsyncDisposable {
           this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
           await sleep(delay);
           continue;
+        }
+
+        // Try fallback if allowed and retries exhausted
+        if (resolved.allowFallback && attempt >= retryConfig.maxRetries && !(err instanceof ValidationError)) {
+          const fallbacks = this._getFallbacks([modelId], params);
+          for (const fb of fallbacks) {
+            try {
+              const fbAdapter = this._getAdapter(fb.provider);
+              const result = await fbAdapter.complete({ model: fb.model, messages: structuredMessages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: structuredExtra, signal });
+              this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, structuredOutput: !!outputConfig });
+              if (!outputConfig) return result as T;
+              const json = extractJson(result);
+              const parsed = JSON.parse(json);
+              const validation = outputConfig.schema.safeParse(parsed);
+              if (validation.success) return validation.data;
+              throw new ValidationError(maxRepairAttempts + 1, validation.error, result);
+            } catch { /* fallback also failed — continue to next */ }
+          }
         }
 
         circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);

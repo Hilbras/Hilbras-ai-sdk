@@ -108,6 +108,19 @@ export interface StreamFirstChunkEvent extends BaseEvent {
   latencyMs: number;
 }
 
+/** Fallback attempted */
+export interface FallbackEvent extends BaseEvent {
+  type: "fallback.started";
+  /** Original provider that failed */
+  originalProvider: string;
+  /** Original model that failed */
+  originalModel: string;
+  /** Fallback provider being tried */
+  fallbackProvider: string;
+  /** Fallback model being tried */
+  fallbackModel: string;
+}
+
 /** All hook events */
 export type HookEvent =
   | RequestStartEvent
@@ -118,7 +131,8 @@ export type HookEvent =
   | CircuitBreakerOpenEvent
   | ValidationPassEvent
   | ValidationFailEvent
-  | StreamFirstChunkEvent;
+  | StreamFirstChunkEvent
+  | FallbackEvent;
 
 /** Event type name — used as the key for on()/off() */
 export type HookEventType = HookEvent["type"];
