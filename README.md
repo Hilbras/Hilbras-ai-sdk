@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.8.1-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.9.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-640%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-676%20passing-brightgreen" alt="tests">
 </p>
 
 <h1 align="center">@hilbras/sdk</h1>
@@ -520,6 +520,7 @@ console.log(`By provider:`, report.byProvider);
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| [v0.9.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.9.0) | 2026-08-23 | Hard Budget Enforcement, atomic reservations, 676 tests |
 | [v0.8.1](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.8.1) | 2026-08-23 | Cost audit: negative token fix, callback safety, 640 tests |
 | [v0.8.0](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.8.0) | 2026-08-23 | Cost-Aware Execution, BudgetTracker, 566 tests |
 | [v0.7.1](https://github.com/Hilbras/Hilbras-ai-sdk/releases/tag/v0.7.1) | 2026-08-23 | Deep audit, 78 audit tests, 500 total, patch certified |

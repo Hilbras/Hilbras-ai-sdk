@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Standalone LLM Client SDK for Hilbras — provider abstraction, streaming, tool schemas, and reliability primitives.",
   "type": "module",
   "main": "dist/index.js",

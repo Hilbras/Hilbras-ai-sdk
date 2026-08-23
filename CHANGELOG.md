@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-08-23
+
+### Release: Hard Budget Enforcement & Atomic Cost Control
+
+v0.8.x established **Cost Awareness**. v0.9.0 establishes **Cost Enforcement**.
+
+### Added
+
+#### Atomic Reservation System
+
+BudgetTracker now uses a reservation-based model to prevent concurrent requests from collectively exceeding budgets:
+
+```typescript
+const tracker = new BudgetTracker({ sessionBudget: 1.00 });
+
+// Atomic: reserve before execution
+const reservation = tracker.reserve("req_1", 0.60);
+if (!reservation) throw new Error("Budget exceeded");
+
+// Execute...
+tracker.settle("req_1", 0.45); // actual < reserved → refund $0.15
+
+// OR on failure:
+tracker.release("req_1"); // free the reservation
+```
+
+**Key properties:**
+- **Atomic reservation** — synchronous check+reserve (safe in JS event loop)
+- **Committed cost tracking** — `committedCost = totalActual + totalReserved`
+- **Reservation lifecycle** — reserve → execute → settle/release
+- **Over-reservation handling** — actual > reserved is allowed (settles to actual)
+- **Under-reservation refund** — actual < reserved returns unused budget
+- **No leaked reservations** — guaranteed after terminal execution
+
+#### Enhanced CostReport
+
+```typescript
+interface CostReport {
+  totalEstimated: number;
+  totalActual: number;
+  totalReserved: number;     // NEW — pending reservations
+  committedCost: number;      // NEW — actual + reserved
+  requestCount: number;
+  activeReservations: number; // NEW — pending count
+  byProvider: Record<string, ...>;
+  byPhase: Record<string, number>;
+  budgetExceeded: boolean;
+  remainingBudget: number | null;
+}
+```
+
+#### Backward Compatible
+
+The legacy `record()` API still works — existing code unchanged.
+
+### Changed
+
+- 36 new tests (640 → 676 total)
+
+---
+
 ## [0.8.1] - 2026-08-23
 
 ### Fixed

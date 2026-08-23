@@ -30,8 +30,14 @@ export interface CostReport {
   totalEstimated: number;
   /** Total actual cost across all requests */
   totalActual: number;
+  /** Total currently reserved (pending execution) */
+  totalReserved: number;
+  /** Committed cost = totalActual + totalReserved */
+  committedCost: number;
   /** Number of requests tracked */
   requestCount: number;
+  /** Number of active reservations */
+  activeReservations: number;
   /** Cost by provider */
   byProvider: Record<string, { estimated: number; actual: number; requests: number }>;
   /** Cost by phase */

@@ -475,13 +475,11 @@ export class HilbrasClient implements AsyncDisposable {
 
     const maxRepairAttempts = outputConfig?.maxRepairAttempts ?? 2;
 
-    // Budget check before execution
+    // Budget: atomic reserve before execution
     const estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-    if (this._budgetTracker.wouldExceedBudget(estimatedCost)) {
-      throw new Error(`Request would exceed per-request budget ($${estimatedCost.toFixed(4)})`);
-    }
-    if (this._budgetTracker.isBudgetExhausted()) {
-      throw new Error("Session budget exhausted");
+    const reservation = this._budgetTracker.reserve(requestId, estimatedCost);
+    if (!reservation) {
+      throw new Error(`Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`);
     }
 
     for (let attempt = 0; ; attempt++) {
@@ -497,9 +495,9 @@ export class HilbrasClient implements AsyncDisposable {
         });
         circuitBreaker?.recordSuccess();
 
-        // If no structured output, return raw string
+        // If no structured output, settle and return
         if (!outputConfig) {
-          this._budgetTracker.record({ requestId, provider: providerName, model: modelId, phase: "execute", estimatedCost, actualCost: estimatedCost, timestamp: performance.now() });
+          this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
           this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: false });
           return result as T;
         }
@@ -509,7 +507,7 @@ export class HilbrasClient implements AsyncDisposable {
         const parsed = JSON.parse(json);
         const validation = outputConfig.schema.safeParse(parsed);
         if (validation.success) {
-          this._budgetTracker.record({ requestId, provider: providerName, model: modelId, phase: "execute", estimatedCost, actualCost: estimatedCost, timestamp: performance.now() });
+          this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
           this._emit({ type: "structured.validate.pass", requestId, timestamp: performance.now() });
           this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: true });
           return validation.data;
@@ -564,11 +562,16 @@ export class HilbrasClient implements AsyncDisposable {
 
         // Try fallback if allowed and retries exhausted
         if (resolved.allowFallback && attempt >= retryConfig.maxRetries && !(err instanceof ValidationError)) {
+          this._budgetTracker.release(requestId); // Release original reservation
           const fallbacks = this._getFallbacks([modelId], params);
           for (const fb of fallbacks) {
+            const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, 0, 0);
+            const fbReservation = this._budgetTracker.reserve(`${requestId}_fb_${fb.model}`, fbEstimatedCost);
+            if (!fbReservation) continue; // Budget exceeded — skip this fallback
             try {
               const fbAdapter = this._getAdapter(fb.provider);
               const result = await fbAdapter.complete({ model: fb.model, messages: structuredMessages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: structuredExtra, signal });
+              this._budgetTracker.settle(`${requestId}_fb_${fb.model}`, fbEstimatedCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
               this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, structuredOutput: !!outputConfig });
               if (!outputConfig) return result as T;
               const json = extractJson(result);
@@ -576,10 +579,14 @@ export class HilbrasClient implements AsyncDisposable {
               const validation = outputConfig.schema.safeParse(parsed);
               if (validation.success) return validation.data;
               throw new ValidationError(maxRepairAttempts + 1, validation.error, result);
-            } catch { /* fallback also failed — continue to next */ }
+            } catch {
+              this._budgetTracker.release(`${requestId}_fb_${fb.model}`);
+            }
           }
         }
 
+        // Release reservation on final failure
+        this._budgetTracker.release(requestId);
         circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
         this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
         throw err;

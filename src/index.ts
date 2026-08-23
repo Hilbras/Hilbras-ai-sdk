@@ -57,6 +57,7 @@ export { extractJson, buildJsonSystemInstruction, buildRepairPrompt, buildJsonMo
 
 // ─── Cost Optimization ──────────────────────────────────────────────────────
 export { BudgetTracker } from "./cost/tracker.js";
+export type { Reservation } from "./cost/tracker.js";
 export type { CostEvent, CostReport, BudgetConfig } from "./cost/types.js";
 
 // ─── Transport ──────────────────────────────────────────────────────────────

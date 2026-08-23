@@ -1,25 +1,37 @@
 /**
- * @hilbras/sdk — Budget Tracker
+ * @hilbras/sdk — Budget Tracker with Atomic Reservations
  *
- * Tracks costs across requests and enforces budget limits.
- * Thread-safe (no shared mutable state between requests).
+ * Tracks costs and enforces budgets using a reservation-based model.
+ * Prevents concurrent requests from collectively exceeding the budget
+ * by requiring an atomic check+reserve before execution.
+ *
+ * Lifecycle: RESERVE → EXECUTE → SETTLE (actual > estimated releases delta)
  *
  * Usage:
- *   const tracker = new BudgetTracker({ sessionBudget: 1.00, perRequestBudget: 0.10 });
- *   const estimate = tracker.estimate("gpt-5.6-sol", 1000, 500);
+ *   const tracker = new BudgetTracker({ sessionBudget: 1.00 });
+ *   const reservation = tracker.reserve("req_1", 0.60);
  *   // ... execute request ...
- *   tracker.record({ requestId, provider, model, estimatedCost, actualCost, ... });
- *   const report = tracker.report();
+ *   tracker.settle("req_1", 0.45); // actual < reserved → refund $0.15
+ *   // OR
+ *   tracker.release("req_1"); // failed before execution → release all
  */
 
 import type { CostEvent, CostReport, BudgetConfig } from "./types.js";
 import { estimateCost } from "../tokens/counter.js";
 
+export interface Reservation {
+  id: string;
+  amount: number;
+  timestamp: number;
+}
+
 export class BudgetTracker {
   private _events: CostEvent[] = [];
   private _budget: BudgetConfig;
-  private _totalEstimated = 0;
   private _totalActual = 0;
+  private _totalReserved = 0;
+  private _totalEstimated = 0;
+  private _reservations = new Map<string, Reservation>();
   private _byProvider: Record<string, { estimated: number; actual: number; requests: number }> = {};
   private _byPhase: Record<string, number> = {};
   private _budgetWarningFired = false;
@@ -31,7 +43,6 @@ export class BudgetTracker {
 
   /**
    * Estimate cost before execution.
-   * Returns the estimated cost in USD, or 0 if unknown.
    */
   estimate(model: string, provider: string, inputTokens: number, outputTokens: number): number {
     const result = estimateCost(inputTokens, outputTokens, provider, model);
@@ -40,7 +51,6 @@ export class BudgetTracker {
 
   /**
    * Check if a request would exceed the per-request budget.
-   * Returns true if the request should be rejected.
    */
   wouldExceedBudget(estimatedCost: number): boolean {
     if (this._budget.perRequestBudget == null) return false;
@@ -49,21 +59,101 @@ export class BudgetTracker {
 
   /**
    * Check if the session budget is exhausted.
+   * Uses committed cost (reserved + actual) for accurate enforcement.
    */
   isBudgetExhausted(): boolean {
     if (this._budget.sessionBudget == null) return false;
-    return this._totalActual >= this._budget.sessionBudget;
+    const committed = this._totalActual + this._totalReserved;
+    return committed >= this._budget.sessionBudget;
   }
 
   /**
-   * Record a cost event.
+   * Atomically check and reserve budget.
+   * Returns the reservation if successful, null if budget exceeded.
+   *
+   * This is synchronous — no await between check and reserve.
+   * In JavaScript's single-threaded event loop, this is atomic.
+   */
+  reserve(requestId: string, estimatedCost: number): Reservation | null {
+    if (estimatedCost < 0) return null;
+
+    // Per-request check
+    if (this.wouldExceedBudget(estimatedCost)) return null;
+
+    // Session check — committed = actual + reserved
+    if (this._budget.sessionBudget != null) {
+      const committed = this._totalActual + this._totalReserved;
+      if (committed + estimatedCost > this._budget.sessionBudget) return null;
+    }
+
+    // Atomic reservation
+    const reservation: Reservation = { id: requestId, amount: estimatedCost, timestamp: Date.now() };
+    this._reservations.set(requestId, reservation);
+    this._totalReserved += estimatedCost;
+    this._totalEstimated += estimatedCost;
+
+    return reservation;
+  }
+
+  /**
+   * Settle a reservation with actual cost.
+   * Releases the difference if actual < reserved.
+   * If actual > reserved, consumes additional budget.
+   */
+  settle(requestId: string, actualCost: number, event: Omit<CostEvent, "timestamp" | "estimatedCost" | "actualCost" | "requestId">): void {
+    const reservation = this._reservations.get(requestId);
+    if (!reservation) return;
+
+    const reserved = reservation.amount;
+    this._reservations.delete(requestId);
+    this._totalReserved = Math.max(0, this._totalReserved - reserved);
+
+    // Record actual cost
+    const costEvent: CostEvent = {
+      ...event,
+      requestId,
+      estimatedCost: reserved,
+      actualCost,
+      timestamp: Date.now(),
+    };
+    this._events.push(costEvent);
+    this._totalActual += actualCost;
+
+    // Update provider tracking
+    if (!this._byProvider[event.provider]) {
+      this._byProvider[event.provider] = { estimated: 0, actual: 0, requests: 0 };
+    }
+    this._byProvider[event.provider].estimated += reserved;
+    this._byProvider[event.provider].actual += actualCost;
+    this._byProvider[event.provider].requests++;
+
+    // Update phase tracking
+    this._byPhase[event.phase] = (this._byPhase[event.phase] ?? 0) + actualCost;
+
+    // Budget callbacks
+    this._checkBudgetCallbacks();
+  }
+
+  /**
+   * Release a reservation without recording actual cost.
+   * Use when execution fails before provider call.
+   */
+  release(requestId: string): void {
+    const reservation = this._reservations.get(requestId);
+    if (!reservation) return;
+
+    this._totalReserved = Math.max(0, this._totalReserved - reservation.amount);
+    this._reservations.delete(requestId);
+  }
+
+  /**
+   * Legacy: record a cost event without reservation (backward compatible).
    */
   record(event: CostEvent): void {
     this._events.push(event);
     this._totalEstimated += event.estimatedCost;
     this._totalActual += event.actualCost;
 
-    // Track by provider
     if (!this._byProvider[event.provider]) {
       this._byProvider[event.provider] = { estimated: 0, actual: 0, requests: 0 };
     }
@@ -71,37 +161,27 @@ export class BudgetTracker {
     this._byProvider[event.provider].actual += event.actualCost;
     this._byProvider[event.provider].requests++;
 
-    // Track by phase
     this._byPhase[event.phase] = (this._byPhase[event.phase] ?? 0) + event.actualCost;
 
-    // Budget warnings — track exceeded and warning independently
-    if (this._budget.sessionBudget != null) {
-      const pct = this._totalActual / this._budget.sessionBudget;
-
-      if (pct >= 1 && !this._budgetExceededFired) {
-        this._budgetExceededFired = true;
-        try { this._budget.onBudgetExceeded?.(this.report()); } catch { /* notification-only — errors must not corrupt accounting */ }
-      }
-
-      if (pct >= 0.8 && !this._budgetWarningFired) {
-        this._budgetWarningFired = true;
-        try { this._budget.onBudgetWarning?.(this.report()); } catch { /* notification-only — errors must not corrupt accounting */ }
-      }
-    }
+    this._checkBudgetCallbacks();
   }
 
   /**
    * Get the current cost report.
    */
   report(): CostReport {
+    const committed = this._totalActual + this._totalReserved;
     const remaining = this._budget.sessionBudget != null
-      ? Math.max(0, this._budget.sessionBudget - this._totalActual)
+      ? Math.max(0, this._budget.sessionBudget - committed)
       : null;
 
     return {
       totalEstimated: this._totalEstimated,
       totalActual: this._totalActual,
+      totalReserved: this._totalReserved,
+      committedCost: committed,
       requestCount: this._events.length,
+      activeReservations: this._reservations.size,
       byProvider: { ...this._byProvider },
       byPhase: { ...this._byPhase },
       budgetExceeded: this.isBudgetExhausted(),
@@ -117,15 +197,41 @@ export class BudgetTracker {
   }
 
   /**
+   * Get all active reservations.
+   */
+  reservations(): readonly Reservation[] {
+    return [...this._reservations.values()];
+  }
+
+  /**
    * Reset all tracking state.
    */
   reset(): void {
     this._events = [];
     this._totalEstimated = 0;
     this._totalActual = 0;
+    this._totalReserved = 0;
+    this._reservations.clear();
     this._byProvider = {};
     this._byPhase = {};
     this._budgetWarningFired = false;
     this._budgetExceededFired = false;
+  }
+
+  private _checkBudgetCallbacks(): void {
+    if (this._budget.sessionBudget != null) {
+      const committed = this._totalActual + this._totalReserved;
+      const pct = committed / this._budget.sessionBudget;
+
+      if (pct >= 1 && !this._budgetExceededFired) {
+        this._budgetExceededFired = true;
+        try { this._budget.onBudgetExceeded?.(this.report()); } catch { /* notification-only */ }
+      }
+
+      if (pct >= 0.8 && !this._budgetWarningFired) {
+        this._budgetWarningFired = true;
+        try { this._budget.onBudgetWarning?.(this.report()); } catch { /* notification-only */ }
+      }
+    }
   }
 }
