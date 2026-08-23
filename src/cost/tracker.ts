@@ -75,7 +75,7 @@ export class BudgetTracker {
    * In JavaScript's single-threaded event loop, this is atomic.
    */
   reserve(requestId: string, estimatedCost: number): Reservation | null {
-    if (estimatedCost < 0) return null;
+    if (estimatedCost < 0 || !Number.isFinite(estimatedCost)) return null;
 
     // Per-request check
     if (this.wouldExceedBudget(estimatedCost)) return null;
@@ -104,6 +104,10 @@ export class BudgetTracker {
     const reservation = this._reservations.get(requestId);
     if (!reservation) return;
 
+    // Guard against invalid actual cost — clamp negative/NaN to 0, cap Infinity at session budget
+    const safeActual = actualCost < 0 || Number.isNaN(actualCost) ? 0
+      : actualCost === Infinity ? (this._budget.sessionBudget ?? 1e15)
+      : actualCost;
     const reserved = reservation.amount;
     this._reservations.delete(requestId);
     this._totalReserved = Math.max(0, this._totalReserved - reserved);
@@ -113,22 +117,22 @@ export class BudgetTracker {
       ...event,
       requestId,
       estimatedCost: reserved,
-      actualCost,
+      actualCost: safeActual,
       timestamp: Date.now(),
     };
     this._events.push(costEvent);
-    this._totalActual += actualCost;
+    this._totalActual += safeActual;
 
     // Update provider tracking
     if (!this._byProvider[event.provider]) {
       this._byProvider[event.provider] = { estimated: 0, actual: 0, requests: 0 };
     }
     this._byProvider[event.provider].estimated += reserved;
-    this._byProvider[event.provider].actual += actualCost;
+    this._byProvider[event.provider].actual += safeActual;
     this._byProvider[event.provider].requests++;
 
     // Update phase tracking
-    this._byPhase[event.phase] = (this._byPhase[event.phase] ?? 0) + actualCost;
+    this._byPhase[event.phase] = (this._byPhase[event.phase] ?? 0) + safeActual;
 
     // Budget callbacks
     this._checkBudgetCallbacks();
