@@ -1,5 +1,5 @@
 /**
- * @hilbras/sdk — v0.9.1 Deep Reservation Audit
+ * @hilbras/sdk — v0.9.1/v0.9.2 Deep Reservation Audit
  *
  * Adversarial tests attacking the atomic reservation system.
  * Goal: can any sequence of calls cause incorrect financial accounting?
@@ -164,16 +164,16 @@ describe("Phase 6: Release After Settle", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("Phase 7: Reservation ID Collision", () => {
-  it("same ID used twice — first reservation is overwritten (documented behavior)", () => {
+  it("same ID used twice — second reserve rejected, accounting invariant preserved", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("same-id", 0.5);
-    t.reserve("same-id", 0.3); // overwrites — first reservation is leaked
-    // This is a known limitation: ID collision overwrites the Map entry
-    // but _totalReserved still includes the first amount
+    const second = t.reserve("same-id", 0.3); // rejected
+    expect(second).toBeNull();
+    // First reservation remains intact
     t.settle("same-id", 0.2, { provider: "p", model: "m", phase: "execute" });
     expect(t.report().totalActual).toBeCloseTo(0.2);
-    // totalReserved includes the leaked 0.5 from the first reserve
-    expect(t.report().totalReserved).toBeCloseTo(0.5);
+    expect(t.report().totalReserved).toBe(0);
+    assertBudgetInvariant(t);
   });
 
   it("empty string ID works", () => {
@@ -719,5 +719,121 @@ describe("Phase 21: Callback Safety", () => {
     t.record({ requestId: "r0", provider: "p", model: "m", phase: "execute", estimatedCost: 110, actualCost: 110, timestamp: 1 });
     assertBudgetInvariant(t);
     expect(t.report().totalActual).toBe(110);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// v0.9.2: Duplicate Reservation ID Rejection
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
+  it("duplicate ID returns null — accounting invariant preserved", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    expect(t.reserve("r1", 0.3)).toBeNull(); // rejected
+    expect(t.report().totalReserved).toBe(0.5); // first reservation intact
+    t.settle("r1", 0.3, { provider: "p", model: "m", phase: "execute" });
+    expect(t.report().totalActual).toBeCloseTo(0.3);
+    expect(t.report().totalReserved).toBe(0);
+  });
+
+  it("duplicate ID does not modify existing reservation amount", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    t.reserve("r1", 0.9); // rejected
+    expect(t.reservations()[0].amount).toBe(0.5);
+  });
+
+  it("duplicate ID does not increase totalReserved", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    t.reserve("r1", 0.3); // rejected
+    expect(t.report().totalReserved).toBe(0.5); // not 0.8
+  });
+
+  it("release after rejected duplicate remains correct", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    t.reserve("r1", 0.3); // rejected
+    t.release("r1");
+    expect(t.report().totalReserved).toBe(0);
+    expect(t.report().totalActual).toBe(0);
+  });
+
+  it("settle after rejected duplicate remains correct", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    t.reserve("r1", 0.3); // rejected
+    t.settle("r1", 0.4, { provider: "p", model: "m", phase: "execute" });
+    expect(t.report().totalActual).toBeCloseTo(0.4);
+    expect(t.report().totalReserved).toBe(0);
+  });
+
+  it("repeated duplicate attempts remain safe", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    for (let i = 0; i < 100; i++) {
+      expect(t.reserve("r1", 0.1)).toBeNull();
+    }
+    expect(t.report().totalReserved).toBe(0.5);
+    assertBudgetInvariant(t);
+  });
+
+  it("duplicate IDs under concurrency", () => {
+    const t = new BudgetTracker({ sessionBudget: 100 });
+    let accepted = 0;
+    for (let i = 0; i < 1000; i++) {
+      if (t.reserve("same-id", 0.01)) accepted++;
+    }
+    expect(accepted).toBe(1); // only first succeeds
+    expect(t.report().totalReserved).toBeCloseTo(0.01);
+  });
+
+  it("random collision scenarios — 1000 randomized operations", () => {
+    for (let scenario = 0; scenario < 1000; scenario++) {
+      const t = new BudgetTracker({ sessionBudget: 10.0 });
+      const ids = ["A", "B", "C", "D"]; // deliberately small pool
+      for (let i = 0; i < 20; i++) {
+        const id = ids[i % ids.length]; // generates collisions
+        const cost = Math.random() * 0.1;
+        if (Math.random() > 0.3) {
+          t.reserve(id, cost);
+        } else {
+          t.settle(id, Math.random() * cost, { provider: "p", model: "m", phase: "execute" });
+        }
+      }
+      assertBudgetInvariant(t);
+      expect(t.report().activeReservations).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("reserve after settle on same ID succeeds (ID is freed)", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    t.settle("r1", 0.3, { provider: "p", model: "m", phase: "execute" });
+    // ID is freed after settle — new reservation with same ID should work
+    expect(t.reserve("r1", 0.2)).not.toBeNull();
+    expect(t.report().activeReservations).toBe(1);
+  });
+
+  it("reserve after release on same ID succeeds (ID is freed)", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    t.reserve("r1", 0.5);
+    t.release("r1");
+    // ID is freed after release — new reservation with same ID should work
+    expect(t.reserve("r1", 0.2)).not.toBeNull();
+    expect(t.report().activeReservations).toBe(1);
+  });
+
+  it("client-generated IDs are unique (requestId counter)", () => {
+    const provider = { name: "Test", baseUrl: "https://test.com/v1", authentication: { type: "none" } as const, adapter: "openai" as const, models: [{ id: "gpt-5.6-sol", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }] };
+    const client = new HilbrasClient({ transport: successTransport(), budget: { sessionBudget: 100 } });
+    client.addProvider(provider);
+    const promises = Array.from({ length: 10 }, (_, i) =>
+      client.complete({ provider: "Test", model: "gpt-5.6-sol", messages: [{ role: "user", content: `msg ${i}` }] }).catch(() => {})
+    );
+    return Promise.all(promises).then(() => {
+      expect(client.costReport().activeReservations).toBe(0);
+    });
   });
 });

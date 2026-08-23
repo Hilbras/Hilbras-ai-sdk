@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.2] - 2026-08-23
+
+### Fixed
+
+- **Duplicate reservation IDs could silently overwrite active reservations** — `reserve()` now rejects duplicate IDs, preventing orphaned reservations and accounting corruption. Severity: HIGH.
+
+### Added
+
+- 11 new duplicate-ID regression tests (761 → 772 total)
+- Execution pipeline audit tests (30 tests covering budget+reservation, retry/fallback, streaming, concurrency, security)
+
+---
+
 ## [0.9.0] - 2026-08-23
 
 ### Release: Hard Budget Enforcement & Atomic Cost Control

@@ -142,13 +142,11 @@ describe("Atomicity", () => {
     expect(tracker.report().totalReserved).toBeCloseTo(0.99);
   });
 
-  it("no double-reservation of same ID", () => {
-    const tracker = new BudgetTracker({ sessionBudget: 1.0 });
-    tracker.reserve("r1", 0.3);
-    const r2 = tracker.reserve("r1", 0.3); // Same ID
-    // Second reservation still gets through (IDs are not enforced as unique)
-    // But the reservation tracks both — this is documented behavior
-    expect(r2).not.toBeNull();
+  it("no double-reservation of same ID — second is rejected", () => {
+    const t = new BudgetTracker({ sessionBudget: 1.0 });
+    expect(t.reserve("r1", 0.3)).not.toBeNull();
+    expect(t.reserve("r1", 0.3)).toBeNull(); // rejected
+    expect(t.report().totalReserved).toBe(0.3); // first reservation intact
   });
 
   it("release after settle is safe", () => {

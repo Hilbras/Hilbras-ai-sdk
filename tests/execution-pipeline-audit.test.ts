@@ -66,13 +66,13 @@ function assertBudgetInvariant(t: BudgetTracker) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("Phase 2: Budget + Reservation Integrity", () => {
-  it("duplicate reservation IDs cause leaked budget (documented limitation)", () => {
+  it("duplicate reservation IDs are rejected — accounting invariant preserved", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("same", 0.5);
-    t.reserve("same", 0.3); // overwrites first in Map
+    expect(t.reserve("same", 0.3)).toBeNull(); // rejected
+    expect(t.report().totalReserved).toBeCloseTo(0.5); // first reservation intact
+    expect(t.report().activeReservations).toBe(1);
     t.settle("same", 0.2, { provider: "p", model: "m", phase: "execute" });
-    // First reserve (0.5) is leaked — only second (0.3) is settled
-    expect(t.report().totalReserved).toBeCloseTo(0.5);
     expect(t.report().totalActual).toBeCloseTo(0.2);
     assertBudgetInvariant(t);
   });

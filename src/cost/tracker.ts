@@ -77,6 +77,9 @@ export class BudgetTracker {
   reserve(requestId: string, estimatedCost: number): Reservation | null {
     if (estimatedCost < 0 || !Number.isFinite(estimatedCost)) return null;
 
+    // Reject duplicate IDs — prevents orphaned reservations
+    if (this._reservations.has(requestId)) return null;
+
     // Per-request check
     if (this.wouldExceedBudget(estimatedCost)) return null;
 
