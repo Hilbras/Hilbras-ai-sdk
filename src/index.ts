@@ -104,6 +104,10 @@ export { buildPrompt, buildToolSection, buildEnvironmentSection, buildCodingAgen
 export { DefaultCredentialProvider, getCredentialProvider, setCredentialProvider } from "./credentials/provider.js";
 export type { CredentialSource, CredentialProvider } from "./credentials/provider.js";
 
+// ─── Security (v0.9.3: SSRF guard) ─────────────────────────────────────────
+export { validateBaseUrl } from "./security/url-guard.js";
+export type { UrlGuardOptions, UrlGuardResult } from "./security/url-guard.js";
+
 // ─── Adapters (advanced — usually not imported directly) ────────────────────
 export { BUILTIN_MODELS, findModel, modelsForProvider } from "./catalog/models.js";
 export type { ModelEntry } from "./catalog/models.js";

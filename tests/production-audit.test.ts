@@ -777,3 +777,134 @@ describe("State Isolation", () => {
     expect(client.getProvider("B")).toBeDefined();
   });
 });
+
+// ─── Phase 28: Error body redaction (v0.9.3 fix) ──────────────────────────
+// v0.9.3: ProviderRequestError now redacts API keys, bearer tokens, and
+// JSON secret fields from its `.body` and `.message`. Previously these
+// were stored verbatim, leaking secrets when consumers logged the error
+// or when the README's example pattern `console.error(...err.body)` ran.
+
+import { ProviderRequestError } from "../src/errors/index.js";
+import { redact } from "../src/logging/logger.js";
+
+function errorTransport(errorBody: string): Transport {
+  return {
+    async request() { return new Response(errorBody, { status: 401 }); },
+    async stream() { throw new Error("unused"); },
+    abort() {},
+  };
+}
+
+describe("Phase 28: Error body redaction (v0.9.3 hardening)", () => {
+  it("ProviderRequestError redacts sk- API keys from .body", async () => {
+    const body = JSON.stringify({ error: { message: "Invalid API key sk-proj-abc123def456ghi789jkl012mno" } });
+    const client = new HilbrasClient({ transport: errorTransport(body) });
+    client.addProvider({
+      name: "R",
+      baseUrl: "https://r.com",
+      authentication: { type: "none" },
+      adapter: "openai",
+      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+    });
+
+    try {
+      await client.complete({ provider: "R", model: "m", messages: [{ role: "user", content: "hi" }] });
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ProviderRequestError);
+      const pre = err as ProviderRequestError;
+      expect(pre.body).not.toContain("sk-proj-abc123def456ghi789jkl012mno");
+      expect(pre.body).toContain("[REDACTED]");
+      expect(pre.message).not.toContain("sk-proj-abc123def456ghi789jkl012mno");
+    }
+  });
+
+  it("ProviderRequestError redacts Anthropic sk-ant- keys", async () => {
+    const body = JSON.stringify({ error: { message: "auth error: sk-ant-api03-abcdef0123456789ABCDEF0123456789" } });
+    const client = new HilbrasClient({ transport: errorTransport(body) });
+    client.addProvider({
+      name: "Ant",
+      baseUrl: "https://ant.com",
+      authentication: { type: "none" },
+      adapter: "anthropic",
+      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+    });
+
+    try {
+      await client.complete({ provider: "Ant", model: "m", messages: [{ role: "user", content: "hi" }] });
+      expect.fail("should have thrown");
+    } catch (err) {
+      const pre = err as ProviderRequestError;
+      expect(pre.body).not.toContain("sk-ant-api03-abcdef0123456789ABCDEF0123456789");
+    }
+  });
+
+  it("ProviderRequestError redacts bearer tokens", async () => {
+    const body = JSON.stringify({ error: { message: "Unauthorized Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCDEF" } });
+    const client = new HilbrasClient({ transport: errorTransport(body) });
+    client.addProvider({
+      name: "B",
+      baseUrl: "https://b.com",
+      authentication: { type: "none" },
+      adapter: "openai",
+      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+    });
+
+    try {
+      await client.complete({ provider: "B", model: "m", messages: [{ role: "user", content: "hi" }] });
+      expect.fail("should have thrown");
+    } catch (err) {
+      const pre = err as ProviderRequestError;
+      expect(pre.body).not.toContain("Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCDEF");
+      expect(pre.body).toContain("[REDACTED]");
+    }
+  });
+
+  it("ProviderRequestError redacts JSON api_key fields", async () => {
+    const body = JSON.stringify({ apiKey: "sk-proj-aaaaaaaaaabbbbbbbbbbccccccccccdd", error: "auth failed" });
+    const client = new HilbrasClient({ transport: errorTransport(body) });
+    client.addProvider({
+      name: "J",
+      baseUrl: "https://j.com",
+      authentication: { type: "none" },
+      adapter: "openai",
+      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+    });
+
+    try {
+      await client.complete({ provider: "J", model: "m", messages: [{ role: "user", content: "hi" }] });
+      expect.fail("should have thrown");
+    } catch (err) {
+      const pre = err as ProviderRequestError;
+      expect(pre.body).not.toContain("sk-proj-aaaaaaaaaabbbbbbbbbbccccccccccdd");
+    }
+  });
+
+  it("ProviderRequestError passes normal error text through unredacted", async () => {
+    const body = JSON.stringify({ error: { message: "Bad Request: invalid model name 'foo'" } });
+    const client = new HilbrasClient({ transport: errorTransport(body) });
+    client.addProvider({
+      name: "N",
+      baseUrl: "https://n.com",
+      authentication: { type: "none" },
+      adapter: "openai",
+      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+    });
+
+    try {
+      await client.complete({ provider: "N", model: "m", messages: [{ role: "user", content: "hi" }] });
+      expect.fail("should have thrown");
+    } catch (err) {
+      const pre = err as ProviderRequestError;
+      expect(pre.body).toContain("Bad Request");
+      expect(pre.body).toContain("invalid model name");
+    }
+  });
+
+  it("redact() preserves regular text and redacts keys", () => {
+    expect(redact("hello world")).toBe("hello world");
+    expect(redact("Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCDEF")).toContain("[REDACTED]");
+    expect(redact("normal text sk-proj-aaaaaaaaaabbbbbbbbbbccccccccccdd more text")).toContain("[REDACTED]");
+    expect(redact('{"apiKey": "sk-proj-aaaaaaaaaabbbbbbbbbbccccccccccdd", "ok": true}')).not.toContain("sk-proj-aaaaaaaaaabbbbbbbbbbccccccccccdd");
+  });
+});

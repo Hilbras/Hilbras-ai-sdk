@@ -139,3 +139,56 @@ describe("buildJsonModeParams", () => {
     expect(params).toEqual({});
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 12: extractJson escape and truncated handling (v0.9.3 fix)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("Phase 12: extractJson robustness (v0.9.3 hardening)", () => {
+  it("extracts JSON with escaped quotes", () => {
+    const input = '{"msg":"He said \\"hello\\""}';
+    expect(extractJson(input)).toBe(input);
+  });
+
+  it("extracts JSON with escaped backslash", () => {
+    const input = '{"path":"C:\\\\Users\\\\test"}';
+    expect(extractJson(input)).toBe(input);
+  });
+
+  it("extracts JSON with escaped forward slash", () => {
+    const input = '{"url":"https:\\/\\/example.com"}';
+    expect(extractJson(input)).toBe(input);
+  });
+
+  it("extracts JSON with braces inside string values", () => {
+    const input = '{"template":"if (a) { b } else { c }"}';
+    expect(extractJson(input)).toBe(input);
+  });
+
+  it("extracts JSON with both escaped quote and braces inside string", () => {
+    const input = '{"note":"He said \\"hi\\" and { smiled }"}';
+    expect(extractJson(input)).toBe(input);
+  });
+
+  it("JSON followed by trailing prose is truncated to valid parseable substring", () => {
+    // Old behavior: returned `{"name":"John"} hope this helps` → JSON.parse failed.
+    // New behavior: scans forward looking for a balanced parseable substring
+    // starting from the first `{`. The first balanced `}` is at index 16, so
+    // the result is the well-formed `{"name":"John"}` portion.
+    const input = '{"name":"John"} hope this helps';
+    const result = extractJson(input);
+    expect(result).toBe('{"name":"John"}');
+    expect(() => JSON.parse(result)).not.toThrow();
+  });
+
+  it("JSON array followed by prose is also truncated to balanced parseable", () => {
+    const input = '[1,2,3] and then some text';
+    const result = extractJson(input);
+    expect(() => JSON.parse(result)).not.toThrow();
+  });
+
+  it("nested objects with braces in inner string values parse correctly", () => {
+    const input = '{"a":"has { brace }","b":{"c":"deep"}}';
+    expect(extractJson(input)).toBe(input);
+  });
+});

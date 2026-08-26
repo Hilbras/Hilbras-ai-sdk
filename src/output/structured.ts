@@ -107,15 +107,29 @@ export function extractJson(raw: string): string {
   }
 
   if (start >= 0) {
-    // Find matching closing bracket
+    // Find matching closing bracket with proper JSON-string awareness.
+    // The escape logic is: on `\`, mark the next char as escaped. The next
+    // char is consumed regardless of what it is (valid JSON allows `\<any>`
+    // as an escape sequence). The string-mode toggle for `"` only happens
+    // when the char is NOT escaped.
     let depth = 0;
     let inString = false;
     let escape = false;
     for (let i = start; i < text.length; i++) {
       const ch = text[i];
-      if (escape) { escape = false; continue; }
-      if (ch === "\\") { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
+      if (escape) {
+        // Previous char was `\`, consume this one as part of the escape.
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
       if (inString) continue;
       if (ch === openChar) depth++;
       if (ch === closeChar) {
@@ -125,8 +139,25 @@ export function extractJson(raw: string): string {
         }
       }
     }
-    // No matching close found — return from start to end
-    return text.slice(start);
+    // v0.9.3: When the model emits a JSON object followed by prose (e.g.
+    // `{"name":"John"} hope this helps`), the old code returned everything
+    // from `{` to end-of-string, which then failed JSON.parse with a
+    // confusing error. Instead, scan forward looking for a balanced substring
+    // that JSON.parse accepts. If none, return the original `text` so the
+    // downstream ValidationError surfaces a clear "completely invalid JSON"
+    // rather than "garbage at the end of a partial parse".
+    for (let end = start + 1; end < text.length; end++) {
+      if (text[end] === closeChar) {
+        const candidate = text.slice(start, end + 1);
+        try {
+          JSON.parse(candidate);
+          return candidate;
+        } catch {
+          // keep scanning
+        }
+      }
+    }
+    return text;
   }
 
   return text;
