@@ -144,17 +144,24 @@ export class BudgetTracker {
   /**
    * Release a reservation without recording actual cost.
    * Use when execution fails before provider call.
+   * Decrements both `_totalReserved` and `_totalEstimated` so the public
+   * `CostReport.totalEstimated` reflects in-flight estimate only.
    */
   release(requestId: string): void {
     const reservation = this._reservations.get(requestId);
     if (!reservation) return;
 
     this._totalReserved = Math.max(0, this._totalReserved - reservation.amount);
+    this._totalEstimated = Math.max(0, this._totalEstimated - reservation.amount);
     this._reservations.delete(requestId);
   }
 
   /**
    * Legacy: record a cost event without reservation (backward compatible).
+   *
+   * @deprecated Prefer `reserve()` + `settle()` / `release()`. `record()` does
+   * NOT pair with `reserve()` and can double-count costs if used in
+   * combination. Kept for backward compatibility with pre-v0.9.0 callers.
    */
   record(event: CostEvent): void {
     this._events.push(event);
@@ -230,14 +237,17 @@ export class BudgetTracker {
       const committed = this._totalActual + this._totalReserved;
       const pct = committed / this._budget.sessionBudget;
 
-      if (pct >= 1 && !this._budgetExceededFired) {
-        this._budgetExceededFired = true;
-        try { this._budget.onBudgetExceeded?.(this.report()); } catch { /* notification-only */ }
-      }
-
+      // v0.9.3: warning fires BEFORE exceeded when a single settle crosses
+      // both thresholds. This way the warning callback's report shows a
+      // consistent state (>=80%, <=100%) instead of "warning at 100%+".
       if (pct >= 0.8 && !this._budgetWarningFired) {
         this._budgetWarningFired = true;
         try { this._budget.onBudgetWarning?.(this.report()); } catch { /* notification-only */ }
+      }
+
+      if (pct >= 1 && !this._budgetExceededFired) {
+        this._budgetExceededFired = true;
+        try { this._budget.onBudgetExceeded?.(this.report()); } catch { /* notification-only */ }
       }
     }
   }

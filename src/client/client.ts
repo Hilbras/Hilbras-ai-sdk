@@ -24,11 +24,12 @@ import { FetchTransport } from "../transport/fetch.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
 import { createRetryConfig, shouldRetry, shouldRetryNetworkError } from "../reliability/retry.js";
 import { calculateBackoff, sleep } from "../reliability/backoff.js";
-import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError, ValidationError } from "../errors/index.js";
+import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError, ValidationError, ConfigurationError } from "../errors/index.js";
 import { createTimeoutSignal } from "../reliability/timeout.js";
 import { sdkLogger } from "../logging/logger.js";
 import { AdapterRegistry, getDefaultAdapterRegistry } from "../providers/adapter-registry.js";
 import { dictToMessage } from "../types/messages.js";
+import { validateBaseUrl } from "../security/url-guard.js";
 import { resolvePolicy } from "../reliability/presets.js";
 import { ModelRouter } from "../router/model-router.js";
 import { buildJsonSystemInstruction, buildRepairPrompt, extractJson, buildJsonModeParams } from "../output/structured.js";
@@ -47,6 +48,18 @@ export interface HilbrasClientConfig {
   policy?: ExecutionPolicy;
   /** Budget configuration for cost tracking and enforcement */
   budget?: BudgetConfig;
+  /**
+   * Master switch: allow providers to register http:// baseUrls.
+   * Loopback/`.local` is always allowed when this is on. Private network
+   * ranges additionally require {@link allowPrivateNetwork}.
+   * Defaults to false. Per-provider `allowInsecure: true` overrides this.
+   */
+  allowInsecureUrls?: boolean;
+  /**
+   * On top of {@link allowInsecureUrls}, allow private network ranges
+   * (10.*, 172.16-31.*, 192.168.*). Defaults to false.
+   */
+  allowPrivateNetwork?: boolean;
 }
 
 export class HilbrasClient implements AsyncDisposable {
@@ -59,6 +72,8 @@ export class HilbrasClient implements AsyncDisposable {
   private _hooks = new ClientHooks();
   private _requestCounter = 0;
   private _budgetTracker: BudgetTracker;
+  private _allowInsecureUrls: boolean;
+  private _allowPrivateNetwork: boolean;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
@@ -66,6 +81,8 @@ export class HilbrasClient implements AsyncDisposable {
     this._defaultPolicy = config?.policy;
     this._router = new ModelRouter();
     this._budgetTracker = new BudgetTracker(config?.budget);
+    this._allowInsecureUrls = config?.allowInsecureUrls ?? false;
+    this._allowPrivateNetwork = config?.allowPrivateNetwork ?? false;
   }
 
   /** Subscribe to lifecycle events. Returns an unsubscribe function. */
@@ -94,6 +111,17 @@ export class HilbrasClient implements AsyncDisposable {
   // ─── Provider Management ────────────────────────────────────────────────
 
   addProvider(config: ProviderConfig): void {
+    // v0.9.3: SSRF guard. Per-provider `allowInsecure` overrides client-wide
+    // `allowInsecureUrls`. Loopback is always allowed when either is on.
+    const guard = validateBaseUrl(config.baseUrl, {
+      allowInsecure: config.allowInsecure ?? this._allowInsecureUrls,
+      allowPrivateNetwork: this._allowPrivateNetwork,
+    });
+    if (!guard.ok) {
+      throw new ConfigurationError(
+        `Refused to register provider '${config.name}': ${guard.reason}`,
+      );
+    }
     this._registry.add(config);
     this._adapters.set(config.name, this._adapterRegistry.create(config.adapter, {
       provider: config,
@@ -271,6 +299,10 @@ export class HilbrasClient implements AsyncDisposable {
     let outputTokens: number | undefined;
     let firstChunkEmitted = false;
     let adapterStartTime = 0;
+    // Budget tracking for streaming. v0.9.3: stream() now reserves like complete().
+    let estimatedCost = 0;
+    let reservationActive = false;
+    let usageSettled = false;
 
     this._emit({ type: "request.start", requestId, timestamp: startTime, provider: params.provider, model: params.model, task: params.task });
 
@@ -313,72 +345,140 @@ export class HilbrasClient implements AsyncDisposable {
       ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, params.signal)
       : params.signal;
 
-    for (let attempt = 0; ; attempt++) {
-      try {
-        adapterStartTime = performance.now();
-        const gen = adapter.stream({
-          model: modelId,
-          messages,
-          temperature: params.temperature,
-          maxTokens: params.maxTokens,
-          tools: params.tools,
-          extra: params.extra,
-          signal,
-        });
+    // Atomic budget reservation before any provider call. Reserves the
+    // estimated cost for the entire retry+fallback chain; the reservation is
+    // converted to actual on the first usage chunk, or released on failure.
+    estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
+    const initialReservation = this._budgetTracker.reserve(requestId, estimatedCost);
+    if (!initialReservation) {
+      throw new ConfigurationError(`Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`);
+    }
+    reservationActive = true;
 
-        for await (const chunk of gen) {
-          // Track first chunk latency
-          if (!firstChunkEmitted) {
-            firstChunkEmitted = true;
-            this._emit({ type: "stream.first_chunk", requestId, timestamp: performance.now(), latencyMs: performance.now() - adapterStartTime });
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          adapterStartTime = performance.now();
+          const gen = adapter.stream({
+            model: modelId,
+            messages,
+            temperature: params.temperature,
+            maxTokens: params.maxTokens,
+            tools: params.tools,
+            extra: params.extra,
+            signal,
+          });
+
+          for await (const chunk of gen) {
+            // Track first chunk latency
+            if (!firstChunkEmitted) {
+              firstChunkEmitted = true;
+              this._emit({ type: "stream.first_chunk", requestId, timestamp: performance.now(), latencyMs: performance.now() - adapterStartTime });
+            }
+            // Track usage tokens and convert reservation on first usage chunk
+            if (chunk.type === "usage") {
+              const inT = (chunk as { inputTokens?: number }).inputTokens;
+              const outT = (chunk as { outputTokens?: number }).outputTokens;
+              inputTokens = inT;
+              outputTokens = outT;
+              if (reservationActive && !usageSettled) {
+                const actualCost = this._budgetTracker.estimate(modelId, providerName, inT ?? 0, outT ?? 0);
+                this._budgetTracker.settle(requestId, actualCost, { provider: providerName, model: modelId, phase: "execute" });
+                reservationActive = false;
+                usageSettled = true;
+              }
+            }
+            yield chunk;
           }
-          // Track usage tokens
-          if (chunk.type === "usage") {
-            inputTokens = (chunk as { inputTokens?: number }).inputTokens;
-            outputTokens = (chunk as { outputTokens?: number }).outputTokens;
+
+          circuitBreaker?.recordSuccess();
+          // End-of-stream with no usage chunk: settle at the estimate
+          if (reservationActive) {
+            this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
+            reservationActive = false;
           }
-          yield chunk;
-        }
+          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, inputTokens, outputTokens, structuredOutput: false });
+          return;
+        } catch (err: unknown) {
+          // Check if we should retry
+          const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
+          const status = (err as { status?: number }).status;
 
-        circuitBreaker?.recordSuccess();
-        this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, inputTokens, outputTokens, structuredOutput: false });
-        return;
-      } catch (err: unknown) {
-        // Check if we should retry
-        const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
-        const status = (err as { status?: number }).status;
-
-        if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-          const delay = calculateBackoff(attempt, resolved.backoff);
-          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
-          await sleep(delay);
-          continue;
-        }
-        if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-          const delay = calculateBackoff(attempt, resolved.backoff);
-          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
-          await sleep(delay);
-          continue;
-        }
-
-        // Try fallback if allowed and we have candidates
-        if (resolved.allowFallback && attempt >= retryConfig.maxRetries) {
-          const fallbacks = this._getFallbacks([modelId], params);
-          for (const fb of fallbacks) {
-            this._emit({ type: "fallback.started", requestId, timestamp: performance.now(), originalProvider: providerName, originalModel: modelId, fallbackProvider: fb.provider, fallbackModel: fb.model });
-            try {
-              const fbAdapter = this._getAdapter(fb.provider);
-              const gen = fbAdapter.stream({ model: fb.model, messages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: params.extra, signal });
-              for await (const chunk of gen) { yield chunk; }
-              this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, inputTokens, outputTokens, structuredOutput: false });
-              return;
-            } catch { /* fallback also failed — continue to next */ }
+          if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
+            const delay = calculateBackoff(attempt, resolved.backoff);
+            this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
+            await sleep(delay);
+            continue;
           }
-        }
+          if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
+            const delay = calculateBackoff(attempt, resolved.backoff);
+            this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
+            await sleep(delay);
+            continue;
+          }
 
-        circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-        throw err;
+          // Try fallback if allowed and we have candidates
+          if (resolved.allowFallback && attempt >= retryConfig.maxRetries) {
+            const fallbacks = this._getFallbacks([modelId], params);
+            let fallbackSucceeded = false;
+            for (const fb of fallbacks) {
+              this._emit({ type: "fallback.started", requestId, timestamp: performance.now(), originalProvider: providerName, originalModel: modelId, fallbackProvider: fb.provider, fallbackModel: fb.model });
+              // Release original reservation, re-reserve under fallback id
+              if (reservationActive) {
+                this._budgetTracker.release(requestId);
+                reservationActive = false;
+              }
+              const fbReservationId = `${requestId}_fb_${fb.model}`;
+              const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
+              const fbReservation = this._budgetTracker.reserve(fbReservationId, fbEstimatedCost);
+              if (!fbReservation) continue; // budget exceeded for this fallback
+              let fbReservationActive = true;
+              try {
+                const fbAdapter = this._getAdapter(fb.provider);
+                const gen = fbAdapter.stream({ model: fb.model, messages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: params.extra, signal });
+                for await (const chunk of gen) {
+                  if (chunk.type === "usage") {
+                    const inT = (chunk as { inputTokens?: number }).inputTokens;
+                    const outT = (chunk as { outputTokens?: number }).outputTokens;
+                    if (fbReservationActive) {
+                      const actualCost = this._budgetTracker.estimate(fb.model, fb.provider, inT ?? 0, outT ?? 0);
+                      this._budgetTracker.settle(fbReservationId, actualCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
+                      fbReservationActive = false;
+                    }
+                  }
+                  yield chunk;
+                }
+                // End-of-stream without usage chunk: settle at estimate
+                if (fbReservationActive) {
+                  this._budgetTracker.settle(fbReservationId, fbEstimatedCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
+                  fbReservationActive = false;
+                }
+                this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, inputTokens, outputTokens, structuredOutput: false });
+                fallbackSucceeded = true;
+                return;
+              } catch {
+                if (fbReservationActive) {
+                  this._budgetTracker.release(fbReservationId);
+                  fbReservationActive = false;
+                }
+                /* fallback also failed — continue to next */
+              }
+            }
+            if (fallbackSucceeded) return; // unreachable but for type safety
+          }
+
+          circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
+          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
+          throw err;
+        }
+      }
+    } finally {
+      // Guarantee release on any path that did not settle (consumer break,
+      // signal abort, unexpected throw). Idempotent: settle/release are no-ops
+      // on missing reservations.
+      if (reservationActive) {
+        this._budgetTracker.release(requestId);
+        reservationActive = false;
       }
     }
   }
@@ -479,7 +579,7 @@ export class HilbrasClient implements AsyncDisposable {
     const estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
     const reservation = this._budgetTracker.reserve(requestId, estimatedCost);
     if (!reservation) {
-      throw new Error(`Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`);
+      throw new ConfigurationError(`Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`);
     }
 
     for (let attempt = 0; ; attempt++) {

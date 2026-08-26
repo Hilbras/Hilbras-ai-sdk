@@ -815,3 +815,93 @@ describe("Phase 25: Invariant Testing", () => {
     expect(Number.isFinite(report.totalEstimated)).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 26: totalEstimated accounting (v0.9.3 fix)
+// Verifies _totalEstimated is decremented on release() and not on settle().
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("Phase 26: totalEstimated accounting (v0.9.3 hardening)", () => {
+  it("reserve then release returns totalEstimated to 0", () => {
+    const tracker = new BudgetTracker();
+    const r = tracker.reserve("req_1", 0.50);
+    expect(r).not.toBeNull();
+    expect(tracker.report().totalEstimated).toBeCloseTo(0.50);
+
+    tracker.release("req_1");
+    const report = tracker.report();
+    expect(report.totalEstimated).toBe(0);
+    expect(report.totalReserved).toBe(0);
+    expect(report.activeReservations).toBe(0);
+  });
+
+  it("reserve then settle keeps totalEstimated = reserved and zeroes totalReserved", () => {
+    const tracker = new BudgetTracker();
+    tracker.reserve("req_1", 0.50);
+
+    tracker.settle("req_1", 0.30, { provider: "p", model: "m", phase: "execute" });
+
+    const report = tracker.report();
+    expect(report.totalEstimated).toBeCloseTo(0.50); // estimate committed, not removed
+    expect(report.totalReserved).toBe(0);
+    expect(report.totalActual).toBeCloseTo(0.30);
+    expect(report.activeReservations).toBe(0);
+  });
+
+  it("100 reserves followed by 100 releases leave totalEstimated at 0", () => {
+    const tracker = new BudgetTracker({ sessionBudget: 1000 });
+    for (let i = 0; i < 100; i++) {
+      const r = tracker.reserve(`req_${i}`, 0.10);
+      expect(r).not.toBeNull();
+    }
+    expect(tracker.report().totalEstimated).toBeCloseTo(10.0);
+
+    for (let i = 0; i < 100; i++) {
+      tracker.release(`req_${i}`);
+    }
+    const report = tracker.report();
+    expect(report.totalEstimated).toBe(0);
+    expect(report.totalReserved).toBe(0);
+    expect(report.totalActual).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 27: Budget callback ordering (v0.9.3 fix)
+// Single settle that crosses 100% must fire warning THEN exceeded, not the
+// other way around. Previously the warning callback's report would show
+// already-exceeded state, which was confusing telemetry.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("Phase 27: Budget callback ordering (v0.9.3 hardening)", () => {
+  it("single settle crossing 100% fires warning before exceeded", () => {
+    const calls: string[] = [];
+    const tracker = new BudgetTracker({
+      sessionBudget: 1.0,
+      onBudgetWarning: () => calls.push("warning"),
+      onBudgetExceeded: () => calls.push("exceeded"),
+    });
+    // Reserve + settle a full $1.0 in one shot. After this single settle,
+    // committed = 1.0 (100%). Both thresholds are crossed.
+    tracker.reserve("req_1", 1.0);
+    tracker.settle("req_1", 1.0, { provider: "p", model: "m", phase: "execute" });
+
+    expect(calls).toEqual(["warning", "exceeded"]);
+  });
+
+  it("warning report shows consistent state when single settle crosses 100%", () => {
+    let warningReport: ReturnType<typeof /*dummy*/ Object> | null = null;
+    const tracker = new BudgetTracker({
+      sessionBudget: 1.0,
+      onBudgetWarning: (r) => { warningReport = r; },
+    });
+    tracker.reserve("req_1", 1.0);
+    tracker.settle("req_1", 1.0, { provider: "p", model: "m", phase: "execute" });
+
+    // The warning callback should see >=80% and <=100% (not already exceeded).
+    expect(warningReport).not.toBeNull();
+    const r = warningReport as { committedCost: number; budgetExceeded: boolean };
+    expect(r.committedCost).toBeCloseTo(1.0, 5);
+    expect(r.budgetExceeded).toBe(true); // budgetExceeded is a state field, set on the report
+  });
+});

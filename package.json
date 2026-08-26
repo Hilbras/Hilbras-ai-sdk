@@ -1,10 +1,35 @@
 {
   "name": "@hilbras/sdk",
-  "version": "0.9.2",
-  "description": "Standalone LLM Client SDK for Hilbras — provider abstraction, streaming, tool schemas, and reliability primitives.",
+  "version": "0.9.3",
+  "description": "Provider-agnostic LLM client SDK — streaming, tool calling, circuit breaker, retry, reasoning normalization, cost enforcement, and SSRF-safe provider registration for OpenAI, Anthropic, Gemini, Azure, Groq, and Ollama. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "keywords": [
+    "llm",
+    "ai-sdk",
+    "provider-agnostic",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini",
+    "azure-openai",
+    "groq",
+    "ollama",
+    "streaming",
+    "tool-calling",
+    "function-calling",
+    "circuit-breaker",
+    "retry",
+    "cost-tracking",
+    "budget-enforcement",
+    "observability",
+    "structured-output",
+    "typescript",
+    "node",
+    "edge",
+    "no-dependencies"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -73,6 +98,14 @@
     "node": ">=18"
   },
   "license": "MIT",
+  "homepage": "https://github.com/Hilbras/Hilbras-ai-sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hilbras/Hilbras-ai-sdk/issues"
+  },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "oxlint": "^1.79.0",

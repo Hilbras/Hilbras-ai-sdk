@@ -513,3 +513,120 @@ describe("Phase 29: Backward Compatibility", () => {
     expect(typeof client.cost.report).toBe("function");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 30: Streaming budget enforcement (v0.9.3 fix)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function streamingTransport(wireChunks: string[]): Transport {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const c of wireChunks) controller.enqueue(encoder.encode(c));
+      controller.close();
+    },
+  });
+  return {
+    async request() { return new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } }); },
+    async stream() { return stream; },
+    abort() {},
+  };
+}
+
+function sse(payload: Record<string, unknown>): string {
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+describe("Phase 30: Streaming budget enforcement (v0.9.3 hardening)", () => {
+  it("stream reserves budget before any provider call", async () => {
+    // Build a transport that records the order of calls vs the budget state.
+    // The reservation must happen synchronously before the first body byte
+    // is read by the adapter.
+    const client = new HilbrasClient({ transport: streamingTransport([
+      sse({ choices: [{ delta: { content: "hi" } }] }),
+      sse({ usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } }),
+      sse({ choices: [{ finish_reason: "stop" }] }),
+      "data: [DONE]\n\n",
+    ]), budget: { sessionBudget: 10 } });
+    client.addProvider(provider());
+
+    const before = client.costReport();
+    expect(before.activeReservations).toBe(0);
+
+    const chunks: string[] = [];
+    for await (const chunk of client.stream({ provider: "Test", model: MODEL, messages: [{ role: "user", content: "hi" }] })) {
+      if (chunk.type === "text") chunks.push(chunk.text);
+    }
+
+    const after = client.costReport();
+    expect(after.activeReservations).toBe(0);
+    expect(after.totalReserved).toBe(0);
+    expect(after.totalActual).toBeGreaterThan(0); // settled from usage chunk
+    expect(after.requestCount).toBe(1);
+    expect(chunks.join("")).toBe("hi");
+  });
+
+  it("stream reservation rejected when budget is too small", async () => {
+    // Estimate for ~1MB of text against gpt-5.6-sol ($4/M input tokens) is
+    // ~$1.00. A perRequestBudget of $0.0001 must reject the reservation
+    // synchronously, before the provider is called.
+    const longMessage = "x".repeat(1_000_000);
+    const client = new HilbrasClient({ transport: failingTransport(500), budget: { perRequestBudget: 0.0001 } });
+    client.addProvider(provider());
+
+    let threw = false;
+    try {
+      // stream() returns an AsyncGenerator; reservation happens at first next()
+      const gen = client.stream({ provider: "Test", model: MODEL, messages: [{ role: "user", content: longMessage }] });
+      await gen.next();
+    } catch (err) {
+      threw = true;
+      expect(String(err)).toMatch(/Budget reservation rejected/);
+    }
+    expect(threw).toBe(true);
+    expect(client.costReport().activeReservations).toBe(0);
+  });
+
+  it("stream reservation released on consumer abort before first chunk", async () => {
+    // The finally block in stream() must release the reservation when the
+    // consumer breaks out of the for-await loop, regardless of where the
+    // abort happens.
+    const client = new HilbrasClient({ transport: streamingTransport([
+      sse({ choices: [{ delta: { content: "first" } }] }),
+      sse({ choices: [{ delta: { content: "second" } }] }),
+      "data: [DONE]\n\n",
+    ]), budget: { sessionBudget: 10 } });
+    client.addProvider(provider());
+
+    let sawFirst = false;
+    for await (const chunk of client.stream({ provider: "Test", model: MODEL, messages: [{ role: "user", content: "hi" }] })) {
+      if (chunk.type === "text" && chunk.text === "first") {
+        sawFirst = true;
+        break; // consumer abort mid-stream
+      }
+    }
+    expect(sawFirst).toBe(true);
+    // Reservation must be released even though the stream was abandoned.
+    expect(client.costReport().activeReservations).toBe(0);
+  });
+
+  it("stream settles once even with multiple usage chunks", async () => {
+    // A provider that emits two usage chunks (anomaly) must not double-settle.
+    // We assert by checking requestCount === 1 and the report shows a single
+    // settlement, not a doubled one.
+    const client = new HilbrasClient({ transport: streamingTransport([
+      sse({ choices: [{ delta: { content: "hi" } }] }),
+      sse({ usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 } }),
+      sse({ usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 } }),
+      sse({ choices: [{ finish_reason: "stop" }] }),
+      "data: [DONE]\n\n",
+    ]), budget: { sessionBudget: 10 } });
+    client.addProvider(provider());
+
+    for await (const _chunk of client.stream({ provider: "Test", model: MODEL, messages: [{ role: "user", content: "hi" }] })) { /* drain */ }
+
+    const report = client.costReport();
+    expect(report.activeReservations).toBe(0);
+    expect(report.requestCount).toBe(1);
+  });
+});

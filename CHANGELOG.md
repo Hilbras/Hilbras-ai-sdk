@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.3] - 2026-08-27
+
+### Fixed (P0)
+
+- **`_totalEstimated` grew monotonically forever** — `BudgetTracker.release()` now decrements `_totalEstimated` alongside `_totalReserved` so the public `CostReport.totalEstimated` reflects in-flight estimate only, not a running tally. `settle()` correctly preserves the estimate (it has committed to actual).
+- **`stream()` was not budget-enforced** — `client.stream()` now reserves before the retry loop (symmetric with `complete()`), settles on the first `usage` chunk with the actual cost, settles at end-of-stream with the estimate if no usage chunk arrived, and releases on abort/throw/fallback. The v0.9.0 "Hard Budget Enforcement" headline feature now actually covers streams.
+- **`ProviderRequestError` echoed raw provider error bodies, leaking API keys** — the constructor now redacts `sk-…`, `sk-proj-…`, `sk-ant-…`, `Bearer …`, and JSON `apiKey`/`token`/`secret`/`password` fields from both `err.body` and `err.message`. The README's example pattern `console.error(...err.body)` is now safe.
+- **No SSRF protection on `baseUrl`** — `addProvider()` now validates the URL through `validateBaseUrl()`. Default rejects `http://`; loopback is always allowed when `allowInsecure: true`; private network ranges require `allowPrivateNetwork: true`. AWS instance metadata (`169.254.169.254`) is always blocked. Throws `ConfigurationError` on reject.
+- **Budget callback order was inverted** — when a single `settle()` crossed 100%, `onBudgetExceeded` fired before `onBudgetWarning`, and the warning's report showed already-exceeded state. Order swapped; warning now fires first.
+- **`extractJson` could return garbage on truncated input** — the "no matching close found" fallback used to return from `{` to end-of-text (including trailing prose). It now scans forward looking for a balanced, JSON.parse-valid substring, so `{"name":"John"} hope this helps` returns just `{"name":"John"}`.
+
+### Added
+
+- 58 new tests (820 → 878 total). New test files: `tests/security/url-guard.test.ts` (27), `tests/security/ssrf-integration.test.ts` (8).
+- `src/security/url-guard.ts` — `validateBaseUrl(url, opts)` exported from the public API.
+- `validateBaseUrl`, `UrlGuardOptions`, `UrlGuardResult` re-exported from `@hilbras/sdk`.
+- `allowInsecure?: boolean` field on `ProviderConfig`.
+- `allowInsecureUrls?: boolean` and `allowPrivateNetwork?: boolean` on `HilbrasClientConfig`.
+- `ConfigurationError` is now used at the budget-rejection path in both `stream()` and `complete()` (was raw `Error`).
+- `redact()` exported from `src/logging/logger.ts`.
+
+### Changed
+
+- No breaking changes. All existing tests pass without modification.
+
+### Security
+
+- `@hilbras/sdk` is now SSRF-safe by default. A misconfigured or malicious provider cannot point the SDK at the AWS instance metadata service, internal services, or `file://` / `javascript:` / `data:` schemes.
+
+---
+
 ## [0.9.2] - 2026-08-23
 
 ### Fixed

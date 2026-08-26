@@ -205,5 +205,8 @@ async function main() {
 ## Next Steps
 
 - Read the [API Reference](./api-reference.md) for complete type documentation
-- Check the [Migration Guide](./migration-v0.1-to-v0.2.md) if upgrading from v0.1.0
+- See the [Providers guide](./providers.md) for adapter-specific examples
+- See [Cost & Budget](./cost-and-budget.md) for budget enforcement
+- See [Security](./security.md) for SSRF protection and redaction
+- See [Observability](./observability.md) for lifecycle events
 - See the [CHANGELOG](../CHANGELOG.md) for version history

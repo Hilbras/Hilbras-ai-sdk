@@ -25,4 +25,10 @@ export interface ProviderConfig {
   adapter: AdapterName;
   timeout?: number;
   extraHeaders?: Record<string, string>;
+  /**
+   * Allow non-https baseUrl for this provider. Required for local Ollama
+   * (`http://localhost:11434`) and similar. Defaults to false.
+   * See {@link validateBaseUrl} for the full policy.
+   */
+  allowInsecure?: boolean;
 }

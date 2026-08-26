@@ -5,6 +5,8 @@
  * Each error carries context (provider name, status code, etc.)
  */
 
+import { redact } from "../logging/logger.js";
+
 export class HilbrasSdkError extends Error {
   constructor(message: string) {
     super(message);
@@ -35,8 +37,16 @@ export class ProviderRequestError extends HilbrasSdkError {
     public readonly body: string,
     public readonly providerName: string,
   ) {
-    super(`Provider '${providerName}' returned HTTP ${status}: ${body.slice(0, 200)}`);
+    // v0.9.3: redact API keys, bearer tokens, and JSON secret fields from
+    // both the body stored on the instance and the rendered message. Provider
+    // error bodies frequently echo the rejected API key on auth failures, and
+    // the README example pattern (`console.error(...err.body)`) would otherwise
+    // leak it into logs.
+    const safeBody = redact(body);
+    super(`Provider '${providerName}' returned HTTP ${status}: ${safeBody.slice(0, 200)}`);
     this.name = "ProviderRequestError";
+    // Replace the public body with the redacted form.
+    this.body = safeBody;
   }
 }
 
