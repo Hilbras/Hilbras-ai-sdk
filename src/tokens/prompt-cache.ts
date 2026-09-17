@@ -29,7 +29,7 @@ export interface CacheableMessage {
 export function cacheSystemMessage(
   messages: Array<{ role: string; content: string | null }>
 ): CacheableMessage[] {
-  return messages.map((m, i) => {
+  return messages.map((m) => {
     if (m.role === "system") {
       return { ...m, content: m.content ?? "", cache_control: { type: "ephemeral" } };
     }
@@ -89,5 +89,5 @@ export function autoCache(messages: Array<{ role: string; content: string | null
  */
 export function supportsCacheControl(provider: string): boolean {
   // Anthropic and OpenAI both support prompt caching
-  return ["anthropic", "openai"].includes(provider);
+  return ["anthropic", "openai", "mistral", "deepseek"].includes(provider);
 }

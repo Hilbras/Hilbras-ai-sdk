@@ -1,8 +1,11 @@
 /**
  * @hilbras/sdk — Provider and API format types
+ *
+ * `ProviderConfig` is defined in `src/config/provider-config.ts` (the
+ * canonical home). It is re-exported here for backward compatibility
+ * with the existing public path `@hilbras/sdk/types` and the top-level
+ * `@hilbras/sdk`.
  */
-
-import type { Model } from "./models.js";
 
 /** Supported API wire formats */
 export type APIFormat = "openai" | "anthropic" | "google-genai";
@@ -14,21 +17,11 @@ export type Authentication =
   | { type: "none" };
 
 /** Which adapter to use for a provider */
-export type AdapterName = "openai" | "anthropic" | "google-genai" | "azure" | "groq" | "ollama";
+export type AdapterName =
+  | "openai" | "anthropic" | "google-genai" | "azure" | "groq" | "ollama"
+  | "mistral" | "deepseek" | "xai" | "together" | "fireworks"
+  | "cohere" | "perplexity" | "cerebras" | "deepinfra"
+  | "openai-compatible";
 
-/** Minimal provider configuration */
-export interface ProviderConfig {
-  name: string;
-  baseUrl: string;
-  authentication: Authentication;
-  models: Model[];
-  adapter: AdapterName;
-  timeout?: number;
-  extraHeaders?: Record<string, string>;
-  /**
-   * Allow non-https baseUrl for this provider. Required for local Ollama
-   * (`http://localhost:11434`) and similar. Defaults to false.
-   * See {@link validateBaseUrl} for the full policy.
-   */
-  allowInsecure?: boolean;
-}
+// Re-export the canonical ProviderConfig so existing imports work.
+export type { ProviderConfig } from "../config/provider-config.js";

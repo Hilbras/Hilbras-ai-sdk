@@ -15,6 +15,18 @@ import type { Message } from "./messages.js";
 import type { Tool } from "./tools.js";
 import type { StreamChunk } from "./streams.js";
 import type { Transport } from "../transport/transport.js";
+import type {
+  EmbeddingParams,
+  EmbeddingResult,
+  ImageParams,
+  ImageResult,
+  SpeechParams,
+  SpeechResult,
+  TranscriptionParams,
+  TranscriptionResult,
+  RerankParams,
+  RerankResult,
+} from "./multi-modal.js";
 
 /** Shared config passed to all adapter constructors */
 export interface AdapterConfig {
@@ -38,6 +50,9 @@ export interface GenerateParams {
  *
  * Any class with this shape can be registered via AdapterRegistry
  * and used with HilbrasClient — no SDK modification required.
+ *
+ * Multi-modal methods are optional — adapters declare support by
+ * implementing the relevant method.
  */
 export interface AIProvider {
   /** Unique identifier for this provider type (e.g. "openai", "anthropic") */
@@ -48,4 +63,21 @@ export interface AIProvider {
 
   /** Non-streaming chat completion */
   complete(params: GenerateParams): Promise<string>;
+
+  // ─── Optional: Multi-Modal Capabilities ────────────────────────────────
+
+  /** Generate embeddings for text input */
+  embed?(params: EmbeddingParams): Promise<EmbeddingResult>;
+
+  /** Generate images from text prompt */
+  generateImage?(params: ImageParams): Promise<ImageResult>;
+
+  /** Synthesize speech from text */
+  generateSpeech?(params: SpeechParams): Promise<SpeechResult>;
+
+  /** Transcribe audio to text */
+  transcribe?(params: TranscriptionParams): Promise<TranscriptionResult>;
+
+  /** Rerank documents by relevance to a query */
+  rerank?(params: RerankParams): Promise<RerankResult>;
 }

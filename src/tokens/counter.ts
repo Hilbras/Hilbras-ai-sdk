@@ -94,6 +94,19 @@ export function estimateCost(
     "gemini-3-flash-preview": { input: 0.50, output: 3.00 },
     "gemini-2.5-pro": { input: 1.25, output: 10.00 },
     "gemini-2.5-flash": { input: 0.30, output: 2.50 },
+    // Mistral
+    "mistral-large-latest": { input: 2.00, output: 6.00 },
+    "mistral-small-latest": { input: 0.10, output: 0.30 },
+    "codestral-latest": { input: 0.30, output: 0.90 },
+    // DeepSeek
+    "deepseek-chat": { input: 0.27, output: 1.10 },
+    "deepseek-reasoner": { input: 0.55, output: 2.19 },
+    // xAI
+    "grok-3": { input: 3.00, output: 15.00 },
+    "grok-3-mini": { input: 0.30, output: 0.50 },
+    // Cohere
+    "command-r-plus-08-2024": { input: 2.50, output: 10.00 },
+    "command-r-08-2024": { input: 0.15, output: 0.60 },
   };
 
   const pricing = PRICING[model] ?? PRICING[`${provider}/${model}`] ?? { input: 0, output: 0 };

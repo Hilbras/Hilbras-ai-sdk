@@ -23,6 +23,26 @@ export type { APIFormat, Authentication, AdapterName, ProviderConfig } from "./t
 export type { Model, ModelCapabilities } from "./types/models.js";
 export { DEFAULT_CAPABILITIES } from "./types/models.js";
 
+export type {
+  EmbeddingParams,
+  EmbeddingResult,
+  ImageParams,
+  ImageResult,
+  SpeechParams,
+  SpeechResult,
+  TranscriptionParams,
+  TranscriptionResult,
+  RerankParams,
+  RerankResult,
+  ImageSize,
+  ImageQuality,
+  ImageStyle,
+  SpeechVoice,
+  SpeechFormat,
+  TranscriptLanguage,
+  TranscriptFormat,
+} from "./types/multi-modal.js";
+
 // ─── Errors ─────────────────────────────────────────────────────────────────
 export {
   HilbrasSdkError,
@@ -54,6 +74,26 @@ export type { TaskRequirement, RoutingResult } from "./types/router.js";
 // ─── Structured Output ──────────────────────────────────────────────────────
 export type { SchemaValidator, StructuredOutputConfig } from "./types/schema.js";
 export { extractJson, buildJsonSystemInstruction, buildRepairPrompt, buildJsonModeParams } from "./output/structured.js";
+export { zodSchema, jsonSchema } from "./output/schema-helpers.js";
+
+// ─── Tool Builder ───────────────────────────────────────────────────────────
+export { tool, toolDef, dynamicTool } from "./types/tool-builder.js";
+export type { DefinedTool, ToolDefinition, ParameterSchema } from "./types/tool-builder.js";
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
+export { generateId, createIdGenerator, shortId } from "./utils/id.js";
+export { parseSSEStream, parseJsonEventStream, collectSSEEvents, findSSEEvent } from "./utils/sse.js";
+export type { SSEEvent } from "./utils/sse.js";
+
+// ─── Telemetry (Production Observability) ───────────────────────────────────
+export { OpenTelemetryExporter } from "./telemetry/opentelemetry.js";
+export type { OpenTelemetryConfig } from "./telemetry/opentelemetry.js";
+export { StructuredLogger } from "./telemetry/structured-logger.js";
+export type { StructuredLoggerConfig, StructuredLogEntry, LogLevel } from "./telemetry/structured-logger.js";
+export { UsageDashboard } from "./telemetry/dashboard.js";
+export type { UsageSummary, ProviderMetrics, ModelMetrics } from "./telemetry/dashboard.js";
+export { BodyLogger } from "./telemetry/body-logger.js";
+export type { BodyLoggerConfig, BodyLogEntry } from "./telemetry/body-logger.js";
 
 // ─── Cost Optimization ──────────────────────────────────────────────────────
 export { BudgetTracker } from "./cost/tracker.js";
@@ -116,3 +156,14 @@ export { GoogleGenAIAdapter } from "./adapters/google-genai.js";
 export { AzureAdapter } from "./adapters/azure.js";
 export { GroqAdapter } from "./adapters/groq.js";
 export { OllamaAdapter } from "./adapters/ollama.js";
+export { GenericOpenAIAdapter } from "./adapters/openai-compatible.js";
+export type { GenericOpenAIAdapterOptions } from "./adapters/openai-compatible.js";
+export { MistralAdapter } from "./adapters/mistral.js";
+export { DeepSeekAdapter } from "./adapters/deepseek.js";
+export { XAIAdapter } from "./adapters/xai.js";
+export { TogetherAdapter } from "./adapters/together.js";
+export { FireworksAdapter } from "./adapters/fireworks.js";
+export { CohereAdapter } from "./adapters/cohere.js";
+export { PerplexityAdapter } from "./adapters/perplexity.js";
+export { CerebrasAdapter } from "./adapters/cerebras.js";
+export { DeepInfraAdapter } from "./adapters/deepinfra.js";
