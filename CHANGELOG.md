@@ -11,16 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Schema integration helpers** — `zodSchema()` wraps any `.safeParse()` validator (Zod, Valibot), `jsonSchema()` creates inline JSON Schema validators with basic type/required field checking.
-- **Type-safe tool builder** — `tool()` creates tools with schema + execute function, `toolDef()` creates definition-only tools, `dynamicTool()` creates tools from runtime schemas.
-- **ID generation utilities** — `generateId()` (UUID v4), `createIdGenerator(prefix)` (sequential IDs), `shortId()` (8-char hex).
-- **SSE parser utilities** — `parseSSEStream()` parses ReadableStream into events, `parseJsonEventStream()` auto-parses JSON data, `collectSSEEvents()` and `findSSEEvent()` for convenience.
-- 32 new tests for all new utilities.
-
-### Changed
-
-- `TransportRequestInit.body` now accepts `FormData` type.
-- `TransportRequestInit.headers` now accepts `Record<string, string | undefined>`.
+- **Schema integration** — `zodSchema()` for Zod/Valibot, `jsonSchema()` for inline JSON Schema validation
+- **Type-safe tool builder** — `tool()`, `toolDef()`, `dynamicTool()`
+- **Utilities** — `generateId()`, `createIdGenerator()`, `shortId()`, `parseSSEStream()`, `parseJsonEventStream()`, `collectSSEEvents()`, `findSSEEvent()`
+- 32 new tests (930 total)
 
 ---
 
@@ -28,21 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Multi-modal support** — 5 new capabilities beyond chat completions:
-  - `embed()` / `embedMany()` — text embeddings (OpenAI, Mistral, Cohere, and all OpenAI-compatible providers)
-  - `generateImage()` — image generation from text prompts (OpenAI DALL-E)
-  - `generateSpeech()` — text-to-speech synthesis (OpenAI TTS)
-  - `transcribe()` — audio transcription (OpenAI Whisper, Groq Whisper)
-  - `rerank()` — document reranking by relevance (Cohere)
-- New `AIProvider` optional methods: `embed`, `generateImage`, `generateSpeech`, `transcribe`, `rerank`
+- **Multi-modal support** — 5 new capabilities beyond chat completions: `embed()`, `generateImage()`, `generateSpeech()`, `transcribe()`, `rerank()`
 - New client methods: `client.embed()`, `client.generateImage()`, `client.generateSpeech()`, `client.transcribe()`, `client.rerank()`
 - Extended `ModelCapabilities` with `embeddings`, `imageGeneration`, `speech`, `transcription`, `reranking` flags
-- 13 new models in catalog: embedding models (text-embedding-3-small/large, ada-002, mistral-embed, cohere-embed), image generation (DALL-E 2/3), speech (TTS-1, TTS-1 HD), transcription (Whisper v1, Whisper Large v3), reranking (Cohere Rerank v3, Multilingual v3)
-- `TransportRequestInit` now supports `FormData` body and `undefined` header values
-
-### Changed
-
-- `ModelCapabilities` type extended with 5 new boolean fields (all default to `false`)
+- 13 new models: embedding, image generation, speech, transcription, and reranking models
 
 ---
 
@@ -62,32 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `AdapterName` type with all new adapter identifiers.
 
 ---
-
-## [0.9.4] - 2026-09-17
-
-### Fixed
-
-- **Build failure: `SDKConfig` missing `sessionBudget`/`perRequestBudget` fields** — `_budgetFromSDK()` referenced budget fields on `SDKConfig` that were never added during the v0.10.0 migration. Added optional `sessionBudget` and `perRequestBudget` to the `SDKConfig` interface.
-- **Operator precedence bug in `HilbrasClient` constructor** — `config?.policy ?? sdk ? this._policyFromSDK(sdk) : undefined` parsed as `(config?.policy ?? sdk) ? ...` due to missing parentheses, causing `_policyFromSDK` to receive `undefined` when no policy was set. Fixed to `config?.policy ?? (sdk ? this._policyFromSDK(sdk) : undefined)`.
-- **Unnecessary regex escapes in `text-tool-call-parser.ts`** — `\-` in character classes replaced with `-` (oxlint `no-useless-escape`).
-
-### Changed
-
-- 18 unused imports/variables cleaned up across adapters, client, middleware, tokens, and output modules.
-- `withDegradation` generic parameter `T` removed (was unused).
-- `buildSchemaDescription` removed from `output/structured.ts` (dead code).
-- Env loader in `config/config.ts` now maps legacy `HILBRAS_PROVIDER_*` variables to the canonical `ProviderConfig` shape with SSRF validation via `validateBaseUrl`.
-- `FetchTransport` retries on 502/503/504 by default.
-- Added `provider-config.ts`, `pipeline.ts`, custom lint tool (`check-validate-url`), ADRs, and analysis docs.
-
-### Added
-
-- `src/config/provider-config.ts` — canonical `ProviderConfig` type extracted from `schema.ts`.
-- `src/client/pipeline.ts` — request pipeline abstraction.
-- `tools/check-validate-url.mjs` — custom lint rule ensuring `validateBaseUrl` is called.
-- `architecture/` — Architecture Decision Records.
-- `docs/analysis/` — comparative analysis (ai-main vs Hilbras-sdk).
-- 20 new tests across `tests/client/`, `tests/tools/`, `tests/transport/`.
 
 ## [0.9.3] - 2026-08-27
 
