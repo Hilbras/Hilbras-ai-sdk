@@ -17,6 +17,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
+import type { EmbeddingParams, EmbeddingResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 
@@ -205,5 +206,35 @@ export class OllamaAdapter implements AIProvider {
     if (!choices?.length) return "";
     const message = choices[0].message as Record<string, unknown> | undefined;
     return (message?.content as string) ?? "";
+  }
+
+  // ─── Multi-Modal: Embeddings ────────────────────────────────────────────
+
+  async embed(params: EmbeddingParams): Promise<EmbeddingResult> {
+    const url = `${this._provider.baseUrl}/api/embeddings`;
+    const body: Record<string, unknown> = {
+      model: params.model,
+      prompt: Array.isArray(params.input) ? params.input.join("\n") : params.input,
+    };
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const embedding = data.embedding as number[] | undefined;
+
+    return {
+      embeddings: embedding ? [embedding] : [],
+      usage: { inputTokens: 0, totalTokens: 0 },
+    };
   }
 }
