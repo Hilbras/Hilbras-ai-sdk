@@ -204,6 +204,13 @@ export class UsageDashboard {
     this._requests = [];
   }
 
+  /** Wire to a HilbrasClient's hook events. Returns an unsubscribe function. */
+  instrumentClient(client: { on: (event: string, listener: (...args: any[]) => void) => (() => void) }): () => void {
+    const unsub1 = client.on("request.completed", (e: any) => this.recordRequest(e));
+    const unsub2 = client.on("request.failed", (e: any) => this.recordError(e));
+    return () => { unsub1(); unsub2(); };
+  }
+
   /** Number of recorded requests */
   get size(): number {
     return this._requests.length;
