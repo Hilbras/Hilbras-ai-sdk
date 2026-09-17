@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.0] - 2026-09-17
+
+### Added
+
+- **10 new provider adapters** — Mistral, DeepSeek, xAI (Grok), Together AI, Fireworks AI, Cohere, Perplexity, Cerebras, and DeepInfra, plus a `GenericOpenAIAdapter` base class for building custom OpenAI-compatible adapters.
+- **30+ new models** added to the built-in catalog with accurate pricing data.
+- Subpath exports for all new adapters (`@hilbras/sdk/adapters/mistral`, etc.).
+- Token counter pricing for Mistral, DeepSeek, xAI, and Cohere models.
+- Prompt cache recognition for Mistral and DeepSeek providers.
+
+### Changed
+
+- Adapter registry expanded from 6 to 16 built-in adapters.
+- Updated `AdapterName` type with all new adapter identifiers.
+
+---
+
 ## [0.9.3] - 2026-08-27
 
 ### Fixed (P0)
