@@ -85,6 +85,16 @@ export { generateId, createIdGenerator, shortId } from "./utils/id.js";
 export { parseSSEStream, parseJsonEventStream, collectSSEEvents, findSSEEvent } from "./utils/sse.js";
 export type { SSEEvent } from "./utils/sse.js";
 
+// ─── Telemetry (Production Observability) ───────────────────────────────────
+export { OpenTelemetryExporter } from "./telemetry/opentelemetry.js";
+export type { OpenTelemetryConfig } from "./telemetry/opentelemetry.js";
+export { StructuredLogger } from "./telemetry/structured-logger.js";
+export type { StructuredLoggerConfig, StructuredLogEntry, LogLevel } from "./telemetry/structured-logger.js";
+export { UsageDashboard } from "./telemetry/dashboard.js";
+export type { UsageSummary, ProviderMetrics, ModelMetrics } from "./telemetry/dashboard.js";
+export { BodyLogger } from "./telemetry/body-logger.js";
+export type { BodyLoggerConfig, BodyLogEntry } from "./telemetry/body-logger.js";
+
 // ─── Cost Optimization ──────────────────────────────────────────────────────
 export { BudgetTracker } from "./cost/tracker.js";
 export type { Reservation } from "./cost/tracker.js";
