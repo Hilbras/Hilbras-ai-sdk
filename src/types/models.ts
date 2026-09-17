@@ -13,6 +13,16 @@ export interface ModelCapabilities {
   structuredOutput: boolean;
   parallelTools: boolean;
   systemPrompts: boolean;
+  /** Model supports text embeddings (e.g. text-embedding-3-small) */
+  embeddings: boolean;
+  /** Model supports image generation (e.g. dall-e-3) */
+  imageGeneration: boolean;
+  /** Model supports speech synthesis (e.g. tts-1) */
+  speech: boolean;
+  /** Model supports audio transcription (e.g. whisper-1) */
+  transcription: boolean;
+  /** Model supports document reranking (e.g. cohere rerank) */
+  reranking: boolean;
 }
 
 export const DEFAULT_CAPABILITIES: ModelCapabilities = {
@@ -23,6 +33,11 @@ export const DEFAULT_CAPABILITIES: ModelCapabilities = {
   structuredOutput: false,
   parallelTools: false,
   systemPrompts: true,
+  embeddings: false,
+  imageGeneration: false,
+  speech: false,
+  transcription: false,
+  reranking: false,
 };
 
 export interface Model {

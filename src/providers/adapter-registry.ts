@@ -18,6 +18,16 @@ import { GoogleGenAIAdapter } from "../adapters/google-genai.js";
 import { AzureAdapter } from "../adapters/azure.js";
 import { GroqAdapter } from "../adapters/groq.js";
 import { OllamaAdapter } from "../adapters/ollama.js";
+import { GenericOpenAIAdapter } from "../adapters/openai-compatible.js";
+import { MistralAdapter } from "../adapters/mistral.js";
+import { DeepSeekAdapter } from "../adapters/deepseek.js";
+import { XAIAdapter } from "../adapters/xai.js";
+import { TogetherAdapter } from "../adapters/together.js";
+import { FireworksAdapter } from "../adapters/fireworks.js";
+import { CohereAdapter } from "../adapters/cohere.js";
+import { PerplexityAdapter } from "../adapters/perplexity.js";
+import { CerebrasAdapter } from "../adapters/cerebras.js";
+import { DeepInfraAdapter } from "../adapters/deepinfra.js";
 
 /** Factory function that creates an adapter from config */
 export type AdapterFactory = (config: AdapterConfig) => AIProvider;
@@ -72,17 +82,32 @@ export class AdapterRegistry {
 
 /**
  * Create a new AdapterRegistry pre-loaded with all built-in adapters:
- * openai, anthropic, google-genai, azure, groq, ollama
+ * openai, anthropic, google-genai, azure, groq, ollama,
+ * mistral, deepseek, xai, together, fireworks, cohere,
+ * perplexity, cerebras, deepinfra, openai-compatible
  */
 export function getDefaultAdapterRegistry(): AdapterRegistry {
   const registry = new AdapterRegistry();
 
+  // Original 6 adapters
   registry.register("openai", (config) => new OpenAIAdapter(config));
   registry.register("anthropic", (config) => new AnthropicAdapter(config));
   registry.register("google-genai", (config) => new GoogleGenAIAdapter(config));
   registry.register("azure", (config) => new AzureAdapter(config));
   registry.register("groq", (config) => new GroqAdapter(config));
   registry.register("ollama", (config) => new OllamaAdapter(config));
+
+  // v0.10.0: OpenAI-compatible adapters
+  registry.register("openai-compatible", (config) => new GenericOpenAIAdapter(config));
+  registry.register("mistral", (config) => new MistralAdapter(config));
+  registry.register("deepseek", (config) => new DeepSeekAdapter(config));
+  registry.register("xai", (config) => new XAIAdapter(config));
+  registry.register("together", (config) => new TogetherAdapter(config));
+  registry.register("fireworks", (config) => new FireworksAdapter(config));
+  registry.register("cohere", (config) => new CohereAdapter(config));
+  registry.register("perplexity", (config) => new PerplexityAdapter(config));
+  registry.register("cerebras", (config) => new CerebrasAdapter(config));
+  registry.register("deepinfra", (config) => new DeepInfraAdapter(config));
 
   return registry;
 }

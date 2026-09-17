@@ -1,0 +1,16 @@
+{
+  "$schema": "https://oxc.rs/schema/oxlintrc.json",
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-console": "off"
+  },
+  "plugins": [],
+  "settings": {
+    "hilbras": {
+      "requireValidateUrl": true
+    }
+  }
+}

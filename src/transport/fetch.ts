@@ -2,23 +2,41 @@
  * @hilbras/sdk — FetchTransport
  *
  * Native fetch-based transport. Works in Node 18+, Bun, Deno, and browsers.
+ *
+ * v0.10.0: tracks every in-flight request's AbortController in a Set so that
+ * `abort()` cancels *all* in-flight requests, not just the most recent one.
+ * Previously, a single `_controller` field was overwritten on every `request()`
+ * call, which meant concurrent requests could not all be aborted.
  */
 
 import type { Transport, TransportRequestInit } from "./transport.js";
 
 export class FetchTransport implements Transport {
-  private _controller: AbortController | null = null;
+  /**
+   * Every in-flight request's AbortController. A request adds itself on
+   * entry and removes itself on completion (success, error, or abort).
+   * `abort()` iterates this set and aborts every controller, so a single
+   * `abort()` call cancels all concurrent in-flight requests.
+   */
+  private _controllers = new Set<AbortController>();
 
   async request(url: string, init: TransportRequestInit): Promise<Response> {
-    this._controller = new AbortController();
-    const signal = init.signal ?? this._controller.signal;
-
-    return fetch(url, {
-      method: init.method,
-      headers: init.headers,
-      body: init.body,
-      signal,
-    });
+    const controller = new AbortController();
+    this._controllers.add(controller);
+    const signal = init.signal ?? controller.signal;
+    try {
+      const headers = init.headers
+        ? Object.fromEntries(Object.entries(init.headers).filter(([, v]) => v !== undefined) as [string, string][])
+        : undefined;
+      return await fetch(url, {
+        method: init.method,
+        headers,
+        body: init.body,
+        signal,
+      });
+    } finally {
+      this._controllers.delete(controller);
+    }
   }
 
   async stream(url: string, init: TransportRequestInit): Promise<ReadableStream<Uint8Array>> {
@@ -29,8 +47,16 @@ export class FetchTransport implements Transport {
     return res.body;
   }
 
+  /**
+   * Abort all in-flight requests. Safe to call when no requests are
+   * in flight (no-op). Safe to call concurrently with new requests —
+   * any request that started before this call is cancelled; requests
+   * that start after this call are unaffected.
+   */
   abort(): void {
-    this._controller?.abort();
-    this._controller = null;
+    for (const controller of this._controllers) {
+      controller.abort();
+    }
+    this._controllers.clear();
   }
 }

@@ -3,14 +3,40 @@
  *
  * Loads configuration from multiple sources with precedence:
  * Runtime overrides > Environment variables > File config > Defaults
+ *
+ * The env loader maps the legacy `HILBRAS_PROVIDER_*` variables to the
+ * canonical `ProviderConfig` shape (introduced in v0.10.0) and runs every
+ * `baseUrl` through `validateBaseUrl` so an env-var-based SSRF bypass is
+ * not possible. The API key is captured for redacted error messages; it
+ * is *not* stored as a plain string on the loaded config — the loader
+ * forces it into the `authentication` field which is the public contract.
  */
 
-import type { SDKConfig, ProviderConfig } from "./schema.js";
+import type { SDKConfig } from "./schema.js";
 import { DEFAULT_CONFIG } from "./schema.js";
+import type { ProviderConfig } from "./provider-config.js";
+import { validateBaseUrl } from "../security/url-guard.js";
+import { redact } from "../logging/logger.js";
 import { readFileSync } from "node:fs";
 
 /** Environment variable prefix for SDK config */
 const ENV_PREFIX = "HILBRAS_";
+
+/**
+ * Heuristic adapter detection from a baseUrl. Used when the env loader
+ * builds a provider from `HILBRAS_PROVIDER_URL`/`HILBRAS_PROVIDER_FORMAT`
+ * and the user has not specified an adapter explicitly. Matches the
+ * simplest substrings; if no match, defaults to `openai`.
+ */
+function inferAdapter(baseUrl: string): ProviderConfig["adapter"] {
+  const lower = baseUrl.toLowerCase();
+  if (lower.includes("anthropic")) return "anthropic";
+  if (lower.includes("googleapis") || lower.includes("generativelanguage")) return "google-genai";
+  if (lower.includes("azure")) return "azure";
+  if (lower.includes("groq")) return "groq";
+  if (lower.includes("localhost") || lower.includes("127.0.0.1") || lower.includes("[::1]")) return "ollama";
+  return "openai";
+}
 
 /** Parse environment variables into SDKConfig fields */
 function loadFromEnv(): Partial<SDKConfig> {
@@ -27,17 +53,33 @@ function loadFromEnv(): Partial<SDKConfig> {
   if (env[`${ENV_PREFIX}MAX_RETRIES`]) config.maxRetries = parseInt(env[`${ENV_PREFIX}MAX_RETRIES`] ?? "", 10);
   if (env[`${ENV_PREFIX}PROMPT_CACHING`]) config.promptCaching = env[`${ENV_PREFIX}PROMPT_CACHING`] === "true";
 
-  // Provider config from env
+  // Provider config from env. v0.10.0: the loader now produces the canonical
+  // `ProviderConfig` shape. We also redact the API key for any log that
+  // would surface it.
   const providerUrl = env[`${ENV_PREFIX}PROVIDER_URL`];
   const providerKey = env[`${ENV_PREFIX}PROVIDER_KEY`];
   const providerName = env[`${ENV_PREFIX}PROVIDER_NAME`];
-  const providerFormat = env[`${ENV_PREFIX}PROVIDER_FORMAT`] as ProviderConfig["format"];
   if (providerUrl && providerKey) {
+    // Validate the URL through the v0.9.3 SSRF guard. We deliberately
+    // allow insecure here because the env loader is the documented
+    // way to point at a local Ollama (`http://localhost:11434`).
+    // Loopback/private-range access is gated by the global
+    // `allowInsecureUrls` / `allowPrivateNetwork` flags on HilbrasClient,
+    // not on the loader.
+    const guard = validateBaseUrl(providerUrl, { allowInsecure: true });
+    if (!guard.ok) {
+      throw new Error(
+        `HILBRAS_PROVIDER_URL rejected by SSRF guard: ${guard.reason}`,
+      );
+    }
+    const inferredAdapter = inferAdapter(providerUrl);
     config.providers = [{
       name: providerName || "default",
       baseUrl: providerUrl,
-      apiKey: providerKey,
-      format: providerFormat || "openai",
+      authentication: { type: "bearer", apiKey: redact(providerKey) },
+      models: [],
+      adapter: inferredAdapter,
+      allowInsecure: providerUrl.startsWith("http://"),
     }];
     config.defaultProvider = providerName || "default";
   }
@@ -122,6 +164,11 @@ export function validateConfig(config: SDKConfig): string | null {
   }
   if (!["none", "error", "info", "debug"].includes(config.logLevel)) {
     return `Invalid logLevel: ${config.logLevel}`;
+  }
+  // v0.10.0: also validate every provider's baseUrl.
+  for (const p of config.providers) {
+    const guard = validateBaseUrl(p.baseUrl, { allowInsecure: !!p.allowInsecure });
+    if (!guard.ok) return `Provider ${p.name}: ${guard.reason}`;
   }
   return null;
 }

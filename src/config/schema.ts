@@ -3,7 +3,16 @@
  *
  * Type-safe configuration with defaults, validation, and layered overrides.
  * Supports global defaults → file config → environment variables → runtime overrides.
+ *
+ * `ProviderConfig` is the canonical type, defined in `./provider-config.ts`
+ * and re-exported from this module for convenience. The legacy
+ * `format`/`apiKey` fields are gone; callers should use the structured
+ * `authentication` and `adapter` fields.
  */
+
+import type { ProviderConfig } from "./provider-config.js";
+
+export type { ProviderConfig } from "./provider-config.js";
 
 export interface SDKConfig {
   /** Default provider name */
@@ -42,14 +51,10 @@ export interface SDKConfig {
   allowedTools: string[];
   /** Denied tools */
   deniedTools: string[];
-}
-
-export interface ProviderConfig {
-  name: string;
-  baseUrl: string;
-  apiKey?: string;
-  format: "openai" | "anthropic" | "google-genai";
-  models?: string[];
+  /** Maximum total cost for the session (null = unlimited) */
+  sessionBudget?: number;
+  /** Maximum cost per individual request (null = unlimited) */
+  perRequestBudget?: number;
 }
 
 export const DEFAULT_CONFIG: SDKConfig = {

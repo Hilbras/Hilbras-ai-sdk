@@ -19,6 +19,13 @@ import type { Transport } from "../transport/transport.js";
 import type { ExecutionPolicy } from "../types/policy.js";
 import type { TaskRequirement } from "../types/router.js";
 import type { StructuredOutputConfig } from "../types/schema.js";
+import type {
+  EmbeddingResult,
+  ImageResult,
+  SpeechResult,
+  TranscriptionResult,
+  RerankResult,
+} from "../types/multi-modal.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { FetchTransport } from "../transport/fetch.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
@@ -26,7 +33,7 @@ import { createRetryConfig, shouldRetry, shouldRetryNetworkError } from "../reli
 import { calculateBackoff, sleep } from "../reliability/backoff.js";
 import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError, ValidationError, ConfigurationError } from "../errors/index.js";
 import { createTimeoutSignal } from "../reliability/timeout.js";
-import { sdkLogger } from "../logging/logger.js";
+
 import { AdapterRegistry, getDefaultAdapterRegistry } from "../providers/adapter-registry.js";
 import { dictToMessage } from "../types/messages.js";
 import { validateBaseUrl } from "../security/url-guard.js";
@@ -36,7 +43,7 @@ import { buildJsonSystemInstruction, buildRepairPrompt, extractJson, buildJsonMo
 import { ClientHooks } from "./hooks.js";
 import type { HookEvent, HookEventType, HookListener } from "../types/observability.js";
 import { BudgetTracker } from "../cost/tracker.js";
-import type { BudgetConfig, CostEvent, CostReport } from "../cost/types.js";
+import type { BudgetConfig, CostReport } from "../cost/types.js";
 import { estimateTokens } from "../tokens/counter.js";
 
 export interface HilbrasClientConfig {
@@ -60,6 +67,17 @@ export interface HilbrasClientConfig {
    * (10.*, 172.16-31.*, 192.168.*). Defaults to false.
    */
   allowPrivateNetwork?: boolean;
+  /**
+   * v0.10.0 PR-5: layered SDK config (e.g. from `loadConfig()`).
+   * Mapped into `policy` and `budget` if those aren't already set.
+   * Precedence: explicit `policy`/`budget` > `sdkConfig.policy`/`sdkConfig.budget`
+   * > `DEFAULT_CONFIG`.
+   *
+   * Currently wired fields: `maxRetries`, `requestTimeoutMs`,
+   * `circuitBreakerEnabled`/`circuitBreakerThreshold`/`circuitBreakerResetMs`,
+   * `sessionBudget`, `perRequestBudget`.
+   */
+  sdkConfig?: import("../config/schema.js").SDKConfig;
 }
 
 export class HilbrasClient implements AsyncDisposable {
@@ -78,11 +96,48 @@ export class HilbrasClient implements AsyncDisposable {
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
     this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
-    this._defaultPolicy = config?.policy;
     this._router = new ModelRouter();
-    this._budgetTracker = new BudgetTracker(config?.budget);
     this._allowInsecureUrls = config?.allowInsecureUrls ?? false;
     this._allowPrivateNetwork = config?.allowPrivateNetwork ?? false;
+
+    // v0.10.0 PR-5: derive policy + budget from sdkConfig when not
+    // explicitly provided. Precedence: explicit > sdkConfig > defaults.
+    const sdk = config?.sdkConfig;
+    this._defaultPolicy = config?.policy ?? (sdk ? this._policyFromSDK(sdk) : undefined);
+    const sdkBudget = sdk ? this._budgetFromSDK(sdk) : undefined;
+    this._budgetTracker = new BudgetTracker(config?.budget ?? sdkBudget);
+  }
+
+  /**
+   * Map the legacy SDKConfig fields (maxRetries, requestTimeoutMs,
+   * circuitBreakerEnabled/Threshold/ResetMs) to an ExecutionPolicy.
+   * Unrecognized fields are left undefined; the per-request policy
+   * resolver fills in defaults.
+   */
+  private _policyFromSDK(sdk: import("../config/schema.js").SDKConfig): ExecutionPolicy {
+    const policy: ExecutionPolicy = {};
+    if (sdk.maxRetries !== undefined) {
+      policy.retry = { maxRetries: sdk.maxRetries };
+    }
+    if (sdk.requestTimeoutMs !== undefined) {
+      policy.timeout = { requestTimeoutMs: sdk.requestTimeoutMs };
+    }
+    if (sdk.circuitBreakerEnabled !== undefined || sdk.circuitBreakerThreshold !== undefined || sdk.circuitBreakerResetMs !== undefined) {
+      policy.circuitBreaker = {
+        enabled: sdk.circuitBreakerEnabled,
+        failureThreshold: sdk.circuitBreakerThreshold,
+        timeoutMs: sdk.circuitBreakerResetMs,
+      };
+    }
+    return policy;
+  }
+
+  /** Map the legacy SDKConfig budget fields to a BudgetConfig. */
+  private _budgetFromSDK(sdk: import("../config/schema.js").SDKConfig): BudgetConfig {
+    const budget: BudgetConfig = {};
+    if (sdk.sessionBudget !== undefined) budget.sessionBudget = sdk.sessionBudget;
+    if (sdk.perRequestBudget !== undefined) budget.perRequestBudget = sdk.perRequestBudget;
+    return budget;
   }
 
   /** Subscribe to lifecycle events. Returns an unsubscribe function. */
@@ -211,6 +266,53 @@ export class HilbrasClient implements AsyncDisposable {
     return adapter;
   }
 
+  // ─── Request Pre-Flight (v0.10.0 PR-4) ───────────────────────────────
+
+  /**
+   * Resolve the per-request reliability primitives: policy, circuit-breaker,
+   * retry config, and timeout-wrapped signal. Both `stream()` and `complete()`
+   * did this work inline with near-duplicate code. Now they share this
+   * helper. Pure refactor: the returned values are byte-for-byte equivalent
+   * to what the inline code produced before PR-4.
+   */
+  private _prepareRequest(
+    requestId: string,
+    providerName: string,
+    providerConfig: ProviderConfig,
+    policy: ExecutionPolicy | undefined,
+    userSignal: AbortSignal | undefined,
+  ): {
+    resolved: ReturnType<typeof resolvePolicy>;
+    circuitBreaker: ReturnType<typeof getCircuitBreakerRegistry>["getOrCreate"] extends (...a: never[]) => infer R ? R : never;
+    retryConfig: ReturnType<typeof createRetryConfig>;
+    signal: AbortSignal | undefined;
+  } {
+    const resolved = resolvePolicy(policy ?? this._defaultPolicy);
+    let circuitBreaker: ReturnType<typeof getCircuitBreakerRegistry>["getOrCreate"] extends (...a: never[]) => infer R ? R : never = undefined as never;
+    if (resolved.circuitBreaker.enabled) {
+      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(providerName, {
+        failureThreshold: resolved.circuitBreaker.failureThreshold,
+        successThreshold: resolved.circuitBreaker.successThreshold,
+        timeoutMs: resolved.circuitBreaker.timeoutMs,
+        halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
+      });
+      if (!circuitBreaker.isAvailable()) {
+        this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
+        throw new CircuitBreakerOpenError(providerName);
+      }
+    }
+    const retryConfig = createRetryConfig({
+      maxRetries: resolved.retry.maxRetries,
+      retryableStatuses: resolved.retry.retryableStatuses,
+      retryableNetworkErrors: resolved.retry.retryableNetworkErrors,
+    });
+    const timeoutMs = resolved.timeout.requestTimeoutMs || providerConfig.timeout;
+    const signal = timeoutMs
+      ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, userSignal)
+      : userSignal;
+    return { resolved, circuitBreaker, retryConfig, signal };
+  }
+
   // ─── Provider/Model Resolution ──────────────────────────────────────────
 
   private _resolveProviderModel(params: {
@@ -315,35 +417,17 @@ export class HilbrasClient implements AsyncDisposable {
     this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
     const adapter = this._getAdapter(providerName);
-    const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
-
-    // Circuit breaker (if enabled)
-    let circuitBreaker = undefined;
-    if (resolved.circuitBreaker.enabled) {
-      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(providerName, {
-        failureThreshold: resolved.circuitBreaker.failureThreshold,
-        successThreshold: resolved.circuitBreaker.successThreshold,
-        timeoutMs: resolved.circuitBreaker.timeoutMs,
-        halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
-      });
-      if (!circuitBreaker.isAvailable()) {
-        this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
-        throw new CircuitBreakerOpenError(providerName);
-      }
-    }
+    // v0.10.0 PR-4: extract the duplicated policy/circuit-breaker/retry/signal
+    // setup into _prepareRequest so stream() and complete() share it.
+    const { resolved, circuitBreaker, retryConfig, signal } = this._prepareRequest(
+      requestId,
+      providerName,
+      providerConfig,
+      params.policy,
+      params.signal,
+    );
 
     const messages = this._normalizeMessages(params.messages);
-    const retryConfig = createRetryConfig({
-      maxRetries: resolved.retry.maxRetries,
-      retryableStatuses: resolved.retry.retryableStatuses,
-      retryableNetworkErrors: resolved.retry.retryableNetworkErrors,
-    });
-
-    // Build timeout signal from policy (falls back to provider config)
-    const timeoutMs = resolved.timeout.requestTimeoutMs || providerConfig.timeout;
-    const signal = timeoutMs
-      ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, params.signal)
-      : params.signal;
 
     // Atomic budget reservation before any provider call. Reserves the
     // estimated cost for the entire retry+fallback chain; the reservation is
@@ -525,35 +609,17 @@ export class HilbrasClient implements AsyncDisposable {
     this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
     const adapter = this._getAdapter(providerName);
-    const resolved = resolvePolicy(params.policy ?? this._defaultPolicy);
-
-    // Circuit breaker (if enabled)
-    let circuitBreaker = undefined;
-    if (resolved.circuitBreaker.enabled) {
-      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(providerName, {
-        failureThreshold: resolved.circuitBreaker.failureThreshold,
-        successThreshold: resolved.circuitBreaker.successThreshold,
-        timeoutMs: resolved.circuitBreaker.timeoutMs,
-        halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
-      });
-      if (!circuitBreaker.isAvailable()) {
-        this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
-        throw new CircuitBreakerOpenError(providerName);
-      }
-    }
+    // v0.10.0 PR-4: extract the duplicated policy/circuit-breaker/retry/signal
+    // setup into _prepareRequest so stream() and complete() share it.
+    const { resolved, circuitBreaker, retryConfig, signal } = this._prepareRequest(
+      requestId,
+      providerName,
+      providerConfig,
+      params.policy,
+      params.signal,
+    );
 
     const messages = this._normalizeMessages(params.messages);
-    const retryConfig = createRetryConfig({
-      maxRetries: resolved.retry.maxRetries,
-      retryableStatuses: resolved.retry.retryableStatuses,
-      retryableNetworkErrors: resolved.retry.retryableNetworkErrors,
-    });
-
-    // Build timeout signal from policy (falls back to provider config)
-    const timeoutMs = resolved.timeout.requestTimeoutMs || providerConfig.timeout;
-    const signal = timeoutMs
-      ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, params.signal)
-      : params.signal;
 
     // Structured output setup
     const outputConfig = params.output;
@@ -566,7 +632,6 @@ export class HilbrasClient implements AsyncDisposable {
       structuredExtra = { ...structuredExtra, ...jsonModeParams };
 
       // Add system instruction for JSON output
-      const schemaDesc = buildJsonSystemInstruction(outputConfig.schema as never);
       structuredMessages = [
         { role: "system", content: buildJsonSystemInstruction(outputConfig.schema as never) },
         ...messages,
@@ -692,6 +757,131 @@ export class HilbrasClient implements AsyncDisposable {
         throw err;
       }
     }
+  }
+
+  // ─── Multi-Modal: Embeddings ──────────────────────────────────────────
+
+  async embed(params: {
+    provider: string;
+    model: string;
+    input: string | string[];
+    dimensions?: number;
+    signal?: AbortSignal;
+  }): Promise<EmbeddingResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.embed) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support embeddings`);
+    }
+    return adapter.embed({
+      model: params.model,
+      input: params.input,
+      dimensions: params.dimensions,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Image Generation ────────────────────────────────────
+
+  async generateImage(params: {
+    provider: string;
+    model: string;
+    prompt: string;
+    n?: number;
+    size?: import("../types/multi-modal.js").ImageSize;
+    quality?: import("../types/multi-modal.js").ImageQuality;
+    style?: import("../types/multi-modal.js").ImageStyle;
+    responseFormat?: "url" | "b64_json";
+    signal?: AbortSignal;
+  }): Promise<ImageResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.generateImage) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support image generation`);
+    }
+    return adapter.generateImage({
+      model: params.model,
+      prompt: params.prompt,
+      n: params.n,
+      size: params.size,
+      quality: params.quality,
+      style: params.style,
+      responseFormat: params.responseFormat,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Speech Synthesis ────────────────────────────────────
+
+  async generateSpeech(params: {
+    provider: string;
+    model: string;
+    input: string;
+    voice: import("../types/multi-modal.js").SpeechVoice;
+    responseFormat?: import("../types/multi-modal.js").SpeechFormat;
+    speed?: number;
+    signal?: AbortSignal;
+  }): Promise<SpeechResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.generateSpeech) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support speech synthesis`);
+    }
+    return adapter.generateSpeech({
+      model: params.model,
+      input: params.input,
+      voice: params.voice,
+      responseFormat: params.responseFormat,
+      speed: params.speed,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Transcription ───────────────────────────────────────
+
+  async transcribe(params: {
+    provider: string;
+    model: string;
+    file: File | Blob | Uint8Array;
+    language?: import("../types/multi-modal.js").TranscriptLanguage;
+    prompt?: string;
+    responseFormat?: import("../types/multi-modal.js").TranscriptFormat;
+    temperature?: number;
+    signal?: AbortSignal;
+  }): Promise<TranscriptionResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.transcribe) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support transcription`);
+    }
+    return adapter.transcribe({
+      model: params.model,
+      file: params.file,
+      language: params.language,
+      prompt: params.prompt,
+      responseFormat: params.responseFormat,
+      temperature: params.temperature,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Reranking ───────────────────────────────────────────
+
+  async rerank(params: {
+    provider: string;
+    model: string;
+    query: string;
+    documents: string[];
+    topN?: number;
+    signal?: AbortSignal;
+  }): Promise<RerankResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.rerank) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support reranking`);
+    }
+    return adapter.rerank({
+      model: params.model,
+      query: params.query,
+      documents: params.documents,
+      topN: params.topN,
+      signal: params.signal,
+    });
   }
 
   // ─── Cleanup ────────────────────────────────────────────────────────────
