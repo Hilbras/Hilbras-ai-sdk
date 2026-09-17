@@ -144,9 +144,19 @@ export { buildPrompt, buildToolSection, buildEnvironmentSection, buildCodingAgen
 export { DefaultCredentialProvider, getCredentialProvider, setCredentialProvider } from "./credentials/provider.js";
 export type { CredentialSource, CredentialProvider } from "./credentials/provider.js";
 
-// ─── Security (v0.9.3: SSRF guard) ─────────────────────────────────────────
+// ─── Security (v0.9.3: SSRF guard, v0.14.0: HMAC signing, PII, audit) ──────
 export { validateBaseUrl } from "./security/url-guard.js";
 export type { UrlGuardOptions, UrlGuardResult } from "./security/url-guard.js";
+export { RequestSigner, signingMiddleware } from "./security/request-signer.js";
+export type { RequestSignerConfig, SignedRequest } from "./security/request-signer.js";
+export { redactPii, detectPii, createPiiRedactor } from "./security/pii-guard.js";
+export type { PiiType, PiiMatch, PiiGuardConfig } from "./security/pii-guard.js";
+export { AuditLogger, createRetentionPolicy } from "./security/audit-logger.js";
+export type { AuditCategory, AuditSeverity, AuditEntry, AuthAuditEntry, DataAccessAuditEntry, ConfigChangeAuditEntry, SecurityAuditEntry, AuditLoggerConfig } from "./security/audit-logger.js";
+
+// ─── OIDC Credentials ───────────────────────────────────────────────────────
+export { OidcCredentialProvider, OidcError, oidcSource } from "./credentials/oidc.js";
+export type { OidcConfig } from "./credentials/oidc.js";
 
 // ─── Adapters (advanced — usually not imported directly) ────────────────────
 export { BUILTIN_MODELS, findModel, modelsForProvider } from "./catalog/models.js";
