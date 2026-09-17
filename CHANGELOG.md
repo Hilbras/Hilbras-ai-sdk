@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-09-17
+
+### Added
+
+- **Schema integration** — `zodSchema()` for Zod/Valibot, `jsonSchema()` for inline JSON Schema validation
+- **Type-safe tool builder** — `tool()`, `toolDef()`, `dynamicTool()`
+- **Utilities** — `generateId()`, `createIdGenerator()`, `shortId()`, `parseSSEStream()`, `parseJsonEventStream()`, `collectSSEEvents()`, `findSSEEvent()`
+- 32 new tests (930 total)
+
+---
+
 ## [0.11.0] - 2026-09-17
 
 ### Added
