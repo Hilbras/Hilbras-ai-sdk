@@ -16,28 +16,6 @@
 import type { SchemaValidator, StructuredOutputConfig } from "../types/schema.js";
 import { ValidationError } from "../errors/index.js";
 
-/** Build the JSON schema description string from a schema validator */
-function buildSchemaDescription(schema: SchemaValidator): string {
-  // Try to extract JSON Schema from Zod's .jsonSchema or .definition
-  const s = schema as unknown as Record<string, unknown>;
-
-  // Zod 3.x: schema._def or schema.jsonSchema()
-  if (typeof s.jsonSchema === "function") {
-    try {
-      return JSON.stringify((s.jsonSchema as () => unknown)(), null, 2);
-    } catch { /* fall through */ }
-  }
-
-  // Zod 4.x: schema.meta or schema._zod
-  if (s.meta && typeof s.meta === "object") {
-    return JSON.stringify(s.meta, null, 2);
-  }
-
-  // Valibot: schema._def
-  // Fallback: describe as opaque object
-  return "A JSON object. The exact structure is validated server-side.";
-}
-
 /** Build system instruction for JSON output */
 export function buildJsonSystemInstruction(schemaDescription: string): string {
   return [

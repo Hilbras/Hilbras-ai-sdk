@@ -84,7 +84,7 @@ function stripMedia(content: string): string {
  * Execute a request with graceful degradation.
  * Tries each level in order until one succeeds.
  */
-export async function withDegradation<T>(
+export async function withDegradation(
   transport: Transport,
   url: string,
   messages: Message[],

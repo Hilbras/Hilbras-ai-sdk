@@ -8,7 +8,6 @@
  * The execution plan is deterministic for the same inputs.
  */
 
-import type { RoutingResult } from "./router.js";
 import type { ExecutionPolicy } from "./policy.js";
 
 /** A single candidate in the execution plan */

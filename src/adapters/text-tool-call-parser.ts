@@ -56,10 +56,10 @@ export function parseToolCallBlock(body: string): ParsedToolCall | null {
     }
   }
 
-  const fnMatch = /^<function=([A-Za-z0-9_.\-]+)>\s*([\s\S]*?)\s*<\/function>$/.exec(trimmed);
+  const fnMatch = /^<function=([A-Za-z0-9_.-]+)>\s*([\s\S]*?)\s*<\/function>$/.exec(trimmed);
   if (fnMatch) {
     const input: Record<string, unknown> = {};
-    const paramRe = /<parameter=([A-Za-z0-9_.\-]+)>([\s\S]*?)<\/parameter>/g;
+    const paramRe = /<parameter=([A-Za-z0-9_.-]+)>([\s\S]*?)<\/parameter>/g;
     for (let m = paramRe.exec(fnMatch[2]); m != null; m = paramRe.exec(fnMatch[2])) {
       input[m[1]] = m[2];
     }

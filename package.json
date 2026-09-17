@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, circuit breaker, retry, reasoning normalization, cost enforcement, and SSRF-safe provider registration for OpenAI, Anthropic, Gemini, Azure, Groq, and Ollama. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -92,7 +92,8 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "oxlint src/"
+    "lint": "oxlint src/",
+    "lint:custom": "node tools/check-validate-url.mjs"
   },
   "engines": {
     "node": ">=18"

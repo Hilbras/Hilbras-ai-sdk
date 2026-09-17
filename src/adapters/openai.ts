@@ -10,12 +10,11 @@
  */
 
 import type { Transport } from "../transport/transport.js";
-import type { ProviderConfig, Authentication } from "../types/providers.js";
+import type { ProviderConfig } from "../types/providers.js";
 import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk, TextChunk, ToolCallChunk, FinishChunk } from "../types/streams.js";
-import type { Model } from "../types/models.js";
-import type { AIProvider, AdapterConfig, GenerateParams } from "../types/adapter.js";
+import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 import { TextToolCallParser } from "./text-tool-call-parser.js";

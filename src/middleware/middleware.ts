@@ -4,7 +4,7 @@
  * Interceptors that wrap the transport layer for cross-cutting concerns.
  */
 
-import type { Transport, TransportRequestInit } from "../transport/transport.js";
+import type { TransportRequestInit } from "../transport/transport.js";
 
 export interface MiddlewareContext {
   url: string;
