@@ -17,6 +17,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
+import type { EmbeddingParams, EmbeddingResult, ImageParams, ImageResult, SpeechParams, SpeechResult, TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 
@@ -237,5 +238,147 @@ export class GoogleGenAIAdapter implements AIProvider {
     const parts = content?.parts as Array<Record<string, unknown>> | undefined;
     if (!parts?.length) return "";
     return parts.filter((p) => typeof p.text === "string").map((p) => p.text).join("");
+  }
+
+  // ─── Multi-Modal: Embeddings ──────────────────────────────────────────
+
+  async embed(params: EmbeddingParams): Promise<EmbeddingResult> {
+    const url = `${this._provider.baseUrl}/models/${params.model}:embedContent`;
+    const body: Record<string, unknown> = {
+      model: `models/${params.model}`,
+      content: { parts: [{ text: typeof params.input === "string" ? params.input : params.input.join("\n") }] },
+    };
+    if (params.dimensions) {
+      (body as Record<string, unknown>).outputDimensionality = params.dimensions;
+    }
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(this._provider.extraHeaders),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const embedding = data.embedding as Record<string, unknown> | undefined;
+    const values = embedding?.values as number[] | undefined;
+
+    if (Array.isArray(params.input) && values) {
+      // batch embedContent not supported — return single result
+      return { embeddings: [values], usage: { inputTokens: 0, totalTokens: 0 } };
+    }
+
+    return { embeddings: values ? [values] : [], usage: { inputTokens: 0, totalTokens: 0 } };
+  }
+
+  // ─── Multi-Modal: Image Generation ────────────────────────────────────
+
+  async generateImage(params: ImageParams): Promise<ImageResult> {
+    const url = `${this._provider.baseUrl}/models/${params.model}:predict`;
+    const body: Record<string, unknown> = {
+      instances: [{ prompt: params.prompt }],
+      parameters: {
+        sampleCount: params.n ?? 1,
+        ...(params.size ? { aspectRatio: params.size } : {}),
+      },
+    };
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(this._provider.extraHeaders),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const predictions = data.predictions as Array<Record<string, unknown>> | undefined;
+
+    const images = (predictions ?? []).map((p) => ({
+      b64Json: typeof p.bytesBase64Encoded === "string" ? p.bytesBase64Encoded : undefined,
+      revisedPrompt: typeof p.prompt === "string" ? p.prompt : undefined,
+    }));
+
+    return { images };
+  }
+
+  // ─── Multi-Modal: Speech Synthesis ────────────────────────────────────
+
+  async generateSpeech(params: SpeechParams): Promise<SpeechResult> {
+    // Google Cloud TTS uses a different endpoint structure
+    const url = `https://texttospeech.googleapis.com/v1/text:synthesize`;
+    const body: Record<string, unknown> = {
+      input: { text: params.input },
+      voice: { languageCode: "en-US", name: params.voice },
+      audioConfig: {
+        audioEncoding: params.responseFormat === "mp3" ? "MP3" : params.responseFormat === "opus" ? "OGG_OPUS" : "LINEAR16",
+        speakingRate: params.speed ?? 1.0,
+      },
+    };
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(this._provider.extraHeaders),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const audioContent = data.audioContent as string | undefined;
+
+    return {
+      audio: audioContent ? Uint8Array.from(atob(audioContent), (c) => c.charCodeAt(0)) : new Uint8Array(),
+      format: params.responseFormat ?? "wav",
+    };
+  }
+
+  // ─── Multi-Modal: Transcription ───────────────────────────────────────
+
+  async transcribe(params: TranscriptionParams): Promise<TranscriptionResult> {
+    // Google Speech-to-Text uses a different endpoint
+    const url = `https://speech.googleapis.com/v1/speech:recognize`;
+    const fileBytes = params.file instanceof Uint8Array ? params.file : new Uint8Array(await (params.file as Blob).arrayBuffer());
+    const body: Record<string, unknown> = {
+      config: {
+        encoding: "LINEAR16",
+        sampleRateHertz: 16000,
+        languageCode: params.language ?? "en-US",
+        enableAutomaticPunctuation: true,
+      },
+      audio: { content: btoa(String.fromCharCode(...fileBytes)) },
+    };
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(this._provider.extraHeaders),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const results = data.results as Array<Record<string, unknown>> | undefined;
+    const alternatives = (results?.[0] as Record<string, unknown> | undefined)?.alternatives as Array<Record<string, unknown>> | undefined;
+    const transcript = alternatives?.[0]?.transcript as string | undefined;
+
+    return { text: transcript ?? "" };
   }
 }

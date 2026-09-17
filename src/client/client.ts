@@ -759,6 +759,58 @@ export class HilbrasClient implements AsyncDisposable {
     }
   }
 
+  // ─── Multi-Modal Reliability Pipeline ──────────────────────────────────
+
+  /**
+   * Run a multi-modal adapter method with retry, circuit breaker, timeout,
+   * and hook events — the same reliability guarantees as stream()/complete().
+   */
+  private async _runMultiModal<T>(
+    requestId: string,
+    providerName: string,
+    modelId: string,
+    operation: string,
+    fn: (signal: AbortSignal | undefined) => Promise<T>,
+    userSignal: AbortSignal | undefined,
+  ): Promise<T> {
+    const startTime = performance.now();
+    this._emit({ type: "request.start", requestId, timestamp: startTime, provider: providerName, model: modelId });
+
+    const providerConfig = this._registry.get(providerName);
+    const { resolved, circuitBreaker, retryConfig, signal } = this._prepareRequest(
+      requestId, providerName, providerConfig ?? { name: providerName, baseUrl: "", authentication: { type: "none" }, adapter: "openai-compatible" } as ProviderConfig, undefined, userSignal,
+    );
+
+    let lastError: Error | undefined;
+    const maxAttempts = resolved.retry.maxRetries + 1;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const result = await fn(signal);
+        circuitBreaker?.recordSuccess();
+        this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: false });
+        return result;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const status = (err as { status?: number }).status ?? 0;
+        const retryable = (status > 0 && shouldRetry(status, attempt, retryConfig)) || shouldRetryNetworkError(attempt, retryConfig);
+        circuitBreaker?.recordFailure(lastError);
+
+        if (retryable && attempt < maxAttempts - 1) {
+          const delay = calculateBackoff(attempt, resolved.backoff);
+          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: lastError.message });
+          await sleep(delay);
+          continue;
+        }
+
+        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: lastError.message });
+        throw lastError;
+      }
+    }
+
+    throw lastError!;
+  }
+
   // ─── Multi-Modal: Embeddings ──────────────────────────────────────────
 
   async embed(params: {
@@ -772,12 +824,10 @@ export class HilbrasClient implements AsyncDisposable {
     if (!adapter.embed) {
       throw new ConfigurationError(`Provider "${params.provider}" does not support embeddings`);
     }
-    return adapter.embed({
-      model: params.model,
-      input: params.input,
-      dimensions: params.dimensions,
-      signal: params.signal,
-    });
+    const requestId = this._nextRequestId();
+    return this._runMultiModal(requestId, params.provider, params.model, "embed", (signal) =>
+      adapter.embed!({ model: params.model, input: params.input, dimensions: params.dimensions, signal }),
+    params.signal);
   }
 
   // ─── Multi-Modal: Image Generation ────────────────────────────────────
@@ -797,16 +847,13 @@ export class HilbrasClient implements AsyncDisposable {
     if (!adapter.generateImage) {
       throw new ConfigurationError(`Provider "${params.provider}" does not support image generation`);
     }
-    return adapter.generateImage({
-      model: params.model,
-      prompt: params.prompt,
-      n: params.n,
-      size: params.size,
-      quality: params.quality,
-      style: params.style,
-      responseFormat: params.responseFormat,
-      signal: params.signal,
-    });
+    const requestId = this._nextRequestId();
+    return this._runMultiModal(requestId, params.provider, params.model, "generateImage", (signal) =>
+      adapter.generateImage!({
+        model: params.model, prompt: params.prompt, n: params.n, size: params.size,
+        quality: params.quality, style: params.style, responseFormat: params.responseFormat, signal,
+      }),
+    params.signal);
   }
 
   // ─── Multi-Modal: Speech Synthesis ────────────────────────────────────
@@ -824,14 +871,13 @@ export class HilbrasClient implements AsyncDisposable {
     if (!adapter.generateSpeech) {
       throw new ConfigurationError(`Provider "${params.provider}" does not support speech synthesis`);
     }
-    return adapter.generateSpeech({
-      model: params.model,
-      input: params.input,
-      voice: params.voice,
-      responseFormat: params.responseFormat,
-      speed: params.speed,
-      signal: params.signal,
-    });
+    const requestId = this._nextRequestId();
+    return this._runMultiModal(requestId, params.provider, params.model, "generateSpeech", (signal) =>
+      adapter.generateSpeech!({
+        model: params.model, input: params.input, voice: params.voice,
+        responseFormat: params.responseFormat, speed: params.speed, signal,
+      }),
+    params.signal);
   }
 
   // ─── Multi-Modal: Transcription ───────────────────────────────────────
@@ -850,15 +896,14 @@ export class HilbrasClient implements AsyncDisposable {
     if (!adapter.transcribe) {
       throw new ConfigurationError(`Provider "${params.provider}" does not support transcription`);
     }
-    return adapter.transcribe({
-      model: params.model,
-      file: params.file,
-      language: params.language,
-      prompt: params.prompt,
-      responseFormat: params.responseFormat,
-      temperature: params.temperature,
-      signal: params.signal,
-    });
+    const requestId = this._nextRequestId();
+    return this._runMultiModal(requestId, params.provider, params.model, "transcribe", (signal) =>
+      adapter.transcribe!({
+        model: params.model, file: params.file, language: params.language,
+        prompt: params.prompt, responseFormat: params.responseFormat,
+        temperature: params.temperature, signal,
+      }),
+    params.signal);
   }
 
   // ─── Multi-Modal: Reranking ───────────────────────────────────────────
@@ -875,13 +920,10 @@ export class HilbrasClient implements AsyncDisposable {
     if (!adapter.rerank) {
       throw new ConfigurationError(`Provider "${params.provider}" does not support reranking`);
     }
-    return adapter.rerank({
-      model: params.model,
-      query: params.query,
-      documents: params.documents,
-      topN: params.topN,
-      signal: params.signal,
-    });
+    const requestId = this._nextRequestId();
+    return this._runMultiModal(requestId, params.provider, params.model, "rerank", (signal) =>
+      adapter.rerank!({ model: params.model, query: params.query, documents: params.documents, topN: params.topN, signal }),
+    params.signal);
   }
 
   // ─── Cleanup ────────────────────────────────────────────────────────────
