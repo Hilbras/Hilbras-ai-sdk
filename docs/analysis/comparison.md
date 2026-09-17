@@ -27,7 +27,7 @@
 | Install scripts | Zero (`grep hasInstallScript pnpm-lock.yaml` returns 0) | Zero |
 | Pre-commit | `pnpm install` if package.json changes, then ultracite via lint-staged, `ARTISAL_MODE=1` bypass | None |
 | Public surface | 60+ symbols from `ai`, plus 80 packages each with their own barrel | 60+ symbols from a single barrel |
-| Major version | `ai@7.0.77`, providers at `4.x`–`5.x` (intentional skew) | `0.9.3` (pre-1.0) |
+| Major version | `ai@7.0.77`, providers at `4.x`–`5.x` (intentional skew) | `0.9.4` (pre-1.0) |
 | Docs | 514 MDX files in `content/`, single docs app pulling three pinned historical branches, 12 `SKILL.md` files, `architecture/` (6 design docs), `contributing/` (19 guides) | 6 markdown files in `docs/`, README as landing page |
 | ADR process | New (only 1 ADR so far) | None |
 | Per-package LICENSE file | No (only root) | No (only root) |
@@ -103,10 +103,10 @@ Both projects:
 
 ### Maintenance signals
 
-- **ai-main's `ai` package has 7.0.77 patch entries**; provider packages are at independent 4.x and 5.x versions. Version skew is intentional but the documentation explains it. Hilbras is at 0.9.3, all in one number, with an aggressive 17-releases-in-5-weeks cadence.
+- **ai-main's `ai` package has 7.0.77 patch entries**; provider packages are at independent 4.x and 5.x versions. Version skew is intentional but the documentation explains it. Hilbras is at 0.9.4, all in one number, with an aggressive 18-releases-in-5-weeks cadence.
 - **ai-main has a brand-new ADR process** (only 1 ADR). Hilbras has none.
 - **ai-main's release process is fully automated** (release.yml on tag push). Hilbras has no release.yml.
-- **Hilbras has its package on npm as v0.9.3** with the `--access public` flag (org scope was private-by-default, which the flag overrode at publish time). ai-main publishes all 80 packages with `provenance: true` via OIDC.
+- **Hilbras has its package on npm as v0.9.4** with the `--access public` flag (org scope was private-by-default, which the flag overrode at publish time). ai-main publishes all 80 packages with `provenance: true` via OIDC.
 - **Hilbras's `dist/` directory is on disk and may be committed** despite `.gitignore:5` listing it. ai-main uses tsup, ships only `dist/` per package, and has no such ambiguity.
 
 ### Risk areas
@@ -163,7 +163,7 @@ Hilbras's most concerning findings:
 1. **Code organization at scale** — the layered `ai → provider-utils → provider` architecture is genuinely deep, with custom oxlint + konsistent enforcing it. Hilbras has nothing analogous; `client.ts` is 708 lines and 8 folders pull into it.
 2. **Test breadth and infrastructure** — 30k-line `stream-text.test.ts`, per-package edge configs, multi-OS CI, load-time matrix, OIDC release.
 3. **Documentation depth** — 514 MDX files, 6 architecture docs, 12 SKILL.md files, 19 contributing guides, working docs app with three-branch sync.
-4. **Adoption signal** — Vercel's production customers use this. Hilbras is at 0.9.3.
+4. **Adoption signal** — Vercel's production customers use this. Hilbras is at 0.9.4.
 5. **Provider breadth** — 40+ first-party providers vs 6.
 6. **Edge runtime support** — `@vercel/edge-runtime` testing across 55 packages. Hilbras is Node-only.
 7. **Linting enforcement of security rules** — `ai-sdk/require-validate-url` is set to `error` and fails the build. Hilbras's `validateBaseUrl` is a runtime check, not a lint rule.
@@ -264,5 +264,5 @@ Hilbras's most concerning findings:
 ## Files in this analysis
 
 - `docs/analysis/ai-main.md` — full report on the Vercel AI SDK
-- `docs/analysis/hilbras-sdk.md` — full report on `@hilbras/sdk` v0.9.3
+- `docs/analysis/hilbras-sdk.md` — full report on `@hilbras/sdk` v0.9.4
 - `docs/analysis/comparison.md` — this file

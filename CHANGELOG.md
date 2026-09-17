@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.4] - 2026-09-17
+
+### Fixed
+
+- **Build failure: `SDKConfig` missing `sessionBudget`/`perRequestBudget` fields** — `_budgetFromSDK()` referenced budget fields on `SDKConfig` that were never added during the v0.10.0 migration. Added optional `sessionBudget` and `perRequestBudget` to the `SDKConfig` interface.
+- **Operator precedence bug in `HilbrasClient` constructor** — `config?.policy ?? sdk ? this._policyFromSDK(sdk) : undefined` parsed as `(config?.policy ?? sdk) ? ...` due to missing parentheses, causing `_policyFromSDK` to receive `undefined` when no policy was set. Fixed to `config?.policy ?? (sdk ? this._policyFromSDK(sdk) : undefined)`.
+- **Unnecessary regex escapes in `text-tool-call-parser.ts`** — `\-` in character classes replaced with `-` (oxlint `no-useless-escape`).
+
+### Changed
+
+- 18 unused imports/variables cleaned up across adapters, client, middleware, tokens, and output modules.
+- `withDegradation` generic parameter `T` removed (was unused).
+- `buildSchemaDescription` removed from `output/structured.ts` (dead code).
+- Env loader in `config/config.ts` now maps legacy `HILBRAS_PROVIDER_*` variables to the canonical `ProviderConfig` shape with SSRF validation via `validateBaseUrl`.
+- `FetchTransport` retries on 502/503/504 by default.
+- Added `provider-config.ts`, `pipeline.ts`, custom lint tool (`check-validate-url`), ADRs, and analysis docs.
+
+### Added
+
+- `src/config/provider-config.ts` — canonical `ProviderConfig` type extracted from `schema.ts`.
+- `src/client/pipeline.ts` — request pipeline abstraction.
+- `tools/check-validate-url.mjs` — custom lint rule ensuring `validateBaseUrl` is called.
+- `architecture/` — Architecture Decision Records.
+- `docs/analysis/` — comparative analysis (ai-main vs Hilbras-sdk).
+- 20 new tests across `tests/client/`, `tests/tools/`, `tests/transport/`.
+
 ## [0.9.3] - 2026-08-27
 
 ### Fixed (P0)

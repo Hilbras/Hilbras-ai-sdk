@@ -1,7 +1,7 @@
 # Hilbras SDK (@hilbras/sdk) — Deep Analysis
 
 **Path:** `/run/media/gin/01DD24D06510A4D0/Hilbras.product/SDK`
-**Version analyzed:** 0.9.3 (post-hardening release)
+**Version analyzed:** 0.9.4 (post-hardening release)
 **License:** MIT (copyright Hilbras 2026)
 **Stack:** TypeScript ESM, Node ≥ 18, tsc only (no tsup/esbuild), Vitest, oxlint, single-package (no monorepo)
 **Date of scan:** 2026-08-27
@@ -15,7 +15,7 @@
 ## Project facts
 
 - **Repo type:** single-package npm library
-- **Version:** 0.9.3 (in `package.json:3`)
+- **Version:** 0.9.4 (in `package.json:3`)
 - **Module type:** ESM (`"type": "module"`), `module: Node16`, `target: ES2022`
 - **Runtime deps:** zero (no `dependencies` key)
 - **Dev deps (4):** `@types/node ^26.2.0`, `oxlint ^1.79.0`, `typescript ^7.0.2`, `vitest ^4.1.11`
@@ -178,7 +178,7 @@
 
 ## Maintenance signals
 
-- **Version:** `0.9.3` (in `package.json:3`).
+- **Version:** `0.9.4` (in `package.json:3`).
 - **CHANGELOG history:** v0.1.0 (2026-07-21) → v0.2.0 → v0.3.0 → v0.4.0 → v0.5.0 → v0.5.1 → v0.5.2 → v0.6.0 → v0.6.1 → v0.6.2 → v0.7.0 → v0.7.1 → v0.8.0 → v0.8.1 → v0.9.0 → v0.9.2 → v0.9.3 (2026-08-27). 17 releases in ~5 weeks suggests an aggressive release cadence.
 - **TODO/FIXME/HACK/XXX scan:** zero matches in `src/` and `tests/`.
 - **`.gitignore`** is minimal — `node_modules`, `dist`, `.zcode`, IDE, OS, coverage, `.env`.
