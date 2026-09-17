@@ -19,6 +19,13 @@ import type { Transport } from "../transport/transport.js";
 import type { ExecutionPolicy } from "../types/policy.js";
 import type { TaskRequirement } from "../types/router.js";
 import type { StructuredOutputConfig } from "../types/schema.js";
+import type {
+  EmbeddingResult,
+  ImageResult,
+  SpeechResult,
+  TranscriptionResult,
+  RerankResult,
+} from "../types/multi-modal.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { FetchTransport } from "../transport/fetch.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
@@ -750,6 +757,131 @@ export class HilbrasClient implements AsyncDisposable {
         throw err;
       }
     }
+  }
+
+  // ─── Multi-Modal: Embeddings ──────────────────────────────────────────
+
+  async embed(params: {
+    provider: string;
+    model: string;
+    input: string | string[];
+    dimensions?: number;
+    signal?: AbortSignal;
+  }): Promise<EmbeddingResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.embed) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support embeddings`);
+    }
+    return adapter.embed({
+      model: params.model,
+      input: params.input,
+      dimensions: params.dimensions,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Image Generation ────────────────────────────────────
+
+  async generateImage(params: {
+    provider: string;
+    model: string;
+    prompt: string;
+    n?: number;
+    size?: import("../types/multi-modal.js").ImageSize;
+    quality?: import("../types/multi-modal.js").ImageQuality;
+    style?: import("../types/multi-modal.js").ImageStyle;
+    responseFormat?: "url" | "b64_json";
+    signal?: AbortSignal;
+  }): Promise<ImageResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.generateImage) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support image generation`);
+    }
+    return adapter.generateImage({
+      model: params.model,
+      prompt: params.prompt,
+      n: params.n,
+      size: params.size,
+      quality: params.quality,
+      style: params.style,
+      responseFormat: params.responseFormat,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Speech Synthesis ────────────────────────────────────
+
+  async generateSpeech(params: {
+    provider: string;
+    model: string;
+    input: string;
+    voice: import("../types/multi-modal.js").SpeechVoice;
+    responseFormat?: import("../types/multi-modal.js").SpeechFormat;
+    speed?: number;
+    signal?: AbortSignal;
+  }): Promise<SpeechResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.generateSpeech) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support speech synthesis`);
+    }
+    return adapter.generateSpeech({
+      model: params.model,
+      input: params.input,
+      voice: params.voice,
+      responseFormat: params.responseFormat,
+      speed: params.speed,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Transcription ───────────────────────────────────────
+
+  async transcribe(params: {
+    provider: string;
+    model: string;
+    file: File | Blob | Uint8Array;
+    language?: import("../types/multi-modal.js").TranscriptLanguage;
+    prompt?: string;
+    responseFormat?: import("../types/multi-modal.js").TranscriptFormat;
+    temperature?: number;
+    signal?: AbortSignal;
+  }): Promise<TranscriptionResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.transcribe) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support transcription`);
+    }
+    return adapter.transcribe({
+      model: params.model,
+      file: params.file,
+      language: params.language,
+      prompt: params.prompt,
+      responseFormat: params.responseFormat,
+      temperature: params.temperature,
+      signal: params.signal,
+    });
+  }
+
+  // ─── Multi-Modal: Reranking ───────────────────────────────────────────
+
+  async rerank(params: {
+    provider: string;
+    model: string;
+    query: string;
+    documents: string[];
+    topN?: number;
+    signal?: AbortSignal;
+  }): Promise<RerankResult> {
+    const adapter = this._getAdapter(params.provider);
+    if (!adapter.rerank) {
+      throw new ConfigurationError(`Provider "${params.provider}" does not support reranking`);
+    }
+    return adapter.rerank({
+      model: params.model,
+      query: params.query,
+      documents: params.documents,
+      topN: params.topN,
+      signal: params.signal,
+    });
   }
 
   // ─── Cleanup ────────────────────────────────────────────────────────────

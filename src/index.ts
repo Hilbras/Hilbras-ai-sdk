@@ -23,6 +23,26 @@ export type { APIFormat, Authentication, AdapterName, ProviderConfig } from "./t
 export type { Model, ModelCapabilities } from "./types/models.js";
 export { DEFAULT_CAPABILITIES } from "./types/models.js";
 
+export type {
+  EmbeddingParams,
+  EmbeddingResult,
+  ImageParams,
+  ImageResult,
+  SpeechParams,
+  SpeechResult,
+  TranscriptionParams,
+  TranscriptionResult,
+  RerankParams,
+  RerankResult,
+  ImageSize,
+  ImageQuality,
+  ImageStyle,
+  SpeechVoice,
+  SpeechFormat,
+  TranscriptLanguage,
+  TranscriptFormat,
+} from "./types/multi-modal.js";
+
 // ─── Errors ─────────────────────────────────────────────────────────────────
 export {
   HilbrasSdkError,

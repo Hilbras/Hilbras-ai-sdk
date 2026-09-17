@@ -15,6 +15,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
+import type { RerankParams, RerankResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 
 export type CohereAdapterConfig = AdapterConfig;
@@ -269,5 +270,46 @@ export class CohereAdapter implements AIProvider {
     if (!content?.length) return "";
     const textBlock = content.find((b) => b.type === "text");
     return (textBlock?.text as string) ?? "";
+  }
+
+  // ─── Multi-Modal: Reranking ─────────────────────────────────────────────
+
+  async rerank(params: RerankParams): Promise<RerankResult> {
+    const url = `${this._provider.baseUrl}/v1/rerank`;
+    const body: Record<string, unknown> = {
+      model: params.model,
+      query: params.query,
+      documents: params.documents.map((d) => ({ text: d })),
+    };
+    if (params.topN != null) body.top_n = params.topN;
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const results = data.results as Array<{ index: number; relevance_score: number }>;
+    const meta = data.meta as Record<string, unknown> | undefined;
+    const billedUnits = meta?.billed_units as Record<string, number> | undefined;
+
+    return {
+      results: results.map((r) => ({
+        index: r.index,
+        relevanceScore: r.relevance_score,
+        document: params.documents[r.index],
+      })),
+      usage: billedUnits ? {
+        inputTokens: billedUnits.input_tokens ?? 0,
+        totalTokens: billedUnits.input_tokens ?? 0,
+      } : undefined,
+    };
   }
 }

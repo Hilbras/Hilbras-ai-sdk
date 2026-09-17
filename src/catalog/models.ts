@@ -10,10 +10,16 @@ import type { ModelCapabilities } from "../types/models.js";
 const DEFAULT_CAPS: ModelCapabilities = {
   streaming: true, tools: true, vision: false, reasoning: false,
   structuredOutput: false, parallelTools: false, systemPrompts: true,
+  embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false,
 };
 const VISION_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, vision: true };
 const REASONING_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, reasoning: true };
 const FULL_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, vision: true, reasoning: true, structuredOutput: true, parallelTools: true };
+const EMBEDDING_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, embeddings: true };
+const IMAGE_GEN_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, imageGeneration: true };
+const SPEECH_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, speech: true };
+const TRANSCRIPTION_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, transcription: true };
+const RERANK_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, reranking: true };
 
 export interface ModelEntry {
   id: string;
@@ -99,6 +105,29 @@ export const BUILTIN_MODELS: ModelEntry[] = [
   { id: "meta-llama/Meta-Llama-3.1-405B-Instruct", name: "Llama 3.1 405B", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["deepinfra-llama-405b"] },
   { id: "Qwen/Qwen2.5-72B-Instruct", name: "Qwen 2.5 72B", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["deepinfra-qwen-72b"] },
   { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: ["deepinfra-deepseek"] },
+
+  // ─── Embedding Models ───────────────────────────────────────────────
+  { id: "text-embedding-3-small", name: "Embedding 3 Small", provider: "openai", contextWindow: 8_191, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["embedding-small"] },
+  { id: "text-embedding-3-large", name: "Embedding 3 Large", provider: "openai", contextWindow: 8_191, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["embedding-large"] },
+  { id: "text-embedding-ada-002", name: "Embedding Ada 002", provider: "openai", contextWindow: 8_191, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["ada-002"] },
+  { id: "mistral-embed", name: "Mistral Embed", provider: "mistral", contextWindow: 8_191, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["mistral-embedding"] },
+  { id: "embed-english-v3.0", name: "Cohere Embed v3", provider: "cohere", contextWindow: 512, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["cohere-embed"] },
+
+  // ─── Image Generation Models ────────────────────────────────────────
+  { id: "dall-e-3", name: "DALL-E 3", provider: "openai", contextWindow: 4_096, maxOutput: 0, capabilities: IMAGE_GEN_CAPS, aliases: ["dalle-3"] },
+  { id: "dall-e-2", name: "DALL-E 2", provider: "openai", contextWindow: 4_096, maxOutput: 0, capabilities: IMAGE_GEN_CAPS, aliases: ["dalle-2"] },
+
+  // ─── Speech Synthesis Models ────────────────────────────────────────
+  { id: "tts-1", name: "TTS-1", provider: "openai", contextWindow: 4_096, maxOutput: 0, capabilities: SPEECH_CAPS, aliases: [] },
+  { id: "tts-1-hd", name: "TTS-1 HD", provider: "openai", contextWindow: 4_096, maxOutput: 0, capabilities: SPEECH_CAPS, aliases: [] },
+
+  // ─── Transcription Models ───────────────────────────────────────────
+  { id: "whisper-1", name: "Whisper v1", provider: "openai", contextWindow: 0, maxOutput: 0, capabilities: TRANSCRIPTION_CAPS, aliases: ["whisper"] },
+  { id: "whisper-large-v3", name: "Whisper Large v3", provider: "groq", contextWindow: 0, maxOutput: 0, capabilities: TRANSCRIPTION_CAPS, aliases: ["groq-whisper"] },
+
+  // ─── Reranking Models ──────────────────────────────────────────────
+  { id: "rerank-english-v3.0", name: "Cohere Rerank v3", provider: "cohere", contextWindow: 512, maxOutput: 0, capabilities: RERANK_CAPS, aliases: ["cohere-rerank"] },
+  { id: "rerank-multilingual-v3.0", name: "Cohere Rerank Multilingual v3", provider: "cohere", contextWindow: 512, maxOutput: 0, capabilities: RERANK_CAPS, aliases: ["cohere-rerank-ml"] },
 ];
 
 export function findModel(query: string): ModelEntry | undefined {

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.0] - 2026-09-17
+
+### Added
+
+- **Multi-modal support** — 5 new capabilities beyond chat completions:
+  - `embed()` / `embedMany()` — text embeddings (OpenAI, Mistral, Cohere, and all OpenAI-compatible providers)
+  - `generateImage()` — image generation from text prompts (OpenAI DALL-E)
+  - `generateSpeech()` — text-to-speech synthesis (OpenAI TTS)
+  - `transcribe()` — audio transcription (OpenAI Whisper, Groq Whisper)
+  - `rerank()` — document reranking by relevance (Cohere)
+- New `AIProvider` optional methods: `embed`, `generateImage`, `generateSpeech`, `transcribe`, `rerank`
+- New client methods: `client.embed()`, `client.generateImage()`, `client.generateSpeech()`, `client.transcribe()`, `client.rerank()`
+- Extended `ModelCapabilities` with `embeddings`, `imageGeneration`, `speech`, `transcription`, `reranking` flags
+- 13 new models in catalog: embedding models (text-embedding-3-small/large, ada-002, mistral-embed, cohere-embed), image generation (DALL-E 2/3), speech (TTS-1, TTS-1 HD), transcription (Whisper v1, Whisper Large v3), reranking (Cohere Rerank v3, Multilingual v3)
+- `TransportRequestInit` now supports `FormData` body and `undefined` header values
+
+### Changed
+
+- `ModelCapabilities` type extended with 5 new boolean fields (all default to `false`)
+
+---
+
 ## [0.10.0] - 2026-09-17
 
 ### Added

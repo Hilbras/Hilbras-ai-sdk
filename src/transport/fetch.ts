@@ -25,9 +25,12 @@ export class FetchTransport implements Transport {
     this._controllers.add(controller);
     const signal = init.signal ?? controller.signal;
     try {
+      const headers = init.headers
+        ? Object.fromEntries(Object.entries(init.headers).filter(([, v]) => v !== undefined) as [string, string][])
+        : undefined;
       return await fetch(url, {
         method: init.method,
-        headers: init.headers,
+        headers,
         body: init.body,
         signal,
       });

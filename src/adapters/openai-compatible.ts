@@ -16,6 +16,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk, TextChunk, ToolCallChunk, FinishChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
+import type { EmbeddingParams, EmbeddingResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 import { TextToolCallParser } from "./text-tool-call-parser.js";
@@ -376,5 +377,40 @@ export class GenericOpenAIAdapter implements AIProvider {
     if (!choices?.length) return "";
     const message = choices[0].message as Record<string, unknown> | undefined;
     return (message?.content as string) ?? "";
+  }
+
+  // ─── Multi-Modal: Embeddings ────────────────────────────────────────────
+
+  async embed(params: EmbeddingParams): Promise<EmbeddingResult> {
+    const url = `${this._provider.baseUrl}/embeddings`;
+    const body: Record<string, unknown> = {
+      model: params.model,
+      input: params.input,
+    };
+    if (params.dimensions != null) body.dimensions = params.dimensions;
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const dataArr = data.data as Array<{ embedding: number[] }>;
+    const usage = data.usage as Record<string, number> | undefined;
+
+    return {
+      embeddings: dataArr.map((d) => d.embedding),
+      usage: {
+        inputTokens: usage?.prompt_tokens ?? 0,
+        totalTokens: usage?.total_tokens ?? 0,
+      },
+    };
   }
 }

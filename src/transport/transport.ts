@@ -7,8 +7,8 @@
 
 export interface TransportRequestInit {
   method: string;
-  headers?: Record<string, string>;
-  body?: string;
+  headers?: Record<string, string | undefined>;
+  body?: string | FormData;
   signal?: AbortSignal;
 }
 
