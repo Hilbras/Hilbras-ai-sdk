@@ -82,15 +82,25 @@ describe("AdapterRegistry", () => {
 });
 
 describe("getDefaultAdapterRegistry", () => {
-  it("returns a registry with all 6 built-in adapters", () => {
+  it("returns a registry with all built-in adapters", () => {
     const registry = getDefaultAdapterRegistry();
-    expect(registry.size).toBe(6);
+    expect(registry.size).toBe(16);
     expect(registry.has("openai")).toBe(true);
     expect(registry.has("anthropic")).toBe(true);
     expect(registry.has("google-genai")).toBe(true);
     expect(registry.has("azure")).toBe(true);
     expect(registry.has("groq")).toBe(true);
     expect(registry.has("ollama")).toBe(true);
+    expect(registry.has("mistral")).toBe(true);
+    expect(registry.has("deepseek")).toBe(true);
+    expect(registry.has("xai")).toBe(true);
+    expect(registry.has("together")).toBe(true);
+    expect(registry.has("fireworks")).toBe(true);
+    expect(registry.has("cohere")).toBe(true);
+    expect(registry.has("perplexity")).toBe(true);
+    expect(registry.has("cerebras")).toBe(true);
+    expect(registry.has("deepinfra")).toBe(true);
+    expect(registry.has("openai-compatible")).toBe(true);
   });
 
   it("creates working adapter instances", () => {
@@ -105,7 +115,7 @@ describe("getDefaultAdapterRegistry", () => {
     const registry = getDefaultAdapterRegistry();
     registry.register("custom", () => new CustomTestAdapter());
 
-    expect(registry.size).toBe(7);
+    expect(registry.size).toBe(17);
     expect(registry.has("custom")).toBe(true);
 
     const adapter = registry.create("custom", makeConfig("test"));

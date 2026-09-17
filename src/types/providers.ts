@@ -17,7 +17,11 @@ export type Authentication =
   | { type: "none" };
 
 /** Which adapter to use for a provider */
-export type AdapterName = "openai" | "anthropic" | "google-genai" | "azure" | "groq" | "ollama";
+export type AdapterName =
+  | "openai" | "anthropic" | "google-genai" | "azure" | "groq" | "ollama"
+  | "mistral" | "deepseek" | "xai" | "together" | "fireworks"
+  | "cohere" | "perplexity" | "cerebras" | "deepinfra"
+  | "openai-compatible";
 
 // Re-export the canonical ProviderConfig so existing imports work.
 export type { ProviderConfig } from "../config/provider-config.js";

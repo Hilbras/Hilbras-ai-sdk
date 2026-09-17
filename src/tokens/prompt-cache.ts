@@ -89,5 +89,5 @@ export function autoCache(messages: Array<{ role: string; content: string | null
  */
 export function supportsCacheControl(provider: string): boolean {
   // Anthropic and OpenAI both support prompt caching
-  return ["anthropic", "openai"].includes(provider);
+  return ["anthropic", "openai", "mistral", "deepseek"].includes(provider);
 }

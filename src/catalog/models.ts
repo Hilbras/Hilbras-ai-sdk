@@ -65,6 +65,40 @@ export const BUILTIN_MODELS: ModelEntry[] = [
   { id: "qwen3-coder", name: "Qwen 3 Coder (local)", provider: "ollama", contextWindow: 131_072, maxOutput: 16_384, capabilities: DEFAULT_CAPS, aliases: ["qwen-coder"] },
   { id: "deepseek-r1", name: "DeepSeek R1 (local)", provider: "ollama", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: ["deepseek"] },
   { id: "mistral", name: "Mistral (local)", provider: "ollama", contextWindow: 32_768, maxOutput: 8_192, capabilities: DEFAULT_CAPS, aliases: [] },
+  // ─── Mistral ─────────────────────────────────────────────────────
+  { id: "mistral-large-latest", name: "Mistral Large", provider: "mistral", contextWindow: 128_000, maxOutput: 32_768, capabilities: FULL_CAPS, aliases: ["mistral-large"] },
+  { id: "mistral-small-latest", name: "Mistral Small", provider: "mistral", contextWindow: 128_000, maxOutput: 32_768, capabilities: FULL_CAPS, aliases: ["mistral-small"] },
+  { id: "codestral-latest", name: "Codestral", provider: "mistral", contextWindow: 256_000, maxOutput: 32_768, capabilities: DEFAULT_CAPS, aliases: ["codestral"] },
+  { id: "pixtral-large-latest", name: "Pixtral Large", provider: "mistral", contextWindow: 128_000, maxOutput: 32_768, capabilities: FULL_CAPS, aliases: ["pixtral"] },
+  // ─── DeepSeek ────────────────────────────────────────────────────
+  { id: "deepseek-chat", name: "DeepSeek V3", provider: "deepseek", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["deepseek-v3"] },
+  { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "deepseek", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: ["deepseek-r1"] },
+  // ─── xAI (Grok) ─────────────────────────────────────────────────
+  { id: "grok-3", name: "Grok 3", provider: "xai", contextWindow: 131_072, maxOutput: 32_768, capabilities: FULL_CAPS, aliases: [] },
+  { id: "grok-3-mini", name: "Grok 3 Mini", provider: "xai", contextWindow: 131_072, maxOutput: 32_768, capabilities: REASONING_CAPS, aliases: [] },
+  { id: "grok-3-fast", name: "Grok 3 Fast", provider: "xai", contextWindow: 131_072, maxOutput: 32_768, capabilities: VISION_CAPS, aliases: [] },
+  // ─── Together AI ─────────────────────────────────────────────────
+  { id: "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo", name: "Llama 3.1 405B Turbo", provider: "together", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["llama-405b"] },
+  { id: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", name: "Llama 3.1 70B Turbo", provider: "together", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["llama-70b"] },
+  { id: "Qwen/Qwen2.5-72B-Instruct-Turbo", name: "Qwen 2.5 72B Turbo", provider: "together", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["qwen-72b"] },
+  { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1", provider: "together", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: [] },
+  // ─── Fireworks ───────────────────────────────────────────────────
+  { id: "accounts/fireworks/models/llama-v3p3-70b-instruct", name: "Llama 3.3 70B", provider: "fireworks", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["fireworks-llama-70b"] },
+  { id: "accounts/fireworks/models/mixtral-8x22b-instruct", name: "Mixtral 8x22B", provider: "fireworks", contextWindow: 65_536, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["fireworks-mixtral"] },
+  { id: "accounts/fireworks/models/deepseek-r1", name: "DeepSeek R1", provider: "fireworks", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: ["fireworks-deepseek"] },
+  // ─── Cohere ──────────────────────────────────────────────────────
+  { id: "command-r-plus-08-2024", name: "Command R+", provider: "cohere", contextWindow: 128_000, maxOutput: 4_096, capabilities: FULL_CAPS, aliases: ["command-r-plus"] },
+  { id: "command-r-08-2024", name: "Command R", provider: "cohere", contextWindow: 128_000, maxOutput: 4_096, capabilities: DEFAULT_CAPS, aliases: ["command-r"] },
+  // ─── Perplexity ──────────────────────────────────────────────────
+  { id: "llama-3.1-sonar-large-128k-online", name: "Sonar Large", provider: "perplexity", contextWindow: 128_000, maxOutput: 4_096, capabilities: DEFAULT_CAPS, aliases: ["sonar-large"] },
+  { id: "llama-3.1-sonar-small-128k-online", name: "Sonar Small", provider: "perplexity", contextWindow: 128_000, maxOutput: 4_096, capabilities: DEFAULT_CAPS, aliases: ["sonar-small"] },
+  // ─── Cerebras ────────────────────────────────────────────────────
+  { id: "llama-3.3-70b", name: "Llama 3.3 70B", provider: "cerebras", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["cerebras-llama-70b"] },
+  { id: "llama-3.1-8b", name: "Llama 3.1 8B", provider: "cerebras", contextWindow: 131_072, maxOutput: 16_384, capabilities: DEFAULT_CAPS, aliases: ["cerebras-llama-8b"] },
+  // ─── DeepInfra ───────────────────────────────────────────────────
+  { id: "meta-llama/Meta-Llama-3.1-405B-Instruct", name: "Llama 3.1 405B", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["deepinfra-llama-405b"] },
+  { id: "Qwen/Qwen2.5-72B-Instruct", name: "Qwen 2.5 72B", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["deepinfra-qwen-72b"] },
+  { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: ["deepinfra-deepseek"] },
 ];
 
 export function findModel(query: string): ModelEntry | undefined {
