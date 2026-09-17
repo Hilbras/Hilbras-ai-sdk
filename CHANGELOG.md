@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-09-17
+
+### Added
+
+- **Schema integration helpers** — `zodSchema()` wraps any `.safeParse()` validator (Zod, Valibot), `jsonSchema()` creates inline JSON Schema validators with basic type/required field checking.
+- **Type-safe tool builder** — `tool()` creates tools with schema + execute function, `toolDef()` creates definition-only tools, `dynamicTool()` creates tools from runtime schemas.
+- **ID generation utilities** — `generateId()` (UUID v4), `createIdGenerator(prefix)` (sequential IDs), `shortId()` (8-char hex).
+- **SSE parser utilities** — `parseSSEStream()` parses ReadableStream into events, `parseJsonEventStream()` auto-parses JSON data, `collectSSEEvents()` and `findSSEEvent()` for convenience.
+- 32 new tests for all new utilities.
+
+### Changed
+
+- `TransportRequestInit.body` now accepts `FormData` type.
+- `TransportRequestInit.headers` now accepts `Record<string, string | undefined>`.
+
+---
+
 ## [0.11.0] - 2026-09-17
 
 ### Added

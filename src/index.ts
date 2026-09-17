@@ -74,6 +74,16 @@ export type { TaskRequirement, RoutingResult } from "./types/router.js";
 // ─── Structured Output ──────────────────────────────────────────────────────
 export type { SchemaValidator, StructuredOutputConfig } from "./types/schema.js";
 export { extractJson, buildJsonSystemInstruction, buildRepairPrompt, buildJsonModeParams } from "./output/structured.js";
+export { zodSchema, jsonSchema } from "./output/schema-helpers.js";
+
+// ─── Tool Builder ───────────────────────────────────────────────────────────
+export { tool, toolDef, dynamicTool } from "./types/tool-builder.js";
+export type { DefinedTool, ToolDefinition, ParameterSchema } from "./types/tool-builder.js";
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
+export { generateId, createIdGenerator, shortId } from "./utils/id.js";
+export { parseSSEStream, parseJsonEventStream, collectSSEEvents, findSSEEvent } from "./utils/sse.js";
+export type { SSEEvent } from "./utils/sse.js";
 
 // ─── Cost Optimization ──────────────────────────────────────────────────────
 export { BudgetTracker } from "./cost/tracker.js";
