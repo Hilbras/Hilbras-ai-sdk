@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.0] - 2026-09-17
+
+### Added
+
+- **Multi-modal support** — 5 new capabilities beyond chat completions: `embed()`, `generateImage()`, `generateSpeech()`, `transcribe()`, `rerank()`
+- New client methods: `client.embed()`, `client.generateImage()`, `client.generateSpeech()`, `client.transcribe()`, `client.rerank()`
+- Extended `ModelCapabilities` with `embeddings`, `imageGeneration`, `speech`, `transcription`, `reranking` flags
+- 13 new models: embedding, image generation, speech, transcription, and reranking models
+
+---
+
 ## [0.10.0] - 2026-09-17
 
 ### Added
