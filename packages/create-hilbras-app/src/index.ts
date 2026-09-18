@@ -10,6 +10,7 @@ import { mkdir, writeFile, cp, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { validateTemplateName, validateProjectName } from "./validate.js";
 
 const TEMPLATES_DIR = new URL("../templates/", import.meta.url).pathname;
 
@@ -41,6 +42,9 @@ function parseArgs(args: string[]): Options {
       name = arg;
     }
   }
+
+  validateTemplateName(template);
+  validateProjectName(name);
 
   return { name, template, provider, dir };
 }

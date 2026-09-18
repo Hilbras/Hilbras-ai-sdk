@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Broken local dev workflow** — `npm test` now works after a fresh clone following CONTRIBUTING.md. Added `pretest` script that builds `packages/cli` (the only package whose tests require compiled output). CI workflow simplified to use `npm test` instead of a hidden manual `npx tsc -p packages/cli/tsconfig.json` step.
+- **Path traversal in create-hilbras-app** — `--template` and project name arguments are now validated to reject values containing `/`, `\`, or `..` that could resolve outside intended directories.
+
 ---
 
 ## [0.17.3] - 2026-09-18
