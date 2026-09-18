@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/svelte",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Svelte 5 runes-based hooks for @hilbras/sdk — useChat, useCompletion, useObject",
   "type": "module",
   "main": "dist/index.js",
