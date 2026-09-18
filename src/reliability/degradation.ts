@@ -7,6 +7,7 @@
  */
 
 import type { Message } from "../types/messages.js";
+import { extractText } from "../types/messages.js";
 import type { Transport, TransportRequestInit } from "../transport/transport.js";
 
 export interface DegradationLevel {
@@ -36,7 +37,7 @@ export function createDegradationChain(): DegradationLevel[] {
       description: "Replace media content with text placeholders",
       transform: (msgs) => msgs.map((m) => ({
         ...m,
-        content: degradeMedia(m.content ?? ""),
+        content: degradeMedia(extractText(m.content)),
       })),
     },
     {
@@ -44,7 +45,7 @@ export function createDegradationChain(): DegradationLevel[] {
       description: "Remove all media content entirely",
       transform: (msgs) => msgs.map((m) => ({
         ...m,
-        content: stripMedia(m.content ?? ""),
+        content: stripMedia(extractText(m.content)),
       })),
     },
     {

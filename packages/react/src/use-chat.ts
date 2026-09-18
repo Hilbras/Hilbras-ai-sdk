@@ -2,7 +2,8 @@
  * @hilbras/react — useChat Hook
  *
  * Manages a streaming chat conversation with an LLM backend.
- * Handles message state, streaming, input, and error recovery.
+ * Handles message state, streaming, input, error recovery,
+ * optimistic updates, reload, and step-level callbacks.
  */
 
 import { useState, useCallback, useRef } from "react";
@@ -19,7 +20,12 @@ function generateId(): string {
   return `msg_${Date.now()}_${_idCounter++}`;
 }
 
-export interface UseChatReturn extends UseChatState, UseChatActions {}
+export interface UseChatReturn extends UseChatState, UseChatActions {
+  /** Reload the last assistant message */
+  reload: () => Promise<void>;
+  /** Append a message and get a response */
+  append: (message: UIMessage | { role: "user"; content: string }) => Promise<void>;
+}
 
 export function useChat(options: UseChatOptions): UseChatReturn {
   const {
@@ -45,33 +51,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     setIsLoading(false);
   }, []);
 
-  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
-    e?.preventDefault();
-
-    const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
-
-    const userMessage: UIMessage = {
-      id: generateId(),
-      role: "user",
-      content: trimmed,
-      createdAt: Date.now(),
-    };
-
-    const assistantMessage: UIMessage = {
-      id: generateId(),
-      role: "assistant",
-      content: "",
-      createdAt: Date.now(),
-      provider,
-      model,
-    };
-
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
-    setInput("");
-    setIsLoading(true);
-    setError(null);
-
+  const sendRequest = useCallback(async (
+    messageHistory: UIMessage[],
+    assistantMessage: UIMessage,
+  ) => {
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -80,7 +63,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
+          messages: messageHistory.map((m) => ({
             role: m.role,
             content: m.content,
           })),
@@ -129,22 +112,99 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       const finalMessage = { ...assistantMessage, content };
       onFinish?.(finalMessage);
+      return finalMessage;
     } catch (err) {
-      if ((err as Error).name === "AbortError") return;
+      if ((err as Error).name === "AbortError") return null;
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
       onError?.(error);
+      throw error;
     } finally {
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [input, isLoading, messages, api, provider, model, headers, body, onFinish, onError]);
+  }, [api, provider, model, headers, body, onFinish, onError]);
 
-  const append = useCallback(async (message: UIMessage) => {
-    setMessages((prev) => [...prev, message]);
-    // Re-trigger handleSubmit with the new message context
-    setInput(message.content);
-  }, []);
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    const trimmed = input.trim();
+    if (!trimmed || isLoading) return;
+
+    const userMessage: UIMessage = {
+      id: generateId(),
+      role: "user",
+      content: trimmed,
+      createdAt: Date.now(),
+    };
+
+    const assistantMessage: UIMessage = {
+      id: generateId(),
+      role: "assistant",
+      content: "",
+      createdAt: Date.now(),
+      provider,
+      model,
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    setInput("");
+    setIsLoading(true);
+    setError(null);
+
+    await sendRequest([...messages, userMessage], assistantMessage);
+  }, [input, isLoading, messages, provider, model, sendRequest]);
+
+  const append = useCallback(async (message: UIMessage | { role: "user"; content: string }) => {
+    const userMessage: UIMessage = {
+      id: generateId(),
+      role: "user",
+      content: message.content,
+      createdAt: Date.now(),
+    };
+
+    const assistantMessage: UIMessage = {
+      id: generateId(),
+      role: "assistant",
+      content: "",
+      createdAt: Date.now(),
+      provider,
+      model,
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    setIsLoading(true);
+    setError(null);
+
+    await sendRequest([...messages, userMessage], assistantMessage);
+  }, [messages, provider, model, sendRequest]);
+
+  const reload = useCallback(async () => {
+    if (isLoading || messages.length === 0) return;
+
+    // Find the last user message
+    const lastUserIdx = messages.findLastIndex((m) => m.role === "user");
+    if (lastUserIdx === -1) return;
+
+    // Remove everything after the last user message
+    const messagesUpToLastUser = messages.slice(0, lastUserIdx + 1);
+    const lastUserMessage = messages[lastUserIdx];
+
+    const assistantMessage: UIMessage = {
+      id: generateId(),
+      role: "assistant",
+      content: "",
+      createdAt: Date.now(),
+      provider,
+      model,
+    };
+
+    setMessages([...messagesUpToLastUser, assistantMessage]);
+    setIsLoading(true);
+    setError(null);
+
+    await sendRequest(messagesUpToLastUser, assistantMessage);
+  }, [isLoading, messages, provider, model, sendRequest]);
 
   const clear = useCallback(() => {
     setMessages([]);
@@ -160,6 +220,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     setInput,
     handleSubmit,
     append,
+    reload,
     setMessages,
     stop,
     clear,

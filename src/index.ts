@@ -11,11 +11,12 @@ export type { HilbrasClientConfig } from "./client/client.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type { Role, Message, ToolCall, ToolCallFunction } from "./types/messages.js";
-export { messageToDict, dictToMessage } from "./types/messages.js";
+export { messageToDict, dictToMessage, isContentParts, extractText, textContent, imageContent, audioContent } from "./types/messages.js";
+export type { ContentPart, TextContentPart, ImageContentPart, AudioContentPart } from "./types/messages.js";
 
 export type { Tool, ToolFunction, ToolParameters, ToolParameter } from "./types/tools.js";
 
-export type { StreamChunk, TextChunk, ReasoningChunk, ToolCallChunk, UsageChunk, ErrorChunk } from "./types/streams.js";
+export type { StreamChunk, TextChunk, ReasoningChunk, ToolCallChunk, UsageChunk, ErrorChunk, FinishChunk, PerformanceChunk } from "./types/streams.js";
 export { chunk } from "./types/streams.js";
 
 export type { APIFormat, Authentication, AdapterName, ProviderConfig } from "./types/providers.js";
@@ -129,9 +130,9 @@ export type { BackoffConfig } from "./reliability/backoff.js";
 export { ReasoningNormalizer } from "./reasoning/normalizer.js";
 
 // ─── Tokens ────────────────────────────────────────────────────────────────
-export { estimateTokens, estimateMessageTokens, estimateToolTokens, estimateCost } from "./tokens/counter.js";
+export { estimateTokens, estimateMessageTokens, estimateToolTokens, estimateCost, setTokenizer, getTokenizer } from "./tokens/counter.js";
 export { cacheSystemMessage, cacheLastN, cacheAtIndex, autoCache, supportsCacheControl } from "./tokens/prompt-cache.js";
-export type { TokenEstimate } from "./tokens/counter.js";
+export type { TokenEstimate, Tokenizer } from "./tokens/counter.js";
 export type { CacheControl, CacheableMessage } from "./tokens/prompt-cache.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────
