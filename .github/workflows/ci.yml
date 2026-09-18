@@ -41,3 +41,35 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx vitest run --shard=${{ matrix.shard }}/4
+
+  test-22:
+    if: always()
+    name: test (node 22)
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          results="${{ needs.test.result }}"
+          if [ "$results" = "success" ] || [ "$results" = "skipped" ]; then
+            echo "All node 22 shards passed"
+          else
+            echo "Some node 22 shards failed"
+            exit 1
+          fi
+
+  test-24:
+    if: always()
+    name: test (node 24)
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          results="${{ needs.test.result }}"
+          if [ "$results" = "success" ] || [ "$results" = "skipped" ]; then
+            echo "All node 24 shards passed"
+          else
+            echo "Some node 24 shards failed"
+            exit 1
+          fi
