@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.20.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
@@ -116,6 +116,7 @@ const reply = await client.complete({
 | **Provider catalog** | Runtime provider/model discovery with search | [Catalog](docs/catalog.md) |
 | **CLI** | `hilbras` CLI for init, provider management, model listing, cost estimation | [CLI](docs/cli.md) |
 | **Migration** | Guide from Vercel AI SDK | [Migration](docs/migration-from-vercel-ai-sdk.md) |
+| **Fine-tuning** | Export training data in 6 formats, data splitting, quality validation | [Fine-tune](docs/fine-tune.md) |
 | **Zero runtime deps** | Pure TypeScript, no transitive dependencies | — |
 
 ---
@@ -135,6 +136,7 @@ const reply = await client.complete({
 - **[Catalog](docs/catalog.md)** — provider/model discovery
 - **[CLI](docs/cli.md)** — command-line tools
 - **[Migration](docs/migration-from-vercel-ai-sdk.md)** — from Vercel AI SDK
+- **[Fine-tuning](docs/fine-tune.md)** — training data export and validation
 - **[CHANGELOG](CHANGELOG.md)** — version history
 
 ## Subpath imports
@@ -157,6 +159,7 @@ import { useChat } from "@hilbras/angular";        // Angular signals
 import { ToolLoopAgent } from "@hilbras/agent";    // Agent framework
 import { evaluate } from "@hilbras/eval";          // Evaluation
 import { RAGPipeline } from "@hilbras/rag";        // RAG
+import { exportTrainingData } from "@hilbras/fine-tune";  // Fine-tuning
 ```
 
 ## Development
