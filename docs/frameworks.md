@@ -1,6 +1,6 @@
 # Framework Integrations
 
-Signal-based hooks for React, Vue, Svelte, Solid, Qwik, and Angular.
+Signal-based hooks for React, Vue, Svelte, Solid, Qwik, Angular, and Next.js.
 
 ## React
 
@@ -148,6 +148,46 @@ export const Chat = () => {
     </div>
   );
 };
+```
+
+## Next.js
+
+```bash
+npm install @hilbras/nextjs
+```
+
+### Route Handler (Server)
+
+```ts
+// app/api/chat/route.ts
+import { createChatHandler } from "@hilbras/nextjs";
+
+export const { POST } = createChatHandler({
+  provider: "OpenAI",
+  model: "gpt-4o",
+});
+```
+
+### Client Component
+
+```tsx
+"use client";
+import { useChat } from "@hilbras/nextjs";
+
+export function Chat() {
+  const { messages, input, handleInputChange, handleSubmit } = useChat();
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>{m.role}: {m.content}</div>
+      ))}
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+      </form>
+    </div>
+  );
+}
 ```
 
 ## Common API

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.23.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.24.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
@@ -111,7 +111,7 @@ const reply = await client.complete({
 | **Reasoning normalization** | Detect & normalize `<thinking>` / `<reasoning>` tags and native fields | [API Reference](docs/api-reference.md) |
 | **Agent framework** | ToolLoopAgent, ReActAgent, PlanAndExecuteAgent with approval, budget, cost tracking | [Agent](docs/agent.md) |
 | **Evaluation** | LLM output evaluation with built-in metrics (exact_match, similarity, toxicity) | [Eval](docs/eval.md) |
-| **Framework hooks** | React, Vue, Svelte, Solid, Qwik, Angular signal-based hooks | [Frameworks](docs/frameworks.md) |
+| **Framework hooks** | React, Vue, Svelte, Solid, Qwik, Angular, Next.js signal-based hooks | [Frameworks](docs/frameworks.md) |
 | **RAG primitives** | VectorStore, Retriever, RAGPipeline, chunking | [RAG](docs/rag.md) |
 | **Provider catalog** | Runtime provider/model discovery with search | [Catalog](docs/catalog.md) |
 | **CLI** | `hilbras` CLI for init, provider management, model listing, cost estimation | [CLI](docs/cli.md) |
@@ -157,6 +157,7 @@ import { useChat } from "@hilbras/vue";            // Vue composables
 import { useChat } from "@hilbras/svelte";         // Svelte stores
 import { useChat } from "@hilbras/solid";          // Solid signals
 import { useChat } from "@hilbras/qwik";            // Qwik signals
+import { useChat } from "@hilbras/nextjs";          // Next.js
 import { useChat } from "@hilbras/angular";        // Angular signals
 import { ToolLoopAgent } from "@hilbras/agent";    // Agent framework
 import { evaluate } from "@hilbras/eval";          // Evaluation
