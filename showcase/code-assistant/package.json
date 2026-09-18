@@ -1,0 +1,17 @@
+{
+  "name": "code-assistant-showcase",
+  "version": "1.0.0",
+  "description": "Code assistant built with @hilbras/agent",
+  "type": "module",
+  "scripts": {
+    "dev": "node --import tsx src/index.ts"
+  },
+  "dependencies": {
+    "@hilbras/sdk": "^0.25.0",
+    "@hilbras/agent": "^0.25.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^7.0.2"
+  }
+}

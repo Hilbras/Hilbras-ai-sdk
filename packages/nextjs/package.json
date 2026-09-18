@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/nextjs",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "description": "Next.js integration for @hilbras/sdk — Server Components, App Router, streaming",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.25.0",
+    "@hilbras/sdk": ">=0.25.1",
     "next": ">=14.0.0",
     "react": ">=18.0.0"
   },
