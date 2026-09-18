@@ -3,10 +3,10 @@ import { estimateTokens, estimateMessageTokens, estimateToolTokens, estimateCost
 import { cacheSystemMessage, cacheLastN, autoCache, supportsCacheControl } from "../src/tokens/prompt-cache.js";
 
 describe("Token estimation", () => {
-  it("estimateTokens uses ~4 chars per token", () => {
+  it("estimateTokens uses improved multi-heuristic", () => {
     expect(estimateTokens("")).toBe(0);
-    expect(estimateTokens("hello")).toBe(2); // 5 chars → ceil(5/4) = 2
-    expect(estimateTokens("a".repeat(100))).toBe(25); // 100 chars → 25 tokens
+    expect(estimateTokens("hello")).toBe(2);
+    expect(estimateTokens("a".repeat(100))).toBe(32); // Improved heuristic: ~3.5 chars/token
   });
 
   it("estimateMessageTokens includes role overhead", () => {
@@ -14,9 +14,8 @@ describe("Token estimation", () => {
       { role: "system", content: "You are helpful" },
       { role: "user", content: "hello" },
     ]);
-    // 4 role overhead × 2 messages = 8, plus 4+15 chars = ~5.75 → 6
     expect(result.tokens).toBeGreaterThan(8);
-    expect(result.tokens).toBeLessThan(15);
+    expect(result.tokens).toBeLessThan(20);
   });
 
   it("estimateToolTokens sums tool definitions", () => {

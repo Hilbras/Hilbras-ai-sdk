@@ -926,6 +926,173 @@ export class HilbrasClient implements AsyncDisposable {
     params.signal);
   }
 
+  // ─── High-Level: streamText with Multi-Step Tool Calling ──────────────
+
+  /**
+   * Stream text with automatic multi-step tool calling.
+   * Loops through tool calls until the model stops calling tools or maxSteps is reached.
+   *
+   * @example
+   * ```ts
+   * for await (const event of client.streamText({
+   *   provider: "OpenAI", model: "gpt-4o",
+   *   messages: [{ role: "user", content: "What's the weather?" }],
+   *   tools: [{ type: "function", function: { name: "getWeather", ... } }],
+   *   maxSteps: 5,
+   *   onStepFinish: (step) => console.log(`Step ${step.step}: ${step.toolCalls.length} tool calls`),
+   * })) {
+   *   if (event.type === "text") process.stdout.write(event.text);
+   * }
+   * ```
+   */
+  async *streamText(params: {
+    provider?: string;
+    model?: string;
+    messages: Array<Record<string, unknown> | Message>;
+    temperature?: number;
+    maxTokens?: number;
+    tools?: Tool[];
+    extra?: Record<string, unknown>;
+    signal?: AbortSignal;
+    policy?: ExecutionPolicy;
+    task?: string;
+    needsVision?: boolean;
+    needsTools?: boolean;
+    needsReasoning?: boolean;
+    maxSteps?: number;
+    toolExecution?: (name: string, args: Record<string, unknown>) => Promise<unknown> | unknown;
+    onStepFinish?: (step: { step: number; text: string; toolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }>; usage?: { promptTokens: number; completionTokens: number } }) => void;
+  }): AsyncGenerator<StreamChunk> {
+    const maxSteps = params.maxSteps ?? 1;
+    const messages = this._normalizeMessages(params.messages);
+    let currentMessages = [...messages];
+
+    for (let step = 0; step < maxSteps; step++) {
+      let stepText = "";
+      const stepToolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }> = [];
+      let stepUsage: { promptTokens: number; completionTokens: number } | undefined;
+
+      for await (const chunk of this.stream({
+        ...params,
+        messages: currentMessages,
+      })) {
+        if (chunk.type === "text") {
+          stepText += chunk.text;
+          yield chunk;
+        } else if (chunk.type === "tool_call") {
+          const args = JSON.parse(chunk.argumentsDelta ?? "{}");
+          stepToolCalls.push({ name: chunk.name ?? "unknown", args, result: undefined });
+
+          // Execute tool if handler provided
+          if (params.toolExecution) {
+            try {
+              const result = await params.toolExecution(chunk.name ?? "unknown", args);
+              stepToolCalls[stepToolCalls.length - 1].result = result;
+            } catch (err) {
+              stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+            }
+          }
+        } else if (chunk.type === "usage") {
+          stepUsage = { promptTokens: chunk.inputTokens ?? 0, completionTokens: chunk.outputTokens ?? 0 };
+        } else {
+          yield chunk;
+        }
+      }
+
+      params.onStepFinish?.({ step, text: stepText, toolCalls: stepToolCalls, usage: stepUsage });
+
+      // If no tool calls, we're done
+      if (stepToolCalls.length === 0) return;
+
+      // Build next messages with tool results
+      currentMessages = [
+        ...currentMessages,
+        { role: "assistant", content: stepText, tool_calls: stepToolCalls.map((tc, i) => ({
+          id: `call_${step}_${i}`,
+          type: "function" as const,
+          function: { name: tc.name, arguments: JSON.stringify(tc.args) },
+        })) },
+      ];
+
+      for (const tc of stepToolCalls) {
+        const resultStr = tc.result !== undefined ? JSON.stringify(tc.result) : "No result";
+        currentMessages.push({ role: "tool" as const, content: resultStr, tool_call_id: `call_${step}_${stepToolCalls.indexOf(tc)}` });
+      }
+    }
+  }
+
+  // ─── High-Level: streamObject (Streaming Structured Output) ───────────
+
+  /**
+   * Stream a structured object with progressive JSON rendering.
+   * Yields partial object chunks as they are parsed from the stream.
+   *
+   * @example
+   * ```ts
+   * for await (const event of client.streamObject({
+   *   provider: "OpenAI", model: "gpt-4o",
+   *   messages: [{ role: "user", content: "Describe a cat" }],
+   *   schema: z.object({ name: z.string(), traits: z.array(z.string()) }),
+   * })) {
+   *   if (event.type === "object_delta") console.log(event.partialObject);
+   * }
+   * ```
+   */
+  async *streamObject<T>(params: {
+    provider?: string;
+    model?: string;
+    messages: Array<Record<string, unknown> | Message>;
+    schema: Record<string, unknown>;
+    temperature?: number;
+    maxTokens?: number;
+    extra?: Record<string, unknown>;
+    signal?: AbortSignal;
+    policy?: ExecutionPolicy;
+  }): AsyncGenerator<{ type: "object_delta"; partialObject: Partial<T> } | StreamChunk> {
+    // Add system instruction for JSON output
+    const jsonInstruction = `You must respond with valid JSON matching this schema: ${JSON.stringify(params.schema)}. Output ONLY the JSON object, no markdown, no explanation.`;
+
+    const messages: Message[] = [
+      { role: "system", content: jsonInstruction },
+      ...this._normalizeMessages(params.messages),
+    ];
+
+    let accumulatedText = "";
+
+    for await (const chunk of this.stream({
+      ...params,
+      messages,
+      extra: {
+        ...params.extra,
+        response_format: { type: "json_object" },
+      },
+    })) {
+      if (chunk.type === "text") {
+        accumulatedText += chunk.text;
+        // Try to parse partial JSON
+        try {
+          const partial = JSON.parse(accumulatedText);
+          yield { type: "object_delta", partialObject: partial as Partial<T> };
+        } catch {
+          // JSON not complete yet, try to extract partial
+          const match = accumulatedText.match(/\{[\s\S]*$/);
+          if (match) {
+            try {
+              // Try adding closing brace to see if it's close to valid
+              const partial = JSON.parse(match[0] + "}");
+              yield { type: "object_delta", partialObject: partial as Partial<T> };
+            } catch {
+              // Still building, yield empty partial
+              yield { type: "object_delta", partialObject: {} as Partial<T> };
+            }
+          }
+        }
+      } else {
+        yield chunk;
+      }
+    }
+  }
+
   // ─── Cleanup ────────────────────────────────────────────────────────────
 
   async dispose(): Promise<void> {

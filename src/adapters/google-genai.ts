@@ -14,6 +14,7 @@
 import type { Transport } from "../transport/transport.js";
 import type { ProviderConfig } from "../types/providers.js";
 import type { Message } from "../types/messages.js";
+import { extractText } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
@@ -62,11 +63,11 @@ export class GoogleGenAIAdapter implements AIProvider {
     const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
     for (const m of params.messages) {
       if (m.role === "system") {
-        systemInstruction += (systemInstruction ? "\n\n" : "") + m.content;
+        systemInstruction += (systemInstruction ? "\n\n" : "") + extractText(m.content);
       } else {
         contents.push({
           role: m.role === "assistant" ? "model" : m.role,
-          parts: [{ text: m.content ?? "" }],
+          parts: [{ text: extractText(m.content) }],
         });
       }
     }

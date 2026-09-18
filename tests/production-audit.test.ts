@@ -629,7 +629,7 @@ describe("Phase 27: Fuzz Testing", () => {
 
   it("estimateTokens handles very long string", () => {
     const result = estimateTokens("a".repeat(1_000_000));
-    expect(result).toBe(250_000);
+    expect(result).toBe(314_286); // Improved heuristic
     expect(Number.isNaN(result)).toBe(false);
   });
 

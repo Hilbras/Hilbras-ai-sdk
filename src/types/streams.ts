@@ -45,7 +45,22 @@ export interface FinishChunk {
   reason: string;
 }
 
-export type StreamChunk = TextChunk | ReasoningChunk | ToolCallChunk | UsageChunk | ErrorChunk | FinishChunk;
+/** Emitted at the end of a stream with performance metrics */
+export interface PerformanceChunk {
+  type: "performance";
+  /** Time to first token in milliseconds */
+  timeToFirstToken: number;
+  /** Total request duration in milliseconds */
+  totalDuration: number;
+  /** Tokens per second (output tokens / stream duration) */
+  tokensPerSecond: number;
+  /** Number of retries attempted */
+  retries: number;
+  /** Whether circuit breaker was involved */
+  circuitBreakerUsed: boolean;
+}
+
+export type StreamChunk = TextChunk | ReasoningChunk | ToolCallChunk | UsageChunk | ErrorChunk | FinishChunk | PerformanceChunk;
 
 // ─── Helper constructors ────────────────────────────────────────────────────
 
@@ -59,4 +74,5 @@ export const chunk = {
     type: "usage", inputTokens: input, outputTokens: output, totalTokens: total ?? input + output,
   }),
   error: (message: string, retryable = false): ErrorChunk => ({ type: "error", message, retryable }),
+  performance: (metrics: Omit<PerformanceChunk, "type">): PerformanceChunk => ({ type: "performance", ...metrics }),
 } as const;

@@ -12,6 +12,7 @@
 import type { Transport } from "../transport/transport.js";
 import type { ProviderConfig } from "../types/providers.js";
 import type { Message } from "../types/messages.js";
+import { extractText } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
@@ -58,11 +59,11 @@ export class CohereAdapter implements AIProvider {
 
     for (const m of params.messages) {
       if (m.role === "system") {
-        preamble += (preamble ? "\n\n" : "") + m.content;
+        preamble += (preamble ? "\n\n" : "") + extractText(m.content);
       } else if (m.role === "user") {
-        chatHistory.push({ role: "USER", message: m.content ?? "" });
+        chatHistory.push({ role: "USER", message: extractText(m.content) });
       } else if (m.role === "assistant") {
-        chatHistory.push({ role: "CHATBOT", message: m.content ?? "" });
+        chatHistory.push({ role: "CHATBOT", message: extractText(m.content) });
       }
     }
 

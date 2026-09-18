@@ -3,6 +3,7 @@
  *
  * Multi-step agent that loops through tool calls until the task is complete.
  * Supports:
+ * - Direct HilbrasClient integration (gets retry, budget, circuit breaker)
  * - Human-in-the-loop approval
  * - Budget enforcement
  * - Cost tracking per step
@@ -10,6 +11,7 @@
  * - Cancellation via AbortSignal
  */
 
+import type { HilbrasClient } from "@hilbras/sdk";
 import type {
   AgentTool,
   AgentConfig,
@@ -24,7 +26,13 @@ import type {
 export interface ToolLoopAgentConfig extends AgentConfig {
   /** Tools available to the agent */
   tools: AgentTool[];
-  /** Custom LLM function (default: client.complete) */
+  /**
+   * HilbrasClient instance. When provided, the agent automatically gets
+   * retry, circuit breaker, budget enforcement, and cost tracking from
+   * the client's reliability pipeline.
+   */
+  client?: HilbrasClient;
+  /** Custom LLM function (used when client is not provided) */
   llm?: (messages: Array<{ role: string; content: string }>) => Promise<{
     content: string;
     toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
@@ -78,11 +86,40 @@ export class ToolLoopAgent {
       systemPrompt = "You are a helpful assistant. Use the provided tools to complete the task. When you have the final answer, respond with it directly without calling more tools.",
       temperature = 0,
       signal,
+      client,
       llm = defaultLLM,
       costEstimator = defaultCostEstimator,
       onApproval,
       onEvent,
     } = this._config;
+
+    // If client is provided, wrap it as an LLM function
+    const effectiveLLM = client
+      ? async (messages: Array<{ role: string; content: string }>) => {
+          const result = await client.complete({
+            provider: this._config.provider,
+            model: this._config.model,
+            messages: messages.map((m) => ({ role: m.role as "system" | "user" | "assistant", content: m.content })),
+            tools: tools.map((t) => ({
+              type: "function" as const,
+              function: {
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters as Record<string, unknown>,
+              },
+            })),
+            temperature,
+          });
+          return {
+            content: result.text,
+            toolCalls: result.toolCalls?.map((tc) => ({
+              name: tc.function.name,
+              arguments: JSON.parse(tc.function.arguments),
+            })),
+            usage: result.usage ? { promptTokens: result.usage.promptTokens, completionTokens: result.usage.completionTokens } : undefined,
+          };
+        }
+      : llm;
 
     const steps: AgentStep[] = [];
     let totalCost = 0;
@@ -108,9 +145,9 @@ export class ToolLoopAgent {
       onEvent?.({ type: "step_start", step: stepNum });
 
       // Call LLM
-      let response: Awaited<ReturnType<typeof llm>>;
+      let response: Awaited<ReturnType<typeof effectiveLLM>>;
       try {
-        response = await llm(messages);
+        response = await effectiveLLM(messages);
       } catch (error) {
         onEvent?.({ type: "error", error: error as Error });
         throw error;

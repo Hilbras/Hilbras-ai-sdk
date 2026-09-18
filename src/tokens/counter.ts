@@ -1,9 +1,9 @@
 /**
  * @hilbras/sdk — Token Counter
  *
- * Estimates token counts for messages and text. Uses a simple
- * heuristic (4 chars ≈ 1 token) with optional tiktoken integration
- * for accurate counting. No external dependencies by default.
+ * Estimates token counts for messages and text. Uses a multi-heuristic
+ * approach by default with optional pluggable tokenizer for accurate BPE counting.
+ * No external dependencies by default.
  */
 
 export interface TokenEstimate {
@@ -12,12 +12,101 @@ export interface TokenEstimate {
   chars: number;
 }
 
-/** Estimate tokens from text using the simple heuristic */
+/**
+ * Pluggable tokenizer interface. Implement this to provide accurate
+ * BPE tokenization (e.g., via tiktoken WASM or a custom tokenizer).
+ */
+export interface Tokenizer {
+  /** Count tokens in a string */
+  count(text: string): number;
+}
+
+let _customTokenizer: Tokenizer | null = null;
+
+/**
+ * Set a custom tokenizer for accurate token counting.
+ * Pass null to reset to the default heuristic.
+ *
+ * @example
+ * ```ts
+ * import { setTokenizer } from "@hilbras/sdk";
+ * // With tiktoken WASM
+ * setTokenizer({ count: (text) => tiktoken.encode(text).length });
+ * ```
+ */
+export function setTokenizer(tokenizer: Tokenizer | null): void {
+  _customTokenizer = tokenizer;
+}
+
+/**
+ * Get the currently active tokenizer (custom or null for default heuristic).
+ */
+export function getTokenizer(): Tokenizer | null {
+  return _customTokenizer;
+}
+
+/**
+ * Improved multi-heuristic token estimator.
+ *
+ * Rules of thumb (empirical, based on GPT-4/Claude tokenization):
+ * - English text: ~4 chars/token for plain text, ~3.5 for mixed content
+ * - Code: ~3 chars/token (shorter tokens due to syntax)
+ * - CJK characters: ~1-2 tokens per character
+ * - Whitespace-heavy text: closer to 4 chars/token
+ * - JSON/structured: ~3 chars/token
+ */
+function improvedEstimate(text: string): number {
+  if (!text) return 0;
+
+  // Count character categories
+  let cjkCount = 0;
+  let alphaCount = 0;
+  let digitCount = 0;
+  let spaceCount = 0;
+  let punctuationCount = 0;
+  let otherCount = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 0x4e00 && code <= 0x9fff) cjkCount++; // CJK Unified
+    else if (code >= 0x3040 && code <= 0x309f) cjkCount++; // Hiragana
+    else if (code >= 0x30a0 && code <= 0x30ff) cjkCount++; // Katakana
+    else if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) alphaCount++;
+    else if (code >= 0x30 && code <= 0x39) digitCount++;
+    else if (code === 0x20 || code === 0x0a || code === 0x0d) spaceCount++;
+    else if (code >= 0x21 && code <= 0x2f || code >= 0x3a && code <= 0x40 || code >= 0x5b && code <= 0x60 || code >= 0x7b && code <= 0x7e) punctuationCount++;
+    else otherCount++;
+  }
+
+  const total = text.length;
+
+  // Pure CJK: ~1.5 tokens per character
+  if (cjkCount === total) {
+    return Math.ceil(cjkCount * 1.5);
+  }
+
+  // Mixed content: weighted estimate
+  // CJK chars count as ~1.5 tokens each
+  // Alpha/digit count as ~1 token per 3.5 chars
+  // Spaces/punctuation count as ~1 token per 5 chars (they're often merged)
+  const cjkTokens = cjkCount * 1.5;
+  const alphaTokens = alphaCount / 3.5;
+  const digitTokens = digitCount / 3;
+  const spaceTokens = spaceCount / 6;
+  const punctTokens = punctuationCount / 4;
+  const otherTokens = otherCount / 4;
+
+  const estimated = cjkTokens + alphaTokens + digitTokens + spaceTokens + punctTokens + otherTokens;
+
+  // Add 10% buffer for subword splits and special tokens
+  return Math.max(1, Math.ceil(estimated * 1.1));
+}
+
+/** Estimate tokens from text using the active tokenizer or improved heuristic */
 export function estimateTokens(text: string): number {
   if (!text) return 0;
-  // ~4 chars per token is a reasonable default for English
-  // Code and non-English text may differ significantly
-  return Math.ceil(text.length / 4);
+  if (_customTokenizer) return _customTokenizer.count(text);
+  return improvedEstimate(text);
 }
 
 /** Estimate tokens for a message array */
