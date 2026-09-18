@@ -1,7 +1,7 @@
 {
-  "name": "@hilbras/angular",
+  "name": "@hilbras/eval",
   "version": "0.19.0",
-  "description": "Angular services for @hilbras/sdk — chat, completion, object streaming",
+  "description": "Evaluation and testing primitives for LLM outputs",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,15 +19,10 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@angular/core": ">=19",
-    "@angular/common": ">=19",
-    "@hilbras/sdk": ">=0.19.0",
-    "rxjs": ">=7"
+    "@hilbras/sdk": ">=0.19.0"
   },
   "devDependencies": {
-    "@angular/core": "^19.0.0",
-    "@angular/common": "^19.0.0",
-    "rxjs": "^7.8.0",
+    "@hilbras/sdk": "workspace:*",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
@@ -35,6 +30,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
-    "directory": "packages/angular"
+    "directory": "packages/eval"
   }
 }
