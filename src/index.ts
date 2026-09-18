@@ -158,6 +158,19 @@ export type { AuditCategory, AuditSeverity, AuditEntry, AuthAuditEntry, DataAcce
 export { OidcCredentialProvider, OidcError, oidcSource } from "./credentials/oidc.js";
 export type { OidcConfig } from "./credentials/oidc.js";
 
+// ─── UIMessage Protocol ─────────────────────────────────────────────────────
+export type {
+  UIMessage,
+  UIToolInvocation,
+  UIProtocolMessage,
+  UseChatOptions,
+  UseChatState,
+  UseChatActions,
+  UseCompletionOptions,
+  UseCompletionState,
+  UseCompletionActions,
+} from "./types/ui-protocol.js";
+
 // ─── Adapters (advanced — usually not imported directly) ────────────────────
 export { BUILTIN_MODELS, findModel, modelsForProvider } from "./catalog/models.js";
 export type { ModelEntry } from "./catalog/models.js";
