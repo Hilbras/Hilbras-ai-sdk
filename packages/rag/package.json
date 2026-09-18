@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/rag",
-  "version": "0.17.3",
+  "version": "0.18.0",
   "description": "RAG primitives for @hilbras/sdk — VectorStore, Retriever, Reranker, Pipeline",
   "type": "module",
   "main": "dist/index.js",
@@ -11,7 +11,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
@@ -20,7 +22,7 @@
     "@hilbras/sdk": ">=0.16.0"
   },
   "devDependencies": {
-    "@hilbras/sdk": "workspace:*",
+    "@hilbras/sdk": ">=0.18.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },

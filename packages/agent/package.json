@@ -1,7 +1,7 @@
 {
-  "name": "@hilbras/react",
+  "name": "@hilbras/agent",
   "version": "0.18.0",
-  "description": "React hooks for @hilbras/sdk — useChat, useCompletion for streaming LLM UIs",
+  "description": "Agent framework for @hilbras/sdk — ToolLoopAgent, ReActAgent, PlanAndExecuteAgent",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,16 +19,10 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "react": ">=18",
-    "@hilbras/sdk": ">=0.16.0"
+    "@hilbras/sdk": ">=0.17.0"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@testing-library/react": "^16.0.0",
-    "jsdom": "^26.0.0",
+    "@hilbras/sdk": ">=0.18.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
@@ -36,6 +30,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
-    "directory": "packages/react"
+    "directory": "packages/agent"
   }
 }
