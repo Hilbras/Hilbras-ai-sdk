@@ -1,0 +1,28 @@
+{
+  "name": "hilbras",
+  "version": "0.17.0",
+  "description": "CLI for @hilbras/sdk — manage providers, models, and budgets",
+  "type": "module",
+  "bin": {
+    "hilbras": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
+    "directory": "packages/cli"
+  }
+}

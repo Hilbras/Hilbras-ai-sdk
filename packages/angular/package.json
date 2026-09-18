@@ -1,7 +1,7 @@
 {
-  "name": "@hilbras/vue",
+  "name": "@hilbras/angular",
   "version": "0.17.0",
-  "description": "Vue 3 Composition API hooks for @hilbras/sdk — useChat, useCompletion, useObject",
+  "description": "Angular services for @hilbras/sdk — chat, completion, object streaming",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,11 +19,15 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "vue": ">=3.4",
-    "@hilbras/sdk": ">=0.16.0"
+    "@angular/core": ">=19",
+    "@angular/common": ">=19",
+    "@hilbras/sdk": ">=0.16.0",
+    "rxjs": ">=7"
   },
   "devDependencies": {
-    "vue": "^3.5.0",
+    "@angular/core": "^19.0.0",
+    "@angular/common": "^19.0.0",
+    "rxjs": "^7.8.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
@@ -31,6 +35,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
-    "directory": "packages/vue"
+    "directory": "packages/angular"
   }
 }

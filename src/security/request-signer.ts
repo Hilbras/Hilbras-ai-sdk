@@ -2,7 +2,12 @@
  * @hilbras/sdk — HMAC Request Signer
  *
  * Signs HTTP requests with HMAC-SHA256 for provider authentication.
- * Supports custom headers, timestamp inclusion, and replay protection.
+ * Supports custom headers and timestamp inclusion for request integrity.
+ *
+ * Note: This signer provides integrity and authentication only — it does NOT
+ * provide replay protection. Callers must independently enforce timestamp
+ * freshness (e.g. reject requests with a `date` header older than 5 minutes)
+ * and/or nonce tracking to prevent replay attacks.
  *
  * Usage:
  *   import { RequestSigner } from "@hilbras/sdk";
@@ -61,6 +66,8 @@ export class RequestSigner {
 
   /**
    * Sign a request. Returns headers to add to the outgoing request.
+   * The timestamp is included in the signing string for integrity, but
+   * callers must independently verify freshness to prevent replay.
    */
   sign(
     url: string,

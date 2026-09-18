@@ -53,7 +53,11 @@ export interface PiiGuardConfig {
 /** PII detection patterns */
 const PII_PATTERNS: Record<PiiType, RegExp> = {
   email: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-  phone: /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/g,
+  // Requires structural separators and 3-digit area code to avoid matching
+  // arbitrary numeric strings (order IDs, credit cards, tracking numbers, zip+4).
+  // Matches: (555) 123-4567, 555-123-4567, +1-555-123-4567, +1 (555) 123 4567, etc.
+  // Does NOT match: 12345678, 1234567890, 4111-1111-1111-1111 (credit cards), 12345-6789.
+  phone: /(?:\+?\d{1,3}[-.\s])?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g,
   ssn: /\b\d{3}[-]\d{2}[-]\d{4}\b/g,
   credit_card: /\b(?:4\d{3}|5[1-5]\d{2}|3[47]\d{2}|6(?:011|5\d{2}))[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
   ip_address: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g,
