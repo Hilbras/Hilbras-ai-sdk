@@ -132,8 +132,11 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "benchmark": "vitest bench tests/benchmarks/",
     "lint": "oxlint src/",
-    "lint:custom": "node tools/check-validate-url.mjs"
+    "lint:custom": "node tools/check-validate-url.mjs",
+    "size": "node tools/check-size.mjs"
   },
   "engines": {
     "node": ">=18"
