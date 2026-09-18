@@ -1,7 +1,7 @@
 {
-  "name": "@hilbras/react",
+  "name": "@hilbras/solid",
   "version": "0.20.0",
-  "description": "React hooks for @hilbras/sdk — useChat, useCompletion for streaming LLM UIs",
+  "description": "SolidJS integration for @hilbras/sdk — signals, stores, and streaming",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,16 +19,12 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "react": ">=18",
-    "@hilbras/sdk": ">=0.20.0"
+    "@hilbras/sdk": ">=0.20.0",
+    "solid-js": ">=1.8.0"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@testing-library/react": "^16.0.0",
-    "jsdom": "^26.0.0",
+    "@hilbras/sdk": "workspace:*",
+    "solid-js": "^1.9.5",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
@@ -36,6 +32,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
-    "directory": "packages/react"
+    "directory": "packages/solid"
   }
 }
