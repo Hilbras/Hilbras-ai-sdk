@@ -1,0 +1,16 @@
+{
+  "name": "cli-chat-showcase",
+  "version": "1.0.0",
+  "description": "CLI chat built with @hilbras/sdk streaming",
+  "type": "module",
+  "scripts": {
+    "dev": "node --import tsx src/index.ts"
+  },
+  "dependencies": {
+    "@hilbras/sdk": "^0.25.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^7.0.2"
+  }
+}

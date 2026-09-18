@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/qwik",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "description": "Qwik integration for @hilbras/sdk — useSignal-based hooks",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.25.0"
+    "@hilbras/sdk": ">=0.25.1"
   },
   "devDependencies": {
     "@hilbras/sdk": "workspace:*",

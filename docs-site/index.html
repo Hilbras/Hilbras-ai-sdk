@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@hilbras/sdk — Documentation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 60px 0; text-align: center; }
+    header h1 { font-size: 3rem; margin-bottom: 10px; }
+    header p { font-size: 1.2rem; opacity: 0.9; }
+    nav { background: #f8f9fa; padding: 20px 0; border-bottom: 1px solid #e9ecef; position: sticky; top: 0; z-index: 100; }
+    nav ul { display: flex; gap: 30px; list-style: none; justify-content: center; flex-wrap: wrap; }
+    nav a { text-decoration: none; color: #667eea; font-weight: 500; }
+    nav a:hover { text-decoration: underline; }
+    main { padding: 60px 0; }
+    .section { margin-bottom: 60px; }
+    .section h2 { font-size: 2rem; margin-bottom: 20px; color: #667eea; }
+    .section h3 { font-size: 1.5rem; margin: 20px 0 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
+    .card { background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 30px; }
+    .card h3 { margin-top: 0; }
+    .badge { display: inline-block; background: #667eea; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; margin-right: 8px; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; overflow-x: auto; margin: 15px 0; }
+    code { font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.9rem; }
+    .inline-code { background: #f1f3f5; padding: 2px 6px; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef; }
+    th { background: #f8f9fa; }
+    footer { background: #1e1e1e; color: white; padding: 40px 0; text-align: center; }
+    footer a { color: #667eea; }
+    .stats { display: flex; gap: 40px; justify-content: center; margin: 30px 0; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 2.5rem; font-weight: bold; color: #667eea; }
+    .stat-label { font-size: 0.9rem; color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>@hilbras/sdk</h1>
+      <p>Provider-agnostic AI execution engine for TypeScript</p>
+      <div class="stats">
+        <div class="stat"><div class="stat-value">23</div><div class="stat-label">Adapters</div></div>
+        <div class="stat"><div class="stat-value">16</div><div class="stat-label">Packages</div></div>
+        <div class="stat"><div class="stat-value">1300+</div><div class="stat-label">Tests</div></div>
+        <div class="stat"><div class="stat-value">0</div><div class="stat-label">Runtime Deps</div></div>
+      </div>
+    </div>
+  </header>
+
+  <nav>
+    <div class="container">
+      <ul>
+        <li><a href="#quickstart">Quick Start</a></li>
+        <li><a href="#providers">Providers</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#frameworks">Frameworks</a></li>
+        <li><a href="#packages">Packages</a></li>
+        <li><a href="#api">API Reference</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="container">
+      <section id="quickstart" class="section">
+        <h2>Quick Start</h2>
+        <pre><code>npm install @hilbras/sdk
+
+import { HilbrasClient } from "@hilbras/sdk";
+
+const client = new HilbrasClient();
+
+client.addProvider({
+  name: "OpenAI",
+  baseUrl: "https://api.openai.com/v1",
+  authentication: { type: "bearer", apiKey: process.env.OPENAI_API_KEY! },
+  adapter: "openai",
+  models: [
+    { id: "gpt-4o", contextWindow: 128000, maxOutputTokens: 16384,
+      capabilities: { streaming: true, tools: true, vision: true,
+        reasoning: true, structuredOutput: true, parallelTools: true,
+        systemPrompts: true } },
+  ],
+});
+
+// Streaming
+for await (const chunk of client.stream({
+  provider: "OpenAI", model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello!" }],
+})) {
+  if (chunk.type === "text") process.stdout.write(chunk.text);
+}</code></pre>
+      </section>
+
+      <section id="providers" class="section">
+        <h2>Providers</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>OpenAI <span class="badge">Streaming</span><span class="badge">Tools</span></h3>
+            <p>GPT-4o, GPT-4o-mini, o1, o3 models</p>
+          </div>
+          <div class="card">
+            <h3>Anthropic <span class="badge">Streaming</span><span class="badge">Tools</span></h3>
+            <p>Claude Sonnet 4.5, Claude Haiku 4.5</p>
+          </div>
+          <div class="card">
+            <h3>Google <span class="badge">Streaming</span><span class="badge">Vision</span></h3>
+            <p>Gemini 2.5 Flash, Gemini 2.5 Pro</p>
+          </div>
+          <div class="card">
+            <h3>Azure <span class="badge">Enterprise</span></h3>
+            <p>OpenAI models via Azure OpenAI Service</p>
+          </div>
+          <div class="card">
+            <h3>Groq <span class="badge">Fast</span></h3>
+            <p>Llama 3.3, Mixtral on Groq</p>
+          </div>
+          <div class="card">
+            <h3>Ollama <span class="badge">Local</span></h3>
+            <p>Run models locally</p>
+          </div>
+          <div class="card">
+            <h3>Bedrock <span class="badge">AWS</span></h3>
+            <p>Claude, Llama via AWS Bedrock</p>
+          </div>
+          <div class="card">
+            <h3>Vertex AI <span class="badge">GCP</span></h3>
+            <p>Gemini, Claude via Google Cloud</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <h2>Features</h2>
+        <table>
+          <thead>
+            <tr><th>Feature</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Streaming</td><td>Async iteration over text/reasoning/tool-call chunks</td></tr>
+            <tr><td>Tool Calling</td><td>Native function calling + text-embedded markup</td></tr>
+            <tr><td>Structured Output</td><td>Schema validation with automatic JSON repair</td></tr>
+            <tr><td>Circuit Breaker</td><td>Per-provider failure isolation</td></tr>
+            <tr><td>Retry & Backoff</td><td>Exponential backoff with jitter</td></tr>
+            <tr><td>Cost Enforcement</td><td>Atomic reservations, per-request budgets</td></tr>
+            <tr><td>SSRF Safety</td><td>Default-reject unsafe URLs</td></tr>
+            <tr><td>Observability</td><td>Typed lifecycle events</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="frameworks" class="section">
+        <h2>Framework Integrations</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>React</h3>
+            <pre><code>import { useChat } from "@hilbras/react";
+
+function Chat() {
+  const { messages, input, handleSubmit } = useChat();
+  // ...
+}</code></pre>
+          </div>
+          <div class="card">
+            <h3>Vue</h3>
+            <pre><code>import { useChat } from "@hilbras/vue";
+
+const { messages, input, handleSubmit } = useChat();
+</code></pre>
+          </div>
+          <div class="card">
+            <h3>Next.js</h3>
+            <pre><code>import { createChatHandler } from "@hilbras/nextjs";
+
+export const { POST } = createChatHandler({
+  provider: "OpenAI", model: "gpt-4o",
+});</code></pre>
+          </div>
+          <div class="card">
+            <h3>Svelte</h3>
+            <pre><code>import { useChat } from "@hilbras/svelte";
+
+const { messages, handleSubmit } = useChat();
+</code></pre>
+          </div>
+          <div class="card">
+            <h3>Solid</h3>
+            <pre><code>import { useChat } from "@hilbras/solid";
+
+const { messages, append } = useChat();
+</code></pre>
+          </div>
+          <div class="card">
+            <h3>Angular</h3>
+            <pre><code>import { ChatService } from "@hilbras/angular";
+
+@Component({ ... })
+export class ChatComponent {
+  constructor(public chat: ChatService) {}
+}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="packages" class="section">
+        <h2>Packages</h2>
+        <table>
+          <thead>
+            <tr><th>Package</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>@hilbras/sdk</code></td><td>Core SDK — streaming, tools, structured output</td></tr>
+            <tr><td><code>@hilbras/react</code></td><td>React hooks</td></tr>
+            <tr><td><code>@hilbras/vue</code></td><td>Vue composables</td></tr>
+            <tr><td><code>@hilbras/svelte</code></td><td>Svelte stores</td></tr>
+            <tr><td><code>@hilbras/solid</code></td><td>Solid signals</td></tr>
+            <tr><td><code>@hilbras/qwik</code></td><td>Qwik signals</td></tr>
+            <tr><td><code>@hilbras/angular</code></td><td>Angular services</td></tr>
+            <tr><td><code>@hilbras/nextjs</code></td><td>Next.js integration</td></tr>
+            <tr><td><code>@hilbras/astro</code></td><td>Astro integration</td></tr>
+            <tr><td><code>@hilbras/remix</code></td><td>Remix integration</td></tr>
+            <tr><td><code>@hilbras/agent</code></td><td>Agent framework</td></tr>
+            <tr><td><code>@hilbras/eval</code></td><td>Evaluation framework</td></tr>
+            <tr><td><code>@hilbras/rag</code></td><td>RAG primitives</td></tr>
+            <tr><td><code>@hilbras/fine-tune</code></td><td>Fine-tuning helpers</td></tr>
+            <tr><td><code>hilbras</code></td><td>CLI tools</td></tr>
+            <tr><td><code>create-hilbras-app</code></td><td>Project scaffolding</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="api" class="section">
+        <h2>API Reference</h2>
+        <h3>HilbrasClient</h3>
+        <pre><code>const client = new HilbrasClient({
+  defaultProvider?: string;
+  defaultModel?: string;
+  defaultBudget?: { session?: number; perRequest?: number };
+});
+
+client.addProvider(config: AIProviderConfig): void;
+client.stream(params: StreamParams): AsyncIterable&lt;StreamChunk&gt;;
+client.complete(params: CompleteParams): Promise&lt;CompleteResult&gt;;
+client.validateBaseUrl(url: string): void;
+client.abort(): void;</code></pre>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>@hilbras/sdk v0.25.0 — MIT License</p>
+      <p><a href="https://github.com/Hilbras/Hilbras-ai-sdk">GitHub</a> · <a href="https://www.npmjs.com/package/@hilbras/sdk">npm</a></p>
+    </div>
+  </footer>
+</body>
+</html>
