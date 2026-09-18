@@ -1,6 +1,6 @@
 # Framework Integrations
 
-Signal-based hooks for React, Vue, Svelte, Solid, and Angular.
+Signal-based hooks for React, Vue, Svelte, Solid, Qwik, and Angular.
 
 ## React
 
@@ -123,6 +123,31 @@ export class ChatComponent {
     this.chatService.append({ role: "user", content: "Hello" });
   }
 }
+```
+
+## Qwik
+
+```bash
+npm install @hilbras/qwik
+```
+
+```tsx
+import { useChat } from "@hilbras/qwik";
+
+export const Chat = () => {
+  const { messages, append, clear } = useChat();
+
+  return (
+    <div>
+      {messages().map((m) => (
+        <div>{m.role}: {m.content}</div>
+      ))}
+      <button onClick={() => append({ role: "user", content: "Hello" })}>
+        Send
+      </button>
+    </div>
+  );
+};
 ```
 
 ## Common API
