@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/solid",
-  "version": "0.25.1",
+  "version": "0.25.2",
   "description": "SolidJS integration for @hilbras/sdk — signals, stores, and streaming",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.25.1",
+    "@hilbras/sdk": ">=0.25.2",
     "solid-js": ">=1.8.0"
   },
   "devDependencies": {

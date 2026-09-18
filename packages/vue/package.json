@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/vue",
-  "version": "0.25.1",
+  "version": "0.25.2",
   "description": "Vue 3 Composition API hooks for @hilbras/sdk — useChat, useCompletion, useObject",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +20,7 @@
   },
   "peerDependencies": {
     "vue": ">=3.4",
-    "@hilbras/sdk": ">=0.25.1"
+    "@hilbras/sdk": ">=0.25.2"
   },
   "devDependencies": {
     "vue": "^3.5.0",
