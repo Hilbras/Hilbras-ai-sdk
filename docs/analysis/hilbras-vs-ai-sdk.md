@@ -259,7 +259,7 @@ ai-repo/
 | P1 | Add PII detection and redaction in logs/outputs | 3-4 days | High — GDPR/privacy |
 | P2 | Add SOC 2 compliance helpers (audit logging, data retention) | 5+ days | Medium — enterprise sales |
 
-### Phase 6: Testing & CI (v0.16.0) — Quality Parity
+### Phase 6: Testing & CI (v0.17.0) — Quality Parity
 
 **Goal:** Match Vercel's testing sophistication.
 
@@ -348,7 +348,7 @@ These are Hilbras' **competitive advantages** that Vercel does NOT have:
 | Phase 3 | v0.12.0 | 6 weeks | Generic types, Zod integration, type tests |
 | Phase 4 | v0.13.0 | 8 weeks | OpenTelemetry, structured logging |
 | Phase 5 | v0.14.0 | 10 weeks | Custom lint rules, OIDC, PII redaction |
-| Phase 6 | v0.16.0 | 12 weeks | 2000+ tests, sharded CI, benchmarks |
+| Phase 6 | v0.17.0 | 12 weeks | 2000+ tests, sharded CI, benchmarks |
 | Phase 7 | v1.0.0 | 16 weeks | React/Vue/Svelte hooks, UIMessage protocol |
 
 ---
