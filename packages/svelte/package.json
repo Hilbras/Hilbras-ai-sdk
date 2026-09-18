@@ -1,0 +1,34 @@
+{
+  "name": "@hilbras/svelte",
+  "version": "0.15.0",
+  "description": "Svelte 5 runes-based hooks for @hilbras/sdk — useChat, useCompletion, useObject",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "svelte": ">=5",
+    "@hilbras/sdk": ">=0.15.0"
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
+    "directory": "packages/svelte"
+  }
+}
