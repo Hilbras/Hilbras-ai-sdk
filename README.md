@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.22.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
@@ -117,6 +117,7 @@ const reply = await client.complete({
 | **CLI** | `hilbras` CLI for init, provider management, model listing, cost estimation | [CLI](docs/cli.md) |
 | **Migration** | Guide from Vercel AI SDK | [Migration](docs/migration-from-vercel-ai-sdk.md) |
 | **Fine-tuning** | Export training data in 6 formats, data splitting, quality validation | [Fine-tune](docs/fine-tune.md) |
+| **Scaffolding** | `npx create-hilbras-app` project scaffolding | [CLI](docs/cli.md) |
 | **Zero runtime deps** | Pure TypeScript, no transitive dependencies | — |
 
 ---
