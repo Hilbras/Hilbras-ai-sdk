@@ -68,4 +68,61 @@ describe("HilbrasClient.addProvider SSRF guard (v0.9.3)", () => {
     expect(caught).toBeInstanceOf(ConfigurationError);
     expect(String(caught)).toContain("http://api.example.com");
   });
+
+  // ─── HTTPS SSRF bypass regression tests ──────────────────────────────
+
+  describe("HTTPS SSRF bypass prevention", () => {
+    it("rejects https://169.254.169.254/ (AWS metadata via HTTPS)", () => {
+      const client = new HilbrasClient();
+      expect(() => client.addProvider(makeProvider("https://169.254.169.254/")))
+        .toThrow(ConfigurationError);
+    });
+
+    it("rejects https://169.254.169.254/ even with allowInsecureUrls", () => {
+      const client = new HilbrasClient({ allowInsecureUrls: true });
+      expect(() => client.addProvider(makeProvider("https://169.254.169.254/")))
+        .toThrow(ConfigurationError);
+    });
+
+    it("rejects https://192.168.1.1/ (private network via HTTPS)", () => {
+      const client = new HilbrasClient();
+      expect(() => client.addProvider(makeProvider("https://192.168.1.1/")))
+        .toThrow(ConfigurationError);
+    });
+
+    it("rejects https://192.168.1.1/ even with allowInsecureUrls", () => {
+      const client = new HilbrasClient({ allowInsecureUrls: true });
+      expect(() => client.addProvider(makeProvider("https://192.168.1.1/")))
+        .toThrow(ConfigurationError);
+    });
+
+    it("rejects https://10.0.0.1/ (private network via HTTPS)", () => {
+      const client = new HilbrasClient();
+      expect(() => client.addProvider(makeProvider("https://10.0.0.1/")))
+        .toThrow(ConfigurationError);
+    });
+
+    it("rejects https://10.0.0.1/ even with allowInsecureUrls", () => {
+      const client = new HilbrasClient({ allowInsecureUrls: true });
+      expect(() => client.addProvider(makeProvider("https://10.0.0.1/")))
+        .toThrow(ConfigurationError);
+    });
+
+    it("accepts https://10.0.0.1/ with allowPrivateNetwork", () => {
+      const client = new HilbrasClient({ allowPrivateNetwork: true });
+      expect(() => client.addProvider(makeProvider("https://10.0.0.1/"))).not.toThrow();
+    });
+
+    it("rejects https://[fc00::1] (IPv6 unique-local via HTTPS)", () => {
+      const client = new HilbrasClient();
+      expect(() => client.addProvider(makeProvider("https://[fc00::1]")))
+        .toThrow(ConfigurationError);
+    });
+
+    it("rejects https://[fe80::1] (IPv6 link-local via HTTPS)", () => {
+      const client = new HilbrasClient();
+      expect(() => client.addProvider(makeProvider("https://[fe80::1]")))
+        .toThrow(ConfigurationError);
+    });
+  });
 });

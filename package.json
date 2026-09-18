@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -102,6 +102,34 @@
     "./adapters/deepinfra": {
       "import": "./dist/adapters/deepinfra.js",
       "types": "./dist/adapters/deepinfra.d.ts"
+    },
+    "./adapters/bedrock": {
+      "import": "./dist/adapters/bedrock.js",
+      "types": "./dist/adapters/bedrock.d.ts"
+    },
+    "./adapters/google-vertex": {
+      "import": "./dist/adapters/google-vertex.js",
+      "types": "./dist/adapters/google-vertex.d.ts"
+    },
+    "./adapters/huggingface": {
+      "import": "./dist/adapters/huggingface.js",
+      "types": "./dist/adapters/huggingface.d.ts"
+    },
+    "./adapters/deepgram": {
+      "import": "./dist/adapters/deepgram.js",
+      "types": "./dist/adapters/deepgram.d.ts"
+    },
+    "./adapters/elevenlabs": {
+      "import": "./dist/adapters/elevenlabs.js",
+      "types": "./dist/adapters/elevenlabs.d.ts"
+    },
+    "./adapters/voyageai": {
+      "import": "./dist/adapters/voyageai.js",
+      "types": "./dist/adapters/voyageai.d.ts"
+    },
+    "./adapters/cohere-rerank": {
+      "import": "./dist/adapters/cohere-rerank.js",
+      "types": "./dist/adapters/cohere-rerank.d.ts"
     },
     "./tokens": {
       "import": "./dist/tokens/counter.js",

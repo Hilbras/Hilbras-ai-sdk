@@ -40,6 +40,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: npx tsc -p packages/cli/tsconfig.json
       - run: npx vitest run --shard=${{ matrix.shard }}/4
 
   test-22:

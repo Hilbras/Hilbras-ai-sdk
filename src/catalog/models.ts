@@ -105,6 +105,53 @@ export const BUILTIN_MODELS: ModelEntry[] = [
   { id: "meta-llama/Meta-Llama-3.1-405B-Instruct", name: "Llama 3.1 405B", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["deepinfra-llama-405b"] },
   { id: "Qwen/Qwen2.5-72B-Instruct", name: "Qwen 2.5 72B", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["deepinfra-qwen-72b"] },
   { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1", provider: "deepinfra", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: ["deepinfra-deepseek"] },
+  // ─── AWS Bedrock ────────────────────────────────────────────────
+  { id: "anthropic.claude-3-5-sonnet-20241022-v2:0", name: "Claude 3.5 Sonnet (Bedrock)", provider: "bedrock", contextWindow: 200_000, maxOutput: 8_192, capabilities: FULL_CAPS, aliases: ["bedrock-claude-sonnet", "bedrock-sonnet"] },
+  { id: "anthropic.claude-3-haiku-20240307-v1:0", name: "Claude 3 Haiku (Bedrock)", provider: "bedrock", contextWindow: 200_000, maxOutput: 4_096, capabilities: VISION_CAPS, aliases: ["bedrock-claude-haiku", "bedrock-haiku"] },
+  { id: "anthropic.claude-3-opus-20240229-v1:0", name: "Claude 3 Opus (Bedrock)", provider: "bedrock", contextWindow: 200_000, maxOutput: 4_096, capabilities: FULL_CAPS, aliases: ["bedrock-claude-opus", "bedrock-opus"] },
+  { id: "anthropic.claude-3-5-haiku-20241022-v1:0", name: "Claude 3.5 Haiku (Bedrock)", provider: "bedrock", contextWindow: 200_000, maxOutput: 8_192, capabilities: VISION_CAPS, aliases: ["bedrock-claude-35-haiku"] },
+  { id: "meta.llama3-1-70b-instruct-v1:0", name: "Llama 3.1 70B (Bedrock)", provider: "bedrock", contextWindow: 131_072, maxOutput: 4_096, capabilities: FULL_CAPS, aliases: ["bedrock-llama-70b"] },
+  { id: "meta.llama3-1-8b-instruct-v1:0", name: "Llama 3.1 8B (Bedrock)", provider: "bedrock", contextWindow: 131_072, maxOutput: 4_096, capabilities: DEFAULT_CAPS, aliases: ["bedrock-llama-8b"] },
+  { id: "mistral.mistral-large-2402-v1:0", name: "Mistral Large (Bedrock)", provider: "bedrock", contextWindow: 32_768, maxOutput: 8_192, capabilities: FULL_CAPS, aliases: ["bedrock-mistral-large"] },
+  { id: "mistral.mistral-7b-instruct-v0:2", name: "Mistral 7B (Bedrock)", provider: "bedrock", contextWindow: 32_768, maxOutput: 8_192, capabilities: DEFAULT_CAPS, aliases: ["bedrock-mistral-7b"] },
+  { id: "cohere.embed-english-v3", name: "Cohere Embed (Bedrock)", provider: "bedrock", contextWindow: 512, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["bedrock-cohere-embed"] },
+  // ─── Google Vertex AI ──────────────────────────────────────────
+  { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash (Vertex)", provider: "google-vertex", contextWindow: 1_048_576, maxOutput: 65_536, capabilities: REASONING_CAPS, aliases: ["vertex-gemini-flash", "vertex-flash"] },
+  { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro (Vertex)", provider: "google-vertex", contextWindow: 1_048_576, maxOutput: 65_536, capabilities: REASONING_CAPS, aliases: ["vertex-gemini-pro", "vertex-pro"] },
+  { id: "google/gemini-2.0-flash", name: "Gemini 2.0 Flash (Vertex)", provider: "google-vertex", contextWindow: 1_048_576, maxOutput: 8_192, capabilities: FULL_CAPS, aliases: ["vertex-gemini-20-flash"] },
+  { id: "google/gemini-1.5-pro", name: "Gemini 1.5 Pro (Vertex)", provider: "google-vertex", contextWindow: 2_097_152, maxOutput: 8_192, capabilities: FULL_CAPS, aliases: ["vertex-gemini-15-pro"] },
+  { id: "google/gemini-1.5-flash", name: "Gemini 1.5 Flash (Vertex)", provider: "google-vertex", contextWindow: 1_048_576, maxOutput: 8_192, capabilities: FULL_CAPS, aliases: ["vertex-gemini-15-flash"] },
+  { id: "google/text-embedding-004", name: "Text Embedding 004 (Vertex)", provider: "google-vertex", contextWindow: 2_048, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["vertex-embedding-004"] },
+  { id: "google/text-embedding-preview-0801", name: "Embedding Preview (Vertex)", provider: "google-vertex", contextWindow: 2_048, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["vertex-embedding-preview"] },
+  { id: "anthropic/claude-3-5-sonnet@20241022", name: "Claude 3.5 Sonnet (Vertex)", provider: "google-vertex", contextWindow: 200_000, maxOutput: 8_192, capabilities: FULL_CAPS, aliases: ["vertex-claude-sonnet"] },
+  { id: "anthropic/claude-3-haiku@20240307", name: "Claude 3 Haiku (Vertex)", provider: "google-vertex", contextWindow: 200_000, maxOutput: 4_096, capabilities: VISION_CAPS, aliases: ["vertex-claude-haiku"] },
+  { id: "meta/llama-3.1-405b-instruct-maas", name: "Llama 3.1 405B (Vertex)", provider: "google-vertex", contextWindow: 131_072, maxOutput: 4_096, capabilities: FULL_CAPS, aliases: ["vertex-llama-405b"] },
+  { id: "meta/llama-3.1-70b-instruct-maas", name: "Llama 3.1 70B (Vertex)", provider: "google-vertex", contextWindow: 131_072, maxOutput: 4_096, capabilities: FULL_CAPS, aliases: ["vertex-llama-70b"] },
+  { id: "mistralai/mistral-large-2411", name: "Mistral Large (Vertex)", provider: "google-vertex", contextWindow: 128_000, maxOutput: 32_768, capabilities: FULL_CAPS, aliases: ["vertex-mistral-large"] },
+  // ─── Hugging Face Inference ─────────────────────────────────────
+  { id: "meta-llama/Llama-3.3-70B-Instruct", name: "Llama 3.3 70B (HF)", provider: "huggingface", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["hf-llama-70b", "huggingface-llama-70b"] },
+  { id: "meta-llama/Llama-3.1-8B-Instruct", name: "Llama 3.1 8B (HF)", provider: "huggingface", contextWindow: 131_072, maxOutput: 16_384, capabilities: DEFAULT_CAPS, aliases: ["hf-llama-8b", "huggingface-llama-8b"] },
+  { id: "Qwen/Qwen2.5-72B-Instruct", name: "Qwen 2.5 72B (HF)", provider: "huggingface", contextWindow: 131_072, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["hf-qwen-72b", "huggingface-qwen-72b"] },
+  { id: "microsoft/Phi-4", name: "Phi-4 (HF)", provider: "huggingface", contextWindow: 16_384, maxOutput: 16_384, capabilities: FULL_CAPS, aliases: ["hf-phi4", "huggingface-phi4"] },
+  { id: "google/gemma-2-27b-it", name: "Gemma 2 27B (HF)", provider: "huggingface", contextWindow: 8_192, maxOutput: 8_192, capabilities: DEFAULT_CAPS, aliases: ["hf-gemma-27b", "huggingface-gemma-27b"] },
+  { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1 (HF)", provider: "huggingface", contextWindow: 131_072, maxOutput: 16_384, capabilities: REASONING_CAPS, aliases: ["hf-deepseek-r1", "huggingface-deepseek-r1"] },
+  { id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)", provider: "huggingface", contextWindow: 32_768, maxOutput: 8_192, capabilities: DEFAULT_CAPS, aliases: ["hf-mistral-7b", "huggingface-mistral-7b"] },
+  // ─── Deepgram (STT) ─────────────────────────────────────────────
+  { id: "nova-2", name: "Nova 2 (Deepgram)", provider: "deepgram", contextWindow: 0, maxOutput: 0, capabilities: TRANSCRIPTION_CAPS, aliases: ["deepgram-nova-2"] },
+  { id: "nova-2-medical", name: "Nova 2 Medical (Deepgram)", provider: "deepgram", contextWindow: 0, maxOutput: 0, capabilities: TRANSCRIPTION_CAPS, aliases: ["deepgram-nova-2-medical"] },
+  { id: "whisper-large", name: "Whisper Large (Deepgram)", provider: "deepgram", contextWindow: 0, maxOutput: 0, capabilities: TRANSCRIPTION_CAPS, aliases: ["deepgram-whisper"] },
+  // ─── ElevenLabs (TTS) ──────────────────────────────────────────
+  { id: "eleven_monolingual_v1", name: "Monolingual v1 (ElevenLabs)", provider: "elevenlabs", contextWindow: 0, maxOutput: 0, capabilities: SPEECH_CAPS, aliases: ["elevenlabs-v1"] },
+  { id: "eleven_multilingual_v2", name: "Multilingual v2 (ElevenLabs)", provider: "elevenlabs", contextWindow: 0, maxOutput: 0, capabilities: SPEECH_CAPS, aliases: ["elevenlabs-v2"] },
+  { id: "eleven_turbo_v2", name: "Turbo v2 (ElevenLabs)", provider: "elevenlabs", contextWindow: 0, maxOutput: 0, capabilities: SPEECH_CAPS, aliases: ["elevenlabs-turbo"] },
+  // ─── Voyage AI (Embeddings) ────────────────────────────────────
+  { id: "voyage-3", name: "Voyage 3", provider: "voyageai", contextWindow: 32_000, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["voyageai-3"] },
+  { id: "voyage-3-lite", name: "Voyage 3 Lite", provider: "voyageai", contextWindow: 32_000, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["voyageai-3-lite"] },
+  { id: "voyage-code-3", name: "Voyage Code 3", provider: "voyageai", contextWindow: 32_000, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["voyageai-code-3"] },
+  { id: "voyage-law-2", name: "Voyage Law 2", provider: "voyageai", contextWindow: 32_000, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["voyageai-law-2"] },
+  // ─── Cohere Rerank ─────────────────────────────────────────────
+  { id: "rerank-english-v3.0", name: "Rerank English v3.0 (Cohere)", provider: "cohere-rerank", contextWindow: 512, maxOutput: 0, capabilities: RERANK_CAPS, aliases: ["cohere-rerank-english"] },
+  { id: "rerank-multilingual-v3.0", name: "Rerank Multilingual v3.0 (Cohere)", provider: "cohere-rerank", contextWindow: 512, maxOutput: 0, capabilities: RERANK_CAPS, aliases: ["cohere-rerank-multilingual"] },
 
   // ─── Embedding Models ───────────────────────────────────────────────
   { id: "text-embedding-3-small", name: "Embedding 3 Small", provider: "openai", contextWindow: 8_191, maxOutput: 0, capabilities: EMBEDDING_CAPS, aliases: ["embedding-small"] },
