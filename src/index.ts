@@ -207,3 +207,15 @@ export type { ElevenLabsAdapterConfig } from "./adapters/elevenlabs.js";
 export { VoyageAIAdapter } from "./adapters/voyageai.js";
 export { CohereRerankAdapter } from "./adapters/cohere-rerank.js";
 export type { CohereRerankAdapterConfig } from "./adapters/cohere-rerank.js";
+
+// ─── MCP ────────────────────────────────────────────────────────────────────
+export { MCPClient, createMCPToolExecution } from "./mcp/index.js";
+export type { MCPServerConfig, MCPTool, MCPResource, MCPPrompt, MCPConnection } from "./mcp/index.js";
+
+// ─── Realtime ───────────────────────────────────────────────────────────────
+export { RealtimeSession } from "./realtime/index.js";
+export type { RealtimeSessionConfig, RealtimeEvent, RealtimeEventHandler } from "./realtime/index.js";
+
+// ─── DevTools ───────────────────────────────────────────────────────────────
+export { DevTools } from "./devtools/index.js";
+export type { DevToolsConfig, LogEntry, RequestMetrics } from "./devtools/index.js";

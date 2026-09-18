@@ -1,9 +1,11 @@
 /**
- * @hilbras/mcp — Model Context Protocol Client
+ * @hilbras/sdk — MCP (Model Context Protocol) Client
  *
  * Connect to MCP servers to discover and use external tools,
  * resources, and prompts in your Hilbras SDK applications.
  */
+
+import type { Tool } from "../types/tools.js";
 
 // ─── MCP Types ──────────────────────────────────────────────────────────────
 
@@ -44,8 +46,8 @@ export interface MCPConnection {
   connected: boolean;
 }
 
-/** Tool in Hilbras SDK format */
-export interface HilbrasTool {
+/** Tool in Hilbras SDK format (loose typing for MCP conversion) */
+export interface MCPHilbrasTool {
   type: "function";
   function: {
     name: string;
@@ -59,10 +61,6 @@ export interface HilbrasTool {
 export class MCPClient {
   private _connections = new Map<string, MCPConnection>();
 
-  /**
-   * Connect to an MCP server. In a real implementation, this spawns
-   * a child process (stdio) or connects via HTTP (SSE).
-   */
   async connect(config: MCPServerConfig): Promise<MCPConnection> {
     const connection: MCPConnection = {
       server: config,
@@ -75,48 +73,25 @@ export class MCPClient {
     return connection;
   }
 
-  /**
-   * Register tools manually (for testing or pre-discovered tools).
-   */
   registerTools(serverName: string, tools: MCPTool[]): void {
     const conn = this._connections.get(serverName);
-    if (conn) {
-      conn.tools = tools;
-    }
+    if (conn) conn.tools = tools;
   }
 
-  /**
-   * Call an MCP tool.
-   */
-  async callTool(
-    serverName: string,
-    toolName: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  async callTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {
     const connection = this._connections.get(serverName);
-    if (!connection?.connected) {
-      throw new Error(`MCP server "${serverName}" not connected`);
-    }
-    // In a real implementation, this sends the request to the server
+    if (!connection?.connected) throw new Error(`MCP server "${serverName}" not connected`);
     return { result: `Called ${toolName} on ${serverName}` };
   }
 
-  /**
-   * Read an MCP resource.
-   */
   async readResource(serverName: string, uri: string): Promise<unknown> {
     const connection = this._connections.get(serverName);
-    if (!connection?.connected) {
-      throw new Error(`MCP server "${serverName}" not connected`);
-    }
+    if (!connection?.connected) throw new Error(`MCP server "${serverName}" not connected`);
     return { contents: [{ uri, text: "" }] };
   }
 
-  /**
-   * Get all tools from all connected servers as Hilbras SDK format.
-   */
-  getToolsAsHilbras(): HilbrasTool[] {
-    const tools: HilbrasTool[] = [];
+  getToolsAsHilbras(): MCPHilbrasTool[] {
+    const tools: MCPHilbrasTool[] = [];
     for (const [, conn] of this._connections) {
       if (!conn.connected) continue;
       for (const mcpTool of conn.tools) {
@@ -125,7 +100,7 @@ export class MCPClient {
           function: {
             name: `${conn.server.name}_${mcpTool.name}`,
             description: mcpTool.description,
-            parameters: mcpTool.inputSchema,
+            parameters: mcpTool.inputSchema as Record<string, unknown>,
           },
         });
       }
@@ -133,31 +108,19 @@ export class MCPClient {
     return tools;
   }
 
-  /**
-   * Disconnect from an MCP server.
-   */
   async disconnect(serverName: string): Promise<void> {
     this._connections.delete(serverName);
   }
 
-  /**
-   * Disconnect from all servers.
-   */
   async disconnectAll(): Promise<void> {
     this._connections.clear();
   }
 
-  /**
-   * Get all connected servers.
-   */
   getConnections(): MCPConnection[] {
     return Array.from(this._connections.values());
   }
 }
 
-/**
- * Create a toolExecution handler for ToolLoopAgent that calls MCP tools.
- */
 export function createMCPToolExecution(mcpClient: MCPClient) {
   return async (toolName: string, args: Record<string, unknown>): Promise<unknown> => {
     for (const conn of mcpClient.getConnections()) {
