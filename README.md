@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.17.3-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-0.20.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1118%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1278%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -11,7 +11,7 @@
 
 <p align="center">
   <strong>Provider-agnostic AI execution engine for TypeScript.</strong><br>
-  Streaming, tool calling, structured output, circuit breaker, retry, reasoning normalization, cost enforcement, and SSRF-safe provider registration — for OpenAI, Anthropic, Gemini, Azure, Groq, and Ollama. Zero runtime dependencies.
+  Streaming, tool calling, structured output, circuit breaker, retry, reasoning normalization, cost enforcement, and SSRF-safe provider registration — for OpenAI, Anthropic, Gemini, Azure, Groq, Ollama, Bedrock, Vertex AI, HuggingFace, Deepgram, ElevenLabs, Voyage AI, and Cohere Rerank. Zero runtime dependencies.
 </p>
 
 ---
@@ -97,10 +97,10 @@ const reply = await client.complete({
 
 | Feature | Summary | Docs |
 |---|---|---|
-| **Provider abstraction** | 6 built-in adapters (OpenAI, Anthropic, Gemini, Azure, Groq, Ollama) | [Providers](docs/providers.md) |
+| **Provider abstraction** | 23 adapters (OpenAI, Anthropic, Gemini, Azure, Groq, Ollama, Bedrock, Vertex AI, HuggingFace, Deepgram, ElevenLabs, Voyage AI, Cohere Rerank) | [Providers](docs/providers.md) |
 | **Streaming** | Async iteration over text/reasoning/tool-call/usage/finish chunks | [Getting Started](docs/getting-started.md#streaming) |
 | **Tool calling** | Native function calling + text-embedded `<tool_call>` markup | [Getting Started](docs/getting-started.md#tool-calling) |
-| **Structured output** | Zod/Valibot schemas with automatic JSON repair | [API Reference](docs/api-reference.md) |
+| **Structured output** | Schema validation with automatic JSON repair | [API Reference](docs/api-reference.md) |
 | **Model routing** | Pick the best model across providers by task, cost, capabilities | [API Reference](docs/api-reference.md#model-router) |
 | **Circuit breaker** | Per-provider failure isolation with half-open recovery | [API Reference](docs/api-reference.md#reliability) |
 | **Retry & backoff** | Exponential backoff with jitter for 429/5xx/network errors | [API Reference](docs/api-reference.md#reliability) |
@@ -109,6 +109,13 @@ const reply = await client.complete({
 | **SSRF safety** | Default-reject `http://`, block AWS metadata, opt-in for local Ollama | [Security](docs/security.md) |
 | **Error redaction** | API keys auto-redacted from provider error bodies | [Security](docs/security.md#error-redaction-in-provider-responses) |
 | **Reasoning normalization** | Detect & normalize `<thinking>` / `<reasoning>` tags and native fields | [API Reference](docs/api-reference.md) |
+| **Agent framework** | ToolLoopAgent, ReActAgent, PlanAndExecuteAgent with approval, budget, cost tracking | [Agent](docs/agent.md) |
+| **Evaluation** | LLM output evaluation with built-in metrics (exact_match, similarity, toxicity) | [Eval](docs/eval.md) |
+| **Framework hooks** | React, Vue, Svelte, Solid, Angular signal-based hooks | [Frameworks](docs/frameworks.md) |
+| **RAG primitives** | VectorStore, Retriever, RAGPipeline, chunking | [RAG](docs/rag.md) |
+| **Provider catalog** | Runtime provider/model discovery with search | [Catalog](docs/catalog.md) |
+| **CLI** | `hilbras` CLI for init, provider management, model listing, cost estimation | [CLI](docs/cli.md) |
+| **Migration** | Guide from Vercel AI SDK | [Migration](docs/migration-from-vercel-ai-sdk.md) |
 | **Zero runtime deps** | Pure TypeScript, no transitive dependencies | — |
 
 ---
@@ -121,6 +128,13 @@ const reply = await client.complete({
 - **[Security](docs/security.md)** — SSRF protection, opt-in flags, error redaction
 - **[Observability](docs/observability.md)** — lifecycle events
 - **[API Reference](docs/api-reference.md)** — complete type and function reference
+- **[Agent Framework](docs/agent.md)** — multi-step agent tools
+- **[Evaluation](docs/eval.md)** — LLM output testing
+- **[RAG](docs/rag.md)** — retrieval-augmented generation
+- **[Frameworks](docs/frameworks.md)** — React, Vue, Svelte, Solid, Angular hooks
+- **[Catalog](docs/catalog.md)** — provider/model discovery
+- **[CLI](docs/cli.md)** — command-line tools
+- **[Migration](docs/migration-from-vercel-ai-sdk.md)** — from Vercel AI SDK
 - **[CHANGELOG](CHANGELOG.md)** — version history
 
 ## Subpath imports
@@ -133,6 +147,16 @@ import { estimateTokens } from "@hilbras/sdk/tokens";           // Token utiliti
 import { loadConfig } from "@hilbras/sdk/config";               // Config
 import { FetchTransport } from "@hilbras/sdk/transport/fetch";  // Transport
 import { validateBaseUrl } from "@hilbras/sdk";                 // SSRF guard
+
+// Packages
+import { useChat } from "@hilbras/react";          // React hooks
+import { useChat } from "@hilbras/vue";            // Vue composables
+import { useChat } from "@hilbras/svelte";         // Svelte stores
+import { useChat } from "@hilbras/solid";          // Solid signals
+import { useChat } from "@hilbras/angular";        // Angular signals
+import { ToolLoopAgent } from "@hilbras/agent";    // Agent framework
+import { evaluate } from "@hilbras/eval";          // Evaluation
+import { RAGPipeline } from "@hilbras/rag";        // RAG
 ```
 
 ## Development
@@ -140,7 +164,7 @@ import { validateBaseUrl } from "@hilbras/sdk";                 // SSRF guard
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run 878 tests
+npm test             # Run 1278 tests
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```
