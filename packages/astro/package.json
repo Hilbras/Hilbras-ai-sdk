@@ -1,7 +1,7 @@
 {
-  "name": "@hilbras/eval",
+  "name": "@hilbras/astro",
   "version": "0.25.0",
-  "description": "Evaluation and testing primitives for LLM outputs",
+  "description": "Astro integration for @hilbras/sdk — islands, endpoints, streaming",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,10 +19,12 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.25.0"
+    "@hilbras/sdk": ">=0.25.0",
+    "astro": ">=4.0.0"
   },
   "devDependencies": {
     "@hilbras/sdk": "workspace:*",
+    "astro": "^5.12.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
@@ -30,6 +32,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
-    "directory": "packages/eval"
+    "directory": "packages/astro"
   }
 }

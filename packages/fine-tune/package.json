@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/fine-tune",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Fine-tuning and distillation helpers — export training data, format for OpenAI/Anthropic/etc.",
   "type": "module",
   "main": "dist/index.js",
