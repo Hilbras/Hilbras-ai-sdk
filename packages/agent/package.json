@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/agent",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Agent framework for @hilbras/sdk — ToolLoopAgent, ReActAgent, PlanAndExecuteAgent",
   "type": "module",
   "main": "dist/index.js",
@@ -19,10 +19,10 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.24.0"
+    "@hilbras/sdk": ">=0.25.0"
   },
   "devDependencies": {
-    "@hilbras/sdk": ">=0.24.0",
+    "@hilbras/sdk": ">=0.25.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
