@@ -11,12 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.17.2] - 2026-09-18
+## [0.17.3] - 2026-09-18
 
-### Fixed
+### Added
 
-- Fixed README badge version (was 0.16.0, now 0.17.1)
-- Fixed CLI version string to match package version
+- **Migration guide** — Comprehensive guide from Vercel AI SDK to Hilbras SDK (`docs/migration-from-vercel-ai-sdk.md`)
+- **Provider catalog JSON** — Dynamic provider/model catalog with runtime API (`loadCatalog()`, `listProviders()`, `searchModels()`, `getModelsForProvider()`)
+- **CI fix** — Added CLI dist build step to CI workflow
+
+### Changed
+
+- Bundle size: 1001.5KB → 1023.5KB (catalog JSON added)
 
 ---
 
