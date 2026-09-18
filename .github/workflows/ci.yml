@@ -9,13 +9,29 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run lint:custom
+      - run: npm run build
+      - run: npm run size
+
   test:
-    name: test (node ${{ matrix.node }})
+    name: test (node ${{ matrix.node }}, shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         node: [22, 24]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +39,37 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm run lint
       - run: npm run build
-      - run: npm test
+      - run: npx vitest run --shard=${{ matrix.shard }}/4
+
+  test-22:
+    if: always()
+    name: test (node 22)
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          results="${{ needs.test.result }}"
+          if [ "$results" = "success" ] || [ "$results" = "skipped" ]; then
+            echo "All node 22 shards passed"
+          else
+            echo "Some node 22 shards failed"
+            exit 1
+          fi
+
+  test-24:
+    if: always()
+    name: test (node 24)
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          results="${{ needs.test.result }}"
+          if [ "$results" = "success" ] || [ "$results" = "skipped" ]; then
+            echo "All node 24 shards passed"
+          else
+            echo "Some node 24 shards failed"
+            exit 1
+          fi

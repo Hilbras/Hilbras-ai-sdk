@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { OllamaAdapter } from "../src/adapters/ollama.js";
+import { ProviderRequestError } from "../src/errors/index.js";
 import type { Transport } from "../src/transport/transport.js";
 import type { ProviderConfig } from "../src/types/providers.js";
 import type { StreamChunk } from "../src/types/streams.js";
@@ -99,5 +100,76 @@ describe("OllamaAdapter", () => {
     const adapter = new OllamaAdapter({ provider, transport: mockTransportComplete({ choices: [] }) });
     const result = await adapter.complete({ model: "llama3.1", messages: [{ role: "user", content: "hi" }] });
     expect(result).toBe("");
+  });
+});
+
+// ─── Ollama Multi-Modal ────────────────────────────────────────────────────
+
+function mockJsonTransport(body: Record<string, unknown>): Transport {
+  return {
+    async request() {
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    },
+    async stream() { throw new Error("unused"); },
+    abort() {},
+  };
+}
+
+function mockErrorTransport(status = 500): Transport {
+  return {
+    async request() {
+      return new Response("error", { status, statusText: "Internal Server Error" });
+    },
+    async stream() { throw new Error("unused"); },
+    abort() {},
+  };
+}
+
+describe("OllamaAdapter multi-modal", () => {
+  it("embed() routes to /api/embeddings endpoint", async () => {
+    let capturedUrl = "";
+    let capturedBody: Record<string, unknown> = {};
+    const transport: Transport = {
+      async request(url, init) {
+        capturedUrl = url;
+        capturedBody = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({ embedding: [0.1, 0.2, 0.3] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const adapter = new OllamaAdapter({ provider, transport });
+    const result = await adapter.embed({ model: "nomic-embed-text", input: "hello world" });
+    expect(capturedUrl).toContain("/api/embeddings");
+    expect(capturedBody.model).toBe("nomic-embed-text");
+    expect(capturedBody.prompt).toBe("hello world");
+    expect(result.embeddings).toHaveLength(1);
+    expect(result.embeddings[0]).toEqual([0.1, 0.2, 0.3]);
+  });
+
+  it("embed() joins array input with newline", async () => {
+    let capturedBody: Record<string, unknown> = {};
+    const transport: Transport = {
+      async request(_url, init) {
+        capturedBody = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({ embedding: [0.1] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const adapter = new OllamaAdapter({ provider, transport });
+    await adapter.embed({ model: "nomic-embed-text", input: ["hello", "world"] });
+    expect(capturedBody.prompt).toBe("hello\nworld");
+  });
+
+  it("embed() returns empty array when no embedding", async () => {
+    const adapter = new OllamaAdapter({ provider, transport: mockJsonTransport({}) });
+    const result = await adapter.embed({ model: "nomic-embed-text", input: "test" });
+    expect(result.embeddings).toEqual([]);
+  });
+
+  it("embed() throws on API error", async () => {
+    const adapter = new OllamaAdapter({ provider, transport: mockErrorTransport() });
+    await expect(adapter.embed({ model: "nomic-embed-text", input: "test" })).rejects.toThrow(ProviderRequestError);
   });
 });

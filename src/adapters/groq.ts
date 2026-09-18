@@ -17,6 +17,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
+import type { TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 
@@ -239,5 +240,57 @@ export class GroqAdapter implements AIProvider {
     if (!choices?.length) return "";
     const message = choices[0].message as Record<string, unknown> | undefined;
     return (message?.content as string) ?? "";
+  }
+
+  // ─── Multi-Modal: Transcription ─────────────────────────────────────────
+
+  async transcribe(params: TranscriptionParams): Promise<TranscriptionResult> {
+    const url = `${this._provider.baseUrl}/audio/transcriptions`;
+    const form = new FormData();
+    form.append("model", params.model);
+
+    if (params.file instanceof File) {
+      form.append("file", params.file);
+    } else if (params.file instanceof Blob) {
+      form.append("file", new File([params.file], "audio.wav"));
+    } else {
+      const buf = new ArrayBuffer(params.file.byteLength);
+      new Uint8Array(buf).set(params.file);
+      form.append("file", new File([buf], "audio.wav", { type: "audio/wav" }));
+    }
+
+    if (params.language) form.append("language", params.language);
+    if (params.prompt) form.append("prompt", params.prompt);
+    if (params.responseFormat) form.append("response_format", params.responseFormat);
+    if (params.temperature != null) form.append("temperature", String(params.temperature));
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: {
+        ...this._headers(),
+        "Content-Type": undefined,
+      },
+      body: form,
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const format = params.responseFormat ?? "json";
+    if (format === "json" || format === "text") {
+      const text = await res.text();
+      return { text };
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    return {
+      text: (data.text as string) ?? "",
+      language: data.language as string | undefined,
+      duration: data.duration as number | undefined,
+      segments: data.segments as TranscriptionResult["segments"],
+    };
   }
 }

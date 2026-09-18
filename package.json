@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -132,8 +132,11 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "benchmark": "vitest bench tests/benchmarks/",
     "lint": "oxlint src/",
-    "lint:custom": "node tools/check-validate-url.mjs"
+    "lint:custom": "node tools/check-validate-url.mjs",
+    "size": "node tools/check-size.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -149,8 +152,12 @@
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "oxlint": "^1.79.0",
+    "react": "^19.3.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "vue": "^3.5.43"
   }
 }

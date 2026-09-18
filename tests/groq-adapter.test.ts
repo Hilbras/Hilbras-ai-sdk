@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { GroqAdapter } from "../src/adapters/groq.js";
+import { ProviderRequestError } from "../src/errors/index.js";
 import type { Transport } from "../src/transport/transport.js";
 import type { ProviderConfig } from "../src/types/providers.js";
 import type { StreamChunk } from "../src/types/streams.js";
@@ -121,5 +122,78 @@ describe("GroqAdapter", () => {
     expect(reasoning.length).toBeGreaterThan(0);
     const texts = chunks.filter((c) => c.type === "text").map((c) => (c as { text: string }).text).join("");
     expect(texts).toBe("The answer is 42.");
+  });
+});
+
+// ─── Groq Multi-Modal ──────────────────────────────────────────────────────
+
+function mockJsonTransport(body: Record<string, unknown>): Transport {
+  return {
+    async request() {
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    },
+    async stream() { throw new Error("unused"); },
+    abort() {},
+  };
+}
+
+function mockErrorTransport(status = 500): Transport {
+  return {
+    async request() {
+      return new Response("error", { status, statusText: "Internal Server Error" });
+    },
+    async stream() { throw new Error("unused"); },
+    abort() {},
+  };
+}
+
+describe("GroqAdapter multi-modal", () => {
+  it("transcribe() routes to audio/transcriptions endpoint", async () => {
+    let capturedUrl = "";
+    const transport: Transport = {
+      async request(url) {
+        capturedUrl = url;
+        return new Response(JSON.stringify({ text: "Hello from Groq" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const adapter = new GroqAdapter({ provider, transport });
+    const result = await adapter.transcribe({ model: "whisper-large-v3", file: new Uint8Array([1, 2, 3]), responseFormat: "verbose_json" });
+    expect(capturedUrl).toContain("/audio/transcriptions");
+    expect(result.text).toBe("Hello from Groq");
+  });
+
+  it("transcribe() passes language parameter", async () => {
+    let capturedBody: FormData | undefined;
+    const transport: Transport = {
+      async request(_url, init) {
+        capturedBody = init.body as FormData;
+        return new Response(JSON.stringify({ text: "hola" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const adapter = new GroqAdapter({ provider, transport });
+    await adapter.transcribe({ model: "whisper-large-v3", file: new Uint8Array([1, 2, 3]), language: "es" });
+    expect(capturedBody?.get("language")).toBe("es");
+  });
+
+  it("transcribe() handles text response format", async () => {
+    const transport: Transport = {
+      async request() {
+        return new Response("plain text transcript", { status: 200, headers: { "Content-Type": "text/plain" } });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const adapter = new GroqAdapter({ provider, transport });
+    const result = await adapter.transcribe({ model: "whisper-large-v3", file: new Uint8Array([1, 2, 3]), responseFormat: "text" });
+    expect(result.text).toBe("plain text transcript");
+  });
+
+  it("transcribe() throws on API error", async () => {
+    const adapter = new GroqAdapter({ provider, transport: mockErrorTransport() });
+    await expect(adapter.transcribe({ model: "whisper-large-v3", file: new Uint8Array([1, 2, 3]) })).rejects.toThrow(ProviderRequestError);
   });
 });

@@ -383,6 +383,31 @@ describe("UsageDashboard", () => {
     expect(s.topProviders).toEqual([]);
     expect(s.topModels).toEqual([]);
   });
+
+  it("instrumentClient wires hook events", () => {
+    const dash = new UsageDashboard();
+    const listeners: Record<string, (...args: any[]) => void> = {};
+    const fakeClient = {
+      on: (event: string, fn: (...args: any[]) => void) => {
+        listeners[event] = fn;
+        return () => { delete listeners[event]; };
+      },
+    };
+
+    const unsub = dash.instrumentClient(fakeClient);
+    expect(listeners).toHaveProperty("request.completed");
+    expect(listeners).toHaveProperty("request.failed");
+
+    listeners["request.completed"]({ provider: "openai", model: "gpt-4o", durationMs: 100, inputTokens: 10, outputTokens: 5, timestamp: Date.now() });
+    expect(dash.size).toBe(1);
+
+    listeners["request.failed"]({ provider: "anthropic", model: "claude-4", durationMs: 200, error: "timeout", timestamp: Date.now() });
+    expect(dash.size).toBe(2);
+
+    unsub();
+    expect(listeners["request.completed"]).toBeUndefined();
+    expect(listeners["request.failed"]).toBeUndefined();
+  });
 });
 
 // ─── Body Logger ────────────────────────────────────────────────────────────

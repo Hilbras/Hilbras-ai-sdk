@@ -15,7 +15,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
-import type { RerankParams, RerankResult } from "../types/multi-modal.js";
+import type { RerankParams, RerankResult, EmbeddingParams, EmbeddingResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 
 export type CohereAdapterConfig = AdapterConfig;
@@ -270,6 +270,45 @@ export class CohereAdapter implements AIProvider {
     if (!content?.length) return "";
     const textBlock = content.find((b) => b.type === "text");
     return (textBlock?.text as string) ?? "";
+  }
+
+  // ─── Multi-Modal: Embeddings ────────────────────────────────────────────
+
+  async embed(params: EmbeddingParams): Promise<EmbeddingResult> {
+    const url = `${this._provider.baseUrl}/v1/embed`;
+    const texts = Array.isArray(params.input) ? params.input : [params.input];
+    const body: Record<string, unknown> = {
+      model: params.model,
+      texts,
+      input_type: "search_document",
+    };
+    if (params.dimensions) body.embedding_types = ["float"];
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const embeddings = data.embeddings as Record<string, unknown> | undefined;
+    const floatEmbeddings = embeddings?.float as number[][] | undefined;
+    const meta = data.meta as Record<string, unknown> | undefined;
+    const billedUnits = meta?.billed_units as Record<string, number> | undefined;
+
+    return {
+      embeddings: floatEmbeddings ?? [],
+      usage: billedUnits ? {
+        inputTokens: billedUnits.input_tokens ?? 0,
+        totalTokens: billedUnits.input_tokens ?? 0,
+      } : { inputTokens: 0, totalTokens: 0 },
+    };
   }
 
   // ─── Multi-Modal: Reranking ─────────────────────────────────────────────

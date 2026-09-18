@@ -16,6 +16,7 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
+import type { EmbeddingParams, EmbeddingResult, ImageParams, ImageResult, SpeechParams, SpeechResult, TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 
@@ -285,5 +286,170 @@ export class AzureAdapter implements AIProvider {
     if (!choices?.length) return "";
     const message = choices[0].message as Record<string, unknown> | undefined;
     return (message?.content as string) ?? "";
+  }
+
+  // ─── Multi-Modal: Embeddings ────────────────────────────────────────────
+
+  async embed(params: EmbeddingParams): Promise<EmbeddingResult> {
+    const deployment = params.model || this._deployment;
+    const url = `${this._provider.baseUrl}/openai/deployments/${deployment}/embeddings?api-version=${this._apiVersion}`;
+    const body: Record<string, unknown> = {
+      model: deployment,
+      input: params.input,
+    };
+    if (params.dimensions != null) body.dimensions = params.dimensions;
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const dataArr = data.data as Array<{ embedding: number[] }>;
+    const usage = data.usage as Record<string, number> | undefined;
+
+    return {
+      embeddings: dataArr.map((d) => d.embedding),
+      usage: {
+        inputTokens: usage?.prompt_tokens ?? 0,
+        totalTokens: usage?.total_tokens ?? 0,
+      },
+    };
+  }
+
+  // ─── Multi-Modal: Image Generation ──────────────────────────────────────
+
+  async generateImage(params: ImageParams): Promise<ImageResult> {
+    const deployment = params.model || this._deployment;
+    const url = `${this._provider.baseUrl}/openai/deployments/${deployment}/images/generations?api-version=${this._apiVersion}`;
+    const body: Record<string, unknown> = {
+      model: deployment,
+      prompt: params.prompt,
+    };
+    if (params.n != null) body.n = params.n;
+    if (params.size) body.size = params.size;
+    if (params.quality) body.quality = params.quality;
+    if (params.style) body.style = params.style;
+    if (params.responseFormat) body.response_format = params.responseFormat;
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const dataArr = data.data as Array<Record<string, string>>;
+
+    return {
+      images: dataArr.map((d) => ({
+        url: d.url,
+        b64Json: d.b64_json,
+        revisedPrompt: d.revised_prompt,
+      })),
+    };
+  }
+
+  // ─── Multi-Modal: Speech Synthesis ──────────────────────────────────────
+
+  async generateSpeech(params: SpeechParams): Promise<SpeechResult> {
+    const deployment = params.model || this._deployment;
+    const url = `${this._provider.baseUrl}/openai/deployments/${deployment}/audio/speech?api-version=${this._apiVersion}`;
+    const body: Record<string, unknown> = {
+      model: deployment,
+      input: params.input,
+      voice: params.voice,
+    };
+    if (params.responseFormat) body.response_format = params.responseFormat;
+    if (params.speed != null) body.speed = params.speed;
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: this._headers(),
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const buffer = await res.arrayBuffer();
+    const contentType = res.headers.get("content-type") ?? "";
+    const format = contentType.includes("ogg") ? "opus"
+      : contentType.includes("aac") ? "aac"
+      : contentType.includes("flac") ? "flac"
+      : contentType.includes("wav") ? "wav"
+      : contentType.includes("pcm") ? "pcm"
+      : "mp3";
+
+    return { audio: new Uint8Array(buffer), format };
+  }
+
+  // ─── Multi-Modal: Transcription ─────────────────────────────────────────
+
+  async transcribe(params: TranscriptionParams): Promise<TranscriptionResult> {
+    const deployment = params.model || this._deployment;
+    const url = `${this._provider.baseUrl}/openai/deployments/${deployment}/audio/transcriptions?api-version=${this._apiVersion}`;
+    const form = new FormData();
+    form.append("model", deployment);
+
+    if (params.file instanceof File) {
+      form.append("file", params.file);
+    } else if (params.file instanceof Blob) {
+      form.append("file", new File([params.file], "audio.wav"));
+    } else {
+      const buf = new ArrayBuffer(params.file.byteLength);
+      new Uint8Array(buf).set(params.file);
+      form.append("file", new File([buf], "audio.wav", { type: "audio/wav" }));
+    }
+
+    if (params.language) form.append("language", params.language);
+    if (params.prompt) form.append("prompt", params.prompt);
+    if (params.responseFormat) form.append("response_format", params.responseFormat);
+    if (params.temperature != null) form.append("temperature", String(params.temperature));
+
+    const res = await this._transport.request(url, {
+      method: "POST",
+      headers: {
+        ...this._headers(),
+        "Content-Type": undefined,
+      },
+      body: form,
+      signal: params.signal,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, errorBody, this._provider.name);
+    }
+
+    const format = params.responseFormat ?? "json";
+    if (format === "json" || format === "text") {
+      const text = await res.text();
+      return { text };
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    return {
+      text: (data.text as string) ?? "",
+      language: data.language as string | undefined,
+      duration: data.duration as number | undefined,
+      segments: data.segments as TranscriptionResult["segments"],
+    };
   }
 }

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.16.0] - 2026-09-18
+
+### Added
+
+- **UIMessage Protocol** — Standard streaming protocol for frontend UIs: `UIMessage`, `UIToolInvocation`, `UIProtocolMessage` types
+- **@hilbras/react** — React hooks for streaming LLM UIs:
+  - `useChat()` — manages a streaming chat conversation with message history
+  - `useCompletion()` — streams text completions from a prompt
+  - `useObject()` — streams structured JSON via incremental tool_call parsing
+  - `parseUIStream()` — SSE stream parser for the UIMessage protocol
+- **@hilbras/vue** — Vue 3 Composition API hooks:
+  - `useChat()`, `useCompletion()`, `useObject()` — same APIs with Vue reactive refs
+  - `parseUIStream()` — shared SSE stream parser
+- **@hilbras/svelte** — Svelte 5 runes-compatible hooks:
+  - `useChat()`, `useCompletion()`, `useObject()` — getter/setter pattern for Svelte reactivity
+  - `parseUIStream()` — shared SSE stream parser
+  - `subscribe()` pattern for Svelte stores integration
+- **Phase 6 infrastructure** — vitest coverage config (v8, 80% thresholds), sharded CI (4×2), benchmark suite, bundle size check
+- **Multi-provider parity gaps** — Azure multi-modal, Cohere embed, Groq transcribe, Ollama embed
+- **Type-level tests** — 22 type tests in `tests/types.test-d.ts`
+- 30 new tests (1118 total across 46 files)
+
+### Changed
+
+- CI now runs 8 parallel jobs (4 shards × Node 22/24) with separate lint + size check job
+- Coverage enforced at 80% line/branch/function/statements
+
+---
+
 ## [0.12.0] - 2026-09-17
 
 ### Added
