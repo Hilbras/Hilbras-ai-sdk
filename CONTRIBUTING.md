@@ -6,6 +6,8 @@
 git clone https://github.com/Hilbras/Hilbras-ai-sdk.git
 cd Hilbras-ai-sdk
 npm install
+npm run build
+npm test
 ```
 
 ## Scripts
@@ -14,7 +16,7 @@ npm install
 |---------|-------------|
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm run dev` | Watch mode compilation |
-| `npm test` | Run all tests |
+| `npm test` | Run all tests (automatically builds packages that need compiled output first) |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run lint` | Lint source with oxlint |
 
