@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+---
+
+## [0.17.0] - 2026-09-18
+
+### Added
+
+- **AWS Bedrock adapter** — Full Converse API support with SigV4 signing, 9 model catalog entries (Claude, Llama, Mistral, Cohere)
+- **Google Vertex AI adapter** — Vertex AI with project/region routing, third-party publishers (Anthropic, Meta, Mistral), 12 model catalog entries
+- **Hugging Face Inference adapter** — OpenAI-compatible chat endpoint + task-based inference, 7 model catalog entries
+- **Deepgram adapter** — Speech-to-text with Nova 2 and Whisper Large support
+- **ElevenLabs adapter** — Text-to-speech with voice customization and speed control
+- **Voyage AI adapter** — High-quality embeddings with OpenAI-compatible API
+- **Cohere Rerank adapter** — Document reranking with English and Multilingual models
+- **@hilbras/angular** — Angular services for streaming LLM UIs:
+  - `HilbrasChatService` — streaming chat with Angular signals
+  - `HilbrasCompletionService` — streaming text completions
+  - `HilbrasObjectService` — structured output streaming
+- **hilbras CLI** — Command-line tool for provider/model management:
+  - `hilbras init` — scaffold project config
+  - `hilbras provider add/list` — manage providers (17 templates)
+  - `hilbras model list` — list available models
+  - `hilbras cost estimate` — pricing calculator
+  - `hilbras doctor` — diagnose config issues
+- **@hilbras/rag** — RAG primitives for retrieval-augmented generation:
+  - `VectorStore` interface + `InMemoryVectorStore` (cosine/dot/L2 metrics)
+  - `chunkText` / `chunkDocuments` — recursive, sentence, fixed chunking
+  - `Retriever` — hybrid search with optional reranking
+  - `RAGPipeline` — end-to-end: ingest → chunk → embed → store → query
+
+### Changed
+
+- **Provider count**: 16 → 23 adapters
+- **Model catalog**: 37 new model entries across Bedrock, Vertex AI, HuggingFace, Deepgram, ElevenLabs, Voyage AI, Cohere Rerank
+- **Bundle size limit**: 1000KB → 1100KB (to accommodate new adapters)
+
+---
+
 ## [0.16.0] - 2026-09-18
 
 ### Added

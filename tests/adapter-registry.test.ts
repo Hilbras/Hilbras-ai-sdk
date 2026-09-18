@@ -84,7 +84,7 @@ describe("AdapterRegistry", () => {
 describe("getDefaultAdapterRegistry", () => {
   it("returns a registry with all built-in adapters", () => {
     const registry = getDefaultAdapterRegistry();
-    expect(registry.size).toBe(16);
+    expect(registry.size).toBe(23);
     expect(registry.has("openai")).toBe(true);
     expect(registry.has("anthropic")).toBe(true);
     expect(registry.has("google-genai")).toBe(true);
@@ -115,7 +115,7 @@ describe("getDefaultAdapterRegistry", () => {
     const registry = getDefaultAdapterRegistry();
     registry.register("custom", () => new CustomTestAdapter());
 
-    expect(registry.size).toBe(17);
+    expect(registry.size).toBe(24);
     expect(registry.has("custom")).toBe(true);
 
     const adapter = registry.create("custom", makeConfig("test"));

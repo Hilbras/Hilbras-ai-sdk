@@ -28,6 +28,13 @@ import { CohereAdapter } from "../adapters/cohere.js";
 import { PerplexityAdapter } from "../adapters/perplexity.js";
 import { CerebrasAdapter } from "../adapters/cerebras.js";
 import { DeepInfraAdapter } from "../adapters/deepinfra.js";
+import { BedrockAdapter } from "../adapters/bedrock.js";
+import { VertexAIAdapter } from "../adapters/google-vertex.js";
+import { HuggingFaceAdapter } from "../adapters/huggingface.js";
+import { DeepgramAdapter } from "../adapters/deepgram.js";
+import { ElevenLabsAdapter } from "../adapters/elevenlabs.js";
+import { VoyageAIAdapter } from "../adapters/voyageai.js";
+import { CohereRerankAdapter } from "../adapters/cohere-rerank.js";
 
 /** Factory function that creates an adapter from config */
 export type AdapterFactory = (config: AdapterConfig) => AIProvider;
@@ -108,6 +115,13 @@ export function getDefaultAdapterRegistry(): AdapterRegistry {
   registry.register("perplexity", (config) => new PerplexityAdapter(config));
   registry.register("cerebras", (config) => new CerebrasAdapter(config));
   registry.register("deepinfra", (config) => new DeepInfraAdapter(config));
+  registry.register("bedrock", (config) => new BedrockAdapter(config));
+  registry.register("google-vertex", (config) => new VertexAIAdapter(config));
+  registry.register("huggingface", (config) => new HuggingFaceAdapter(config));
+  registry.register("deepgram", (config) => new DeepgramAdapter(config));
+  registry.register("elevenlabs", (config) => new ElevenLabsAdapter(config));
+  registry.register("voyageai", (config) => new VoyageAIAdapter(config));
+  registry.register("cohere-rerank", (config) => new CohereRerankAdapter(config));
 
   return registry;
 }
