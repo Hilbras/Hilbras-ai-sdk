@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/react",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "React hooks for @hilbras/sdk — useChat, useCompletion for streaming LLM UIs",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +20,7 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "@hilbras/sdk": ">=0.21.0"
+    "@hilbras/sdk": ">=0.22.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

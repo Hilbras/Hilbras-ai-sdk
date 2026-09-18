@@ -1,28 +1,29 @@
 {
-  "name": "hilbras",
+  "name": "create-hilbras-app",
   "version": "0.22.0",
-  "description": "CLI for @hilbras/sdk — manage providers, models, and budgets",
+  "description": "Scaffold a new project with @hilbras/sdk — npx create-hilbras-app",
   "type": "module",
+  "main": "dist/index.js",
   "bin": {
-    "hilbras": "./dist/cli.js"
+    "create-hilbras-app": "dist/index.js"
   },
-  "main": "./dist/cli.js",
   "files": [
-    "dist"
+    "dist",
+    "templates"
   ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
   },
-  "dependencies": {},
   "devDependencies": {
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@types/node": "^26.2.0"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hilbras/Hilbras-ai-sdk.git",
-    "directory": "packages/cli"
+    "directory": "packages/create-hilbras-app"
   }
 }
