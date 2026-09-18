@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/angular",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "description": "Angular services for @hilbras/sdk — chat, completion, object streaming",
   "type": "module",
   "main": "dist/index.js",
@@ -21,7 +21,7 @@
   "peerDependencies": {
     "@angular/core": ">=19",
     "@angular/common": ">=19",
-    "@hilbras/sdk": ">=0.23.0",
+    "@hilbras/sdk": ">=0.24.0",
     "rxjs": ">=7"
   },
   "devDependencies": {
