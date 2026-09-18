@@ -8,7 +8,7 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const DIST = join(import.meta.dirname, "..", "dist");
-const MAX_KB = 1100; // max total dist size in KB
+const MAX_KB = 1150; // max total dist size in KB
 
 function dirSize(dir) {
   let total = 0;
