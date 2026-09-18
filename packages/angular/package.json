@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/angular",
-  "version": "0.17.3",
+  "version": "0.18.0",
   "description": "Angular services for @hilbras/sdk — chat, completion, object streaming",
   "type": "module",
   "main": "dist/index.js",
