@@ -171,9 +171,13 @@ export type {
   UseCompletionActions,
 } from "./types/ui-protocol.js";
 
-// ─── Adapters (advanced — usually not imported directly) ────────────────────
+// ─── Catalog ────────────────────────────────────────────────────────────────
 export { BUILTIN_MODELS, findModel, modelsForProvider } from "./catalog/models.js";
 export type { ModelEntry } from "./catalog/models.js";
+export { loadCatalog, listProviders, getProviderCatalog, searchModels, getModelsForProvider } from "./catalog/index.js";
+export type { CatalogModel, CatalogProvider, ProviderCatalog } from "./catalog/index.js";
+
+// ─── Adapters (advanced — usually not imported directly) ────────────────────
 export { AnthropicAdapter } from "./adapters/anthropic.js";
 export { GoogleGenAIAdapter } from "./adapters/google-genai.js";
 export { AzureAdapter } from "./adapters/azure.js";

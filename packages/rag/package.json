@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/rag",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "description": "RAG primitives for @hilbras/sdk — VectorStore, Retriever, Reranker, Pipeline",
   "type": "module",
   "main": "dist/index.js",
