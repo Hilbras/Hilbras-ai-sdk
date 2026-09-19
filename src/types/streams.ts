@@ -60,7 +60,34 @@ export interface PerformanceChunk {
   circuitBreakerUsed: boolean;
 }
 
-export type StreamChunk = TextChunk | ReasoningChunk | ToolCallChunk | UsageChunk | ErrorChunk | FinishChunk | PerformanceChunk;
+/** Structured data emitted alongside text (sources, citations, metadata) */
+export interface DataChunk {
+  type: "data";
+  /** The structured data payload */
+  data: unknown;
+}
+
+/** Annotation attached to the response */
+export interface AnnotationChunk {
+  type: "annotation";
+  /** Type of annotation (e.g., "source", "citation", "confidence") */
+  annotationType: string;
+  /** The annotation payload */
+  data: unknown;
+  /** Optional text range the annotation applies to */
+  range?: { start: number; end: number };
+}
+
+export type StreamChunk =
+  | TextChunk
+  | ReasoningChunk
+  | ToolCallChunk
+  | UsageChunk
+  | ErrorChunk
+  | FinishChunk
+  | PerformanceChunk
+  | DataChunk
+  | AnnotationChunk;
 
 // ─── Helper constructors ────────────────────────────────────────────────────
 
@@ -75,4 +102,8 @@ export const chunk = {
   }),
   error: (message: string, retryable = false): ErrorChunk => ({ type: "error", message, retryable }),
   performance: (metrics: Omit<PerformanceChunk, "type">): PerformanceChunk => ({ type: "performance", ...metrics }),
+  data: (data: unknown): DataChunk => ({ type: "data", data }),
+  annotation: (annotationType: string, data: unknown, range?: { start: number; end: number }): AnnotationChunk => ({
+    type: "annotation", annotationType, data, range,
+  }),
 } as const;

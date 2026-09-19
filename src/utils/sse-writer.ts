@@ -15,12 +15,16 @@
  */
 
 import type { StreamChunk } from "../types/streams.js";
-import type { UIProtocolMessage } from "../types/ui-protocol.js";
+import type { UIProtocolMessage, DataAnnotation } from "../types/ui-protocol.js";
 
 /** Options for the SSE writer */
 export interface SSEWriterOptions {
   /** Whether to include reasoning deltas in the stream (default: false) */
   includeReasoning?: boolean;
+  /** Whether to include data events in the stream (default: true) */
+  includeData?: boolean;
+  /** Whether to include annotation events in the stream (default: true) */
+  includeAnnotations?: boolean;
 }
 
 /**
@@ -40,6 +44,8 @@ export function createSSEStream(
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const includeReasoning = options?.includeReasoning ?? false;
+  const includeData = options?.includeData ?? true;
+  const includeAnnotations = options?.includeAnnotations ?? true;
 
   return new ReadableStream({
     async start(controller) {
@@ -97,15 +103,34 @@ export function createSSEStream(
               writeEvent(controller, encoder, { type: "error", error: chunk.message });
               break;
 
-            case "finish":
-              // Yield finish chunk as-is for advanced consumers
+            case "data":
+              if (includeData) {
+                writeEvent(controller, encoder, { type: "data", data: chunk.data });
+              }
               break;
 
-            case "performance":
-              // Performance metrics are internal, not sent to client
+            case "annotation":
+              if (includeAnnotations) {
+                writeEvent(controller, encoder, {
+                  type: "annotation",
+                  annotation: {
+                    type: chunk.annotationType,
+                    data: chunk.data,
+                    range: chunk.range,
+                  },
+                });
+              }
               break;
-          }
+
+          case "finish":
+            // Yield finish chunk as-is for advanced consumers
+            break;
+
+          case "performance":
+            // Performance metrics are internal, not sent to client
+            break;
         }
+      }
 
         // Flush any remaining pending tool calls
         for (const [id, tc] of pendingToolCalls) {
@@ -156,6 +181,88 @@ export function createSSEResponse(
   options?: SSEWriterOptions,
 ): Response {
   const stream = createSSEStream(chunks, options);
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+/**
+ * Create a ReadableStream that yields SSE-encoded object_delta events
+ * from an async iterable of StreamObjectChunk objects.
+ *
+ * @example
+ *   const chunks = client.streamObject({ messages, schema });
+ *   const sseStream = createObjectSSEStream(chunks);
+ *   return new Response(sseStream, {
+ *     headers: { "Content-Type": "text/event-stream" },
+ *   });
+ */
+export function createObjectSSEStream(
+  chunks: AsyncIterable<{ type: "object_delta"; partialObject: unknown } | StreamChunk>,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const chunk of chunks) {
+          if (chunk.type === "object_delta") {
+            writeEvent(controller, encoder, {
+              type: "object_delta",
+              partialObject: chunk.partialObject as Record<string, unknown>,
+            });
+          } else {
+            // Forward StreamChunk events through the standard protocol
+            switch (chunk.type) {
+              case "text":
+                writeEvent(controller, encoder, { type: "text_delta", text: chunk.text });
+                break;
+              case "usage":
+                writeEvent(controller, encoder, {
+                  type: "message_end",
+                  usage: {
+                    inputTokens: chunk.inputTokens,
+                    outputTokens: chunk.outputTokens,
+                    totalTokens: chunk.totalTokens,
+                  },
+                });
+                break;
+              case "error":
+                writeEvent(controller, encoder, { type: "error", error: chunk.message });
+                break;
+            }
+          }
+        }
+
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      } catch (err) {
+        try {
+          writeEvent(controller, encoder, {
+            type: "error",
+            error: err instanceof Error ? err.message : String(err),
+          });
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        } catch {
+          // Stream may already be closed
+        }
+        controller.close();
+      }
+    },
+  });
+}
+
+/**
+ * Create a Response object with SSE headers for object streaming.
+ */
+export function createObjectSSEResponse(
+  chunks: AsyncIterable<{ type: "object_delta"; partialObject: unknown } | StreamChunk>,
+): Response {
+  const stream = createObjectSSEStream(chunks);
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",

@@ -10,6 +10,7 @@ import { useState, useCallback, useRef } from "react";
 import type {
   UIMessage,
   UIToolInvocation,
+  DataAnnotation,
   UseChatOptions,
   UseChatState,
   UseChatActions,
@@ -29,6 +30,10 @@ export interface UseChatToolOptions extends UseChatOptions {
   onToolCall?: (toolCall: { id: string; name: string; args: Record<string, unknown> }) => Promise<unknown> | unknown;
   /** Callback after each step completes */
   onStepFinish?: (step: { step: number; text: string; toolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }> }) => void;
+  /** Callback when structured data is received alongside text */
+  onData?: (data: unknown) => void;
+  /** Callback when an annotation is received */
+  onAnnotation?: (annotation: DataAnnotation) => void;
 }
 
 export interface UseChatReturn extends UseChatState, UseChatActions {
@@ -51,6 +56,8 @@ export function useChat(options: UseChatToolOptions): UseChatReturn {
     maxSteps = 1,
     onToolCall,
     onStepFinish,
+    onData,
+    onAnnotation,
   } = options;
 
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
@@ -101,6 +108,8 @@ export function useChat(options: UseChatToolOptions): UseChatReturn {
       let content = "";
       let step = 0;
       const toolInvocations: UIToolInvocation[] = [];
+      const accumulatedData: unknown[] = [];
+      const accumulatedAnnotations: DataAnnotation[] = [];
       // Accumulate tool call args across deltas
       const pendingToolCalls = new Map<string, { name: string; argsBuffer: string }>();
 
@@ -219,6 +228,30 @@ export function useChat(options: UseChatToolOptions): UseChatReturn {
             }
             break;
 
+          case "data":
+            accumulatedData.push(msg.data);
+            onData?.(msg.data);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, data: [...accumulatedData] }
+                  : m
+              )
+            );
+            break;
+
+          case "annotation":
+            accumulatedAnnotations.push(msg.annotation);
+            onAnnotation?.(msg.annotation);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, annotations: [...accumulatedAnnotations] }
+                  : m
+              )
+            );
+            break;
+
           case "error":
             throw new Error(msg.error);
         }
@@ -246,6 +279,8 @@ export function useChat(options: UseChatToolOptions): UseChatReturn {
         ...assistantMessage,
         content,
         toolInvocations: toolInvocations.length > 0 ? toolInvocations : undefined,
+        data: accumulatedData.length > 0 ? accumulatedData : undefined,
+        annotations: accumulatedAnnotations.length > 0 ? accumulatedAnnotations : undefined,
       };
       onFinish?.(finalMessage);
       return finalMessage;
@@ -259,7 +294,7 @@ export function useChat(options: UseChatToolOptions): UseChatReturn {
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [api, provider, model, headers, body, maxSteps, onToolCall, onStepFinish, onFinish, onError]);
+  }, [api, provider, model, headers, body, maxSteps, onToolCall, onStepFinish, onData, onAnnotation, onFinish, onError]);
 
   const handleSubmit = useCallback(async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
