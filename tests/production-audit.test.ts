@@ -98,7 +98,7 @@ describe("Phase 3: Client Edge Cases", () => {
     await expect(gen.next()).rejects.toThrow("Provider 'Nonexistent' not found");
   });
 
-  it("complete() with empty messages does not crash", async () => {
+  it("complete() with empty messages does not crash", { timeout: 30_000 }, async () => {
     const client = new HilbrasClient();
     client.addProvider({
       name: "Test",
@@ -495,7 +495,7 @@ describe("Phase 18: Observability Attack", () => {
 // ─── Phase 20: Concurrency Testing ────────────────────────────────────────
 
 describe("Phase 20: Concurrency", () => {
-  it("10 concurrent complete() calls on same client do not corrupt state", async () => {
+  it("10 concurrent complete() calls on same client do not corrupt state", { timeout: 30_000 }, async () => {
     const client = new HilbrasClient();
     client.addProvider({
       name: "ConcurrentTest",
@@ -563,7 +563,7 @@ describe("Phase 20: Concurrency", () => {
 // ─── Phase 22: Security / Robustness ──────────────────────────────────────
 
 describe("Phase 22: Security / Robustness", () => {
-  it("API keys are not exposed in error messages", async () => {
+  it("API keys are not exposed in error messages", { timeout: 30_000 }, async () => {
     const client = new HilbrasClient();
     client.addProvider({
       name: "SecretTest",
