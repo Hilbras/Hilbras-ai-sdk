@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/remix",
-  "version": "0.25.2",
+  "version": "0.26.0",
   "description": "Remix integration for @hilbras/sdk — loaders, actions, streaming",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.25.2",
+    "@hilbras/sdk": ">=0.26.0",
     "@remix-run/react": ">=2.0.0",
     "react": ">=18.0.0"
   },

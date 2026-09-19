@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/eval",
-  "version": "0.25.2",
+  "version": "0.26.0",
   "description": "Evaluation and testing primitives for LLM outputs",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.25.2"
+    "@hilbras/sdk": ">=0.26.0"
   },
   "devDependencies": {
     "@hilbras/sdk": "workspace:*",
