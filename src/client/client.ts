@@ -18,7 +18,7 @@ import type { StreamChunk } from "../types/streams.js";
 import type { Transport } from "../transport/transport.js";
 import type { ExecutionPolicy } from "../types/policy.js";
 import type { TaskRequirement } from "../types/router.js";
-import type { StructuredOutputConfig } from "../types/schema.js";
+import type { StructuredOutputConfig, StreamObjectOptions, SchemaValidator } from "../types/schema.js";
 import type {
   EmbeddingResult,
   ImageResult,
@@ -1035,6 +1035,9 @@ export class HilbrasClient implements AsyncDisposable {
       const stepToolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }> = [];
       let stepUsage: { promptTokens: number; completionTokens: number } | undefined;
 
+      // Accumulate tool call arguments across incremental deltas (keyed by index)
+      const pendingToolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+
       for await (const chunk of this.stream({
         ...params,
         messages: currentMessages,
@@ -1043,22 +1046,66 @@ export class HilbrasClient implements AsyncDisposable {
           stepText += chunk.text;
           yield chunk;
         } else if (chunk.type === "tool_call") {
-          const args = JSON.parse(chunk.argumentsDelta ?? "{}");
-          stepToolCalls.push({ name: chunk.name ?? "unknown", args, result: undefined });
+          const idx = chunk.index ?? 0;
 
-          // Execute tool if handler provided
-          if (params.toolExecution) {
+          // Accumulate incremental argument deltas
+          if (!pendingToolCalls.has(idx)) {
+            pendingToolCalls.set(idx, {
+              id: chunk.id,
+              name: chunk.name ?? "unknown",
+              arguments: "",
+            });
+          }
+          const pending = pendingToolCalls.get(idx)!;
+          if (chunk.name) pending.name = chunk.name;
+          if (chunk.argumentsDelta) pending.arguments += chunk.argumentsDelta;
+
+          // Only finalize when done=true, or if done field is absent (backwards compat: treat as complete)
+          if (chunk.done === true || chunk.done === undefined) {
+            let parsedArgs: Record<string, unknown>;
             try {
-              const result = await params.toolExecution(chunk.name ?? "unknown", args);
-              stepToolCalls[stepToolCalls.length - 1].result = result;
-            } catch (err) {
-              stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+              parsedArgs = JSON.parse(pending.arguments || "{}");
+            } catch {
+              parsedArgs = { raw: pending.arguments };
             }
+
+            stepToolCalls.push({ name: pending.name, args: parsedArgs, result: undefined });
+
+            // Execute tool if handler provided
+            if (params.toolExecution) {
+              try {
+                const result = await params.toolExecution(pending.name, parsedArgs);
+                stepToolCalls[stepToolCalls.length - 1].result = result;
+              } catch (err) {
+                stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+              }
+            }
+
+            pendingToolCalls.delete(idx);
           }
         } else if (chunk.type === "usage") {
           stepUsage = { promptTokens: chunk.inputTokens ?? 0, completionTokens: chunk.outputTokens ?? 0 };
         } else {
           yield chunk;
+        }
+      }
+
+      // Flush any remaining pending tool calls (stream ended without done=true)
+      for (const [, tc] of pendingToolCalls) {
+        let parsedArgs: Record<string, unknown>;
+        try {
+          parsedArgs = JSON.parse(tc.arguments || "{}");
+        } catch {
+          parsedArgs = { raw: tc.arguments };
+        }
+        stepToolCalls.push({ name: tc.name, args: parsedArgs, result: undefined });
+        if (params.toolExecution) {
+          try {
+            const result = await params.toolExecution(tc.name, parsedArgs);
+            stepToolCalls[stepToolCalls.length - 1].result = result;
+          } catch (err) {
+            stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+          }
         }
       }
 
@@ -1089,9 +1136,11 @@ export class HilbrasClient implements AsyncDisposable {
   /**
    * Stream a structured object with progressive JSON rendering.
    * Yields partial object chunks as they are parsed from the stream.
+   * Supports both raw JSON Schema objects and SchemaValidator<T> (Zod/Valibot).
    *
    * @example
    * ```ts
+   * import { z } from "zod";
    * for await (const event of client.streamObject({
    *   provider: "OpenAI", model: "gpt-4o",
    *   messages: [{ role: "user", content: "Describe a cat" }],
@@ -1101,55 +1150,107 @@ export class HilbrasClient implements AsyncDisposable {
    * }
    * ```
    */
-  async *streamObject<T>(params: {
-    provider?: string;
-    model?: string;
-    messages: Array<Record<string, unknown> | Message>;
-    schema: Record<string, unknown>;
-    temperature?: number;
-    maxTokens?: number;
-    extra?: Record<string, unknown>;
-    signal?: AbortSignal;
-    policy?: ExecutionPolicy;
-  }): AsyncGenerator<{ type: "object_delta"; partialObject: Partial<T> } | StreamChunk> {
-    // Add system instruction for JSON output
-    const jsonInstruction = `You must respond with valid JSON matching this schema: ${JSON.stringify(params.schema)}. Output ONLY the JSON object, no markdown, no explanation.`;
+  async *streamObject<T>(
+    params: StreamObjectOptions<T> & {
+      messages: Array<Record<string, unknown> | Message>;
+      schema: Record<string, unknown> | SchemaValidator<T>;
+    },
+  ): AsyncGenerator<{ type: "object_delta"; partialObject: Partial<T> } | StreamChunk> {
+    const { onPartialObject, onFinalObject, ...streamParams } = params;
+
+    // Detect if schema is a SchemaValidator (has safeParse) or raw JSON Schema
+    const isValidator = (s: Record<string, unknown> | SchemaValidator<T>): s is SchemaValidator<T> =>
+      typeof s === "object" && s !== null && "safeParse" in s;
+
+    const schemaValidator = isValidator(params.schema) ? params.schema : undefined;
+    const rawSchema = schemaValidator
+      ? undefined
+      : (params.schema as Record<string, unknown>);
+
+    // Build schema description for the system prompt
+    const schemaDescription = schemaValidator
+      ? JSON.stringify(
+          // Try to extract JSON Schema from Zod/Valibot via .toJsonSchema() if available
+          typeof (schemaValidator as unknown as Record<string, unknown>).toJsonSchema === "function"
+            ? (schemaValidator as unknown as { toJsonSchema: () => Record<string, unknown> }).toJsonSchema()
+            : { description: "See schema parameter for details" },
+        )
+      : JSON.stringify(rawSchema);
+
+    // Build system instruction using the structured output utility
+    const { buildJsonSystemInstruction, extractJson } = await import("../output/structured.js");
+    const jsonInstruction = buildJsonSystemInstruction(schemaDescription);
 
     const messages: Message[] = [
       { role: "system", content: jsonInstruction },
       ...this._normalizeMessages(params.messages),
     ];
 
+    // Build JSON mode params based on the first provider's adapter
+    let jsonModeExtra: Record<string, unknown> = {};
+    if (params.provider) {
+      const providerConfig = this._registry.get(params.provider);
+      if (providerConfig?.adapter) {
+        const { buildJsonModeParams } = await import("../output/structured.js");
+        jsonModeExtra = buildJsonModeParams(providerConfig.adapter);
+      }
+    }
+
     let accumulatedText = "";
 
     for await (const chunk of this.stream({
-      ...params,
+      ...streamParams,
       messages,
       extra: {
         ...params.extra,
-        response_format: { type: "json_object" },
+        ...jsonModeExtra,
       },
     })) {
       if (chunk.type === "text") {
         accumulatedText += chunk.text;
-        // Try to parse partial JSON
+
+        // Extract JSON from the accumulated text
+        const extracted = extractJson(accumulatedText);
+
         try {
-          const partial = JSON.parse(accumulatedText);
-          yield { type: "object_delta", partialObject: partial as Partial<T> };
-        } catch {
-          // JSON not complete yet, try to extract partial
-          const match = accumulatedText.match(/\{[\s\S]*$/);
-          if (match) {
-            try {
-              // Try adding closing brace to see if it's close to valid
-              const partial = JSON.parse(match[0] + "}");
-              yield { type: "object_delta", partialObject: partial as Partial<T> };
-            } catch {
-              // Still building, yield empty partial
-              yield { type: "object_delta", partialObject: {} as Partial<T> };
+          const partial = JSON.parse(extracted) as Partial<T>;
+
+          // If we have a validator, validate partial objects (best-effort)
+          if (schemaValidator) {
+            const result = schemaValidator.safeParse(partial);
+            if (result.success) {
+              onPartialObject?.(result.data as Partial<T>);
+              yield { type: "object_delta", partialObject: result.data as Partial<T> };
+            } else {
+              // Partial not yet valid — yield what we have, skip validation
+              onPartialObject?.(partial);
+              yield { type: "object_delta", partialObject: partial };
             }
+          } else {
+            onPartialObject?.(partial);
+            yield { type: "object_delta", partialObject: partial };
           }
+        } catch {
+          // JSON not parseable yet — yield empty partial
+          yield { type: "object_delta", partialObject: {} as Partial<T> };
         }
+      } else if (chunk.type === "finish") {
+        // Final validation of complete object
+        const extracted = extractJson(accumulatedText);
+        try {
+          const finalObject = JSON.parse(extracted) as T;
+          if (schemaValidator) {
+            const result = schemaValidator.safeParse(finalObject);
+            if (result.success) {
+              onFinalObject?.(result.data);
+            }
+          } else {
+            onFinalObject?.(finalObject);
+          }
+        } catch {
+          // Final parse failed — the stream still completes
+        }
+        yield chunk;
       } else {
         yield chunk;
       }

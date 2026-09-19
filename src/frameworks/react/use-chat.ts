@@ -2,13 +2,15 @@
  * @hilbras/react — useChat Hook
  *
  * Manages a streaming chat conversation with an LLM backend.
- * Handles message state, streaming, input, error recovery,
+ * Handles message state, streaming, tool calls, input, error recovery,
  * optimistic updates, reload, and step-level callbacks.
  */
 
 import { useState, useCallback, useRef } from "react";
 import type {
   UIMessage,
+  UIToolInvocation,
+  DataAnnotation,
   UseChatOptions,
   UseChatState,
   UseChatActions,
@@ -20,6 +22,20 @@ function generateId(): string {
   return `msg_${Date.now()}_${_idCounter++}`;
 }
 
+/** Extended options with tool calling support */
+export interface UseChatToolOptions extends UseChatOptions {
+  /** Maximum number of tool-calling steps (default: 1 = no multi-step) */
+  maxSteps?: number;
+  /** Callback when a tool call is received; return the tool result */
+  onToolCall?: (toolCall: { id: string; name: string; args: Record<string, unknown> }) => Promise<unknown> | unknown;
+  /** Callback after each step completes */
+  onStepFinish?: (step: { step: number; text: string; toolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }> }) => void;
+  /** Callback when structured data is received alongside text */
+  onData?: (data: unknown) => void;
+  /** Callback when an annotation is received */
+  onAnnotation?: (annotation: DataAnnotation) => void;
+}
+
 export interface UseChatReturn extends UseChatState, UseChatActions {
   /** Reload the last assistant message */
   reload: () => Promise<void>;
@@ -27,7 +43,7 @@ export interface UseChatReturn extends UseChatState, UseChatActions {
   append: (message: UIMessage | { role: "user"; content: string }) => Promise<void>;
 }
 
-export function useChat(options: UseChatOptions): UseChatReturn {
+export function useChat(options: UseChatToolOptions): UseChatReturn {
   const {
     api,
     initialMessages = [],
@@ -37,6 +53,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     onError,
     headers = {},
     body = {},
+    maxSteps = 1,
+    onToolCall,
+    onStepFinish,
+    onData,
+    onAnnotation,
   } = options;
 
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
@@ -70,6 +91,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           provider,
           model,
           stream: true,
+          maxSteps,
           ...body,
         }),
         signal: controller.signal,
@@ -84,6 +106,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
 
       let content = "";
+      let step = 0;
+      const toolInvocations: UIToolInvocation[] = [];
+      const accumulatedData: unknown[] = [];
+      const accumulatedAnnotations: DataAnnotation[] = [];
+      // Accumulate tool call args across deltas
+      const pendingToolCalls = new Map<string, { name: string; argsBuffer: string }>();
+
       for await (const msg of parseUIStream(res.body)) {
         switch (msg.type) {
           case "text_delta":
@@ -94,6 +123,99 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               )
             );
             break;
+
+          case "reasoning_delta":
+            // Reasoning is available but not displayed by default
+            // Could be exposed via a callback in the future
+            break;
+
+          case "tool_call_start": {
+            const invocation: UIToolInvocation = {
+              id: msg.id,
+              name: msg.name,
+              args: {},
+              state: "call",
+            };
+            toolInvocations.push(invocation);
+            pendingToolCalls.set(msg.id, { name: msg.name, argsBuffer: "" });
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, toolInvocations: [...toolInvocations] }
+                  : m
+              )
+            );
+            break;
+          }
+
+          case "tool_call_delta": {
+            const pending = pendingToolCalls.get(msg.id);
+            if (pending) {
+              pending.argsBuffer += msg.args;
+              // Try to parse partial args for progressive display
+              try {
+                const partialArgs = JSON.parse(pending.argsBuffer);
+                const invocation = toolInvocations.find((t) => t.id === msg.id);
+                if (invocation) {
+                  invocation.args = partialArgs;
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMessage.id
+                        ? { ...m, toolInvocations: [...toolInvocations] }
+                        : m
+                    )
+                  );
+                }
+              } catch {
+                // Partial JSON not parseable yet, skip progressive update
+              }
+            }
+            break;
+          }
+
+          case "tool_call_end": {
+            const pending = pendingToolCalls.get(msg.id);
+            const invocation = toolInvocations.find((t) => t.id === msg.id);
+            if (invocation && pending) {
+              // Final parse of complete args
+              try {
+                invocation.args = JSON.parse(pending.argsBuffer || "{}");
+              } catch {
+                invocation.args = { raw: pending.argsBuffer };
+              }
+              pendingToolCalls.delete(msg.id);
+
+              // Execute tool if handler provided
+              if (onToolCall) {
+                try {
+                  invocation.state = "call";
+                  const result = await onToolCall({
+                    id: msg.id,
+                    name: invocation.name,
+                    args: invocation.args,
+                  });
+                  invocation.result = result;
+                  invocation.state = "result";
+                } catch (err) {
+                  invocation.state = "error";
+                  invocation.error = (err as Error).message;
+                }
+              } else {
+                // No handler — mark as call (not executed)
+                invocation.state = "call";
+              }
+
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessage.id
+                    ? { ...m, toolInvocations: [...toolInvocations] }
+                    : m
+                )
+              );
+            }
+            break;
+          }
+
           case "message_end":
             if (msg.usage) {
               setMessages((prev) =>
@@ -105,12 +227,61 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               );
             }
             break;
+
+          case "data":
+            accumulatedData.push(msg.data);
+            onData?.(msg.data);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, data: [...accumulatedData] }
+                  : m
+              )
+            );
+            break;
+
+          case "annotation":
+            accumulatedAnnotations.push(msg.annotation);
+            onAnnotation?.(msg.annotation);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, annotations: [...accumulatedAnnotations] }
+                  : m
+              )
+            );
+            break;
+
           case "error":
             throw new Error(msg.error);
         }
+
+        // Track step boundaries (text_delta after tool results = new step)
+        if (msg.type === "text_delta" && toolInvocations.length > 0) {
+          // Check if all tool calls are resolved
+          const allResolved = toolInvocations.every((t) => t.state !== "call");
+          if (allResolved) {
+            step++;
+            onStepFinish?.({
+              step,
+              text: content,
+              toolCalls: toolInvocations.map((t) => ({
+                name: t.name,
+                args: t.args,
+                result: t.result,
+              })),
+            });
+          }
+        }
       }
 
-      const finalMessage = { ...assistantMessage, content };
+      const finalMessage: UIMessage = {
+        ...assistantMessage,
+        content,
+        toolInvocations: toolInvocations.length > 0 ? toolInvocations : undefined,
+        data: accumulatedData.length > 0 ? accumulatedData : undefined,
+        annotations: accumulatedAnnotations.length > 0 ? accumulatedAnnotations : undefined,
+      };
       onFinish?.(finalMessage);
       return finalMessage;
     } catch (err) {
@@ -123,7 +294,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       abortRef.current = null;
       setIsLoading(false);
     }
-  }, [api, provider, model, headers, body, onFinish, onError]);
+  }, [api, provider, model, headers, body, maxSteps, onToolCall, onStepFinish, onData, onAnnotation, onFinish, onError]);
 
   const handleSubmit = useCallback(async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
@@ -188,7 +359,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     // Remove everything after the last user message
     const messagesUpToLastUser = messages.slice(0, lastUserIdx + 1);
-    const lastUserMessage = messages[lastUserIdx];
 
     const assistantMessage: UIMessage = {
       id: generateId(),

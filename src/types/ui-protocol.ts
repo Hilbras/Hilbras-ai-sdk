@@ -19,6 +19,10 @@ export interface UIMessage {
   createdAt?: number;
   /** Tool invocations triggered by this message */
   toolInvocations?: UIToolInvocation[];
+  /** Structured data received alongside the text */
+  data?: unknown[];
+  /** Annotations attached to this message */
+  annotations?: DataAnnotation[];
   /** Provider/model used for this message */
   provider?: string;
   model?: string;
@@ -40,6 +44,8 @@ export interface UIToolInvocation {
   state: "call" | "result" | "error";
   /** Error if state is "error" */
   error?: string;
+  /** Rendered component (for generative UI, set after rendering) */
+  rendered?: unknown;
 }
 
 // ─── Stream Protocol ────────────────────────────────────────────────────────
@@ -52,8 +58,21 @@ export type UIProtocolMessage =
   | { type: "tool_call_start"; id: string; name: string }
   | { type: "tool_call_delta"; id: string; args: string }
   | { type: "tool_call_end"; id: string }
+  | { type: "object_delta"; partialObject: Record<string, unknown> }
+  | { type: "data"; data: unknown }
+  | { type: "annotation"; annotation: DataAnnotation }
   | { type: "message_end"; usage?: { inputTokens: number; outputTokens: number; totalTokens: number } }
   | { type: "error"; error: string };
+
+/** A data annotation attached to the response */
+export interface DataAnnotation {
+  /** Type of annotation (e.g., "source", "citation", "confidence", "metadata") */
+  type: string;
+  /** The annotation payload */
+  data: unknown;
+  /** Optional: the text range this annotation applies to (character offsets) */
+  range?: { start: number; end: number };
+}
 
 // ─── Hook Options ───────────────────────────────────────────────────────────
 
@@ -117,8 +136,10 @@ export interface UseChatActions {
   setInput: (input: string) => void;
   /** Submit a new user message */
   handleSubmit: (e?: { preventDefault: () => void }) => Promise<void>;
-  /** Add a message programmatically */
-  append: (message: UIMessage) => Promise<void>;
+  /** Add a message programmatically and get a response */
+  append: (message: UIMessage | { role: "user"; content: string }) => Promise<void>;
+  /** Reload the last assistant message */
+  reload: () => Promise<void>;
   /** Replace all messages */
   setMessages: (messages: UIMessage[]) => void;
   /** Stop the current stream */

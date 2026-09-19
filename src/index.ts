@@ -73,7 +73,7 @@ export { ModelRouter } from "./router/model-router.js";
 export type { TaskRequirement, RoutingResult } from "./types/router.js";
 
 // ─── Structured Output ──────────────────────────────────────────────────────
-export type { SchemaValidator, StructuredOutputConfig } from "./types/schema.js";
+export type { SchemaValidator, StructuredOutputConfig, StreamObjectOptions, StreamObjectChunk } from "./types/schema.js";
 export { extractJson, buildJsonSystemInstruction, buildRepairPrompt, buildJsonModeParams } from "./output/structured.js";
 export { zodSchema, jsonSchema } from "./output/schema-helpers.js";
 
@@ -163,6 +163,7 @@ export type { OidcConfig } from "./credentials/oidc.js";
 export type {
   UIMessage,
   UIToolInvocation,
+  DataAnnotation,
   UIProtocolMessage,
   UseChatOptions,
   UseChatState,
@@ -219,3 +220,12 @@ export type { RealtimeSessionConfig, RealtimeEvent, RealtimeEventHandler } from 
 // ─── DevTools ───────────────────────────────────────────────────────────────
 export { DevTools } from "./devtools/index.js";
 export type { DevToolsConfig, LogEntry, RequestMetrics } from "./devtools/index.js";
+
+// ─── SSE Streaming Utilities ────────────────────────────────────────────────
+export {
+  createSSEStream,
+  createSSEResponse,
+  createObjectSSEStream,
+  createObjectSSEResponse,
+} from "./utils/sse-writer.js";
+export type { SSEWriterOptions } from "./utils/sse-writer.js";

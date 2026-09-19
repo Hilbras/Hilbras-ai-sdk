@@ -15,10 +15,25 @@ export type { UseObjectReturn, UseObjectOptions, UseObjectState, UseObjectAction
 
 export { parseUIStream } from "./stream-parser.js";
 
+export {
+  ComponentRegistry,
+  deserializeComponent,
+  serializeComponent,
+  initGenerativeUI,
+} from "./generative-ui.js";
+export type {
+  ComponentRef,
+  RenderedComponent,
+  GenerativeTool,
+  StreamUIOptions,
+  StreamUIResult,
+} from "./generative-ui.js";
+
 // Re-export types from the main SDK
 export type {
   UIMessage,
   UIToolInvocation,
+  DataAnnotation,
   UIProtocolMessage,
   UseChatOptions,
   UseChatState,

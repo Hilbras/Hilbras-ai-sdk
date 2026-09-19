@@ -3,6 +3,7 @@
  *
  * Angular service for streaming chat conversations with an LLM backend.
  * Uses Angular signals for reactive state management.
+ * Handles all protocol events including tool calls.
  *
  * Usage:
  *   @Component({ ... })
@@ -19,13 +20,24 @@
 
 import { Injectable, signal, computed } from "./angular-shim.js";
 
+export interface UIToolInvocation {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  result?: unknown;
+  state: "call" | "result" | "error";
+  error?: string;
+}
+
 export interface UIMessage {
   id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   createdAt?: number;
+  toolInvocations?: UIToolInvocation[];
   provider?: string;
   model?: string;
+  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
 }
 
 let _idCounter = 0;
@@ -38,7 +50,9 @@ export interface ChatOptions {
   initialMessages?: UIMessage[];
   provider?: string;
   model?: string;
-  onFinish?: (messages: UIMessage[]) => void;
+  maxSteps?: number;
+  onToolCall?: (toolCall: { id: string; name: string; args: Record<string, unknown> }) => Promise<unknown> | unknown;
+  onFinish?: (message: UIMessage) => void;
   onError?: (error: Error) => void;
   headers?: Record<string, string>;
   body?: Record<string, unknown>;
@@ -113,6 +127,7 @@ export class HilbrasChatService {
             content: m.content,
           })),
           stream: true,
+          maxSteps: options.maxSteps ?? 1,
           ...options.body,
         }),
         signal: controller.signal,
@@ -124,6 +139,9 @@ export class HilbrasChatService {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let content = "";
+      const toolInvocations: UIToolInvocation[] = [];
+      const pendingToolCalls = new Map<string, { name: string; argsBuffer: string }>();
 
       while (true) {
         const { done, value } = await reader.read();
@@ -144,19 +162,122 @@ export class HilbrasChatService {
           let data: Record<string, unknown>;
           try { data = JSON.parse(rawData); } catch { continue; }
 
-          if (data.type === "text" && typeof data.text === "string") {
-            this._messages.update((msgs) => {
-              const updated = [...msgs];
-              const last = updated[updated.length - 1];
-              if (last) updated[updated.length - 1] = { ...last, content: last.content + data.text };
-              return updated;
-            });
+          switch (data.type) {
+            case "text_delta":
+              content += data.text as string;
+              this._messages.update((msgs) => {
+                const updated = [...msgs];
+                const last = updated[updated.length - 1];
+                if (last) updated[updated.length - 1] = { ...last, content };
+                return updated;
+              });
+              break;
+
+            case "tool_call_start": {
+              const invocation: UIToolInvocation = {
+                id: data.id as string,
+                name: data.name as string,
+                args: {},
+                state: "call",
+              };
+              toolInvocations.push(invocation);
+              pendingToolCalls.set(data.id as string, { name: data.name as string, argsBuffer: "" });
+              this._messages.update((msgs) => {
+                const updated = [...msgs];
+                const last = updated[updated.length - 1];
+                if (last) updated[updated.length - 1] = { ...last, toolInvocations: [...toolInvocations] };
+                return updated;
+              });
+              break;
+            }
+
+            case "tool_call_delta": {
+              const pending = pendingToolCalls.get(data.id as string);
+              if (pending) {
+                pending.argsBuffer += data.args as string;
+                try {
+                  const partialArgs = JSON.parse(pending.argsBuffer);
+                  const invocation = toolInvocations.find((t) => t.id === data.id);
+                  if (invocation) {
+                    invocation.args = partialArgs;
+                    this._messages.update((msgs) => {
+                      const updated = [...msgs];
+                      const last = updated[updated.length - 1];
+                      if (last) updated[updated.length - 1] = { ...last, toolInvocations: [...toolInvocations] };
+                      return updated;
+                    });
+                  }
+                } catch {
+                  // Partial JSON not parseable yet
+                }
+              }
+              break;
+            }
+
+            case "tool_call_end": {
+              const pending = pendingToolCalls.get(data.id as string);
+              const invocation = toolInvocations.find((t) => t.id === data.id);
+              if (invocation && pending) {
+                try {
+                  invocation.args = JSON.parse(pending.argsBuffer || "{}");
+                } catch {
+                  invocation.args = { raw: pending.argsBuffer };
+                }
+                pendingToolCalls.delete(data.id as string);
+
+                if (options.onToolCall) {
+                  try {
+                    invocation.state = "call";
+                    const result = await options.onToolCall({
+                      id: data.id as string,
+                      name: invocation.name,
+                      args: invocation.args,
+                    });
+                    invocation.result = result;
+                    invocation.state = "result";
+                  } catch (err) {
+                    invocation.state = "error";
+                    invocation.error = (err as Error).message;
+                  }
+                } else {
+                  invocation.state = "call";
+                }
+
+                this._messages.update((msgs) => {
+                  const updated = [...msgs];
+                  const last = updated[updated.length - 1];
+                  if (last) updated[updated.length - 1] = { ...last, toolInvocations: [...toolInvocations] };
+                  return updated;
+                });
+              }
+              break;
+            }
+
+            case "message_end": {
+              const usage = data.usage as { inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
+              if (usage) {
+                this._messages.update((msgs) => {
+                  const updated = [...msgs];
+                  const last = updated[updated.length - 1];
+                  if (last) updated[updated.length - 1] = { ...last, usage };
+                  return updated;
+                });
+              }
+              break;
+            }
+
+            case "error":
+              throw new Error(data.error as string);
           }
         }
       }
 
-      const finalMessages = this._messages();
-      options.onFinish?.(finalMessages);
+      const finalMessage: UIMessage = {
+        ...assistantMessage,
+        content,
+        toolInvocations: toolInvocations.length > 0 ? toolInvocations : undefined,
+      };
+      options.onFinish?.(finalMessage);
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       const error = err instanceof Error ? err : new Error(String(err));

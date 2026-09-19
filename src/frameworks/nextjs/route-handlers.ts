@@ -2,7 +2,12 @@
  * @hilbras/nextjs — Route Handler Helpers
  *
  * Helpers for Next.js App Router route handlers.
+ * Uses the HilbrasClient to generate streaming responses with full protocol support.
  */
+
+import { HilbrasClient } from "../../client/client.js";
+import { createSSEResponse } from "../../utils/sse-writer.js";
+import type { Tool } from "../../types/tools.js";
 
 export interface ChatRequest {
   messages: Array<{ role: string; content: string }>;
@@ -11,6 +16,9 @@ export interface ChatRequest {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  tools?: Tool[];
+  maxSteps?: number;
+  stream?: boolean;
 }
 
 export interface ChatResponse {
@@ -44,34 +52,45 @@ export function createChatHandler(options: {
   provider: string;
   model: string;
   systemPrompt?: string;
+  tools?: Tool[];
+  maxSteps?: number;
 }) {
   async function POST(req: Request): Promise<Response> {
     const body: ChatRequest = await req.json();
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          // Placeholder streaming response
-          const response = `Echo: ${body.messages.map((m) => m.content).join(", ")}`;
-          for (const char of response) {
-            controller.enqueue(encoder.encode(char));
-            await new Promise((r) => setTimeout(r, 5));
-          }
-          controller.close();
-        } catch (error) {
-          controller.error(error);
-        }
-      },
+    const client = new HilbrasClient();
+    client.addProviderFromCatalog(options.provider, body.model ?? options.model, process.env.AI_API_KEY ?? "");
+
+    const messages = [
+      ...(options.systemPrompt ? [{ role: "system", content: options.systemPrompt }] : []),
+      ...body.messages,
+    ];
+
+    if (body.stream === false) {
+      const result = await client.complete({
+        provider: options.provider,
+        model: body.model ?? options.model,
+        messages,
+        temperature: body.temperature,
+        maxTokens: body.maxTokens,
+      });
+      return Response.json({
+        id: `cmpl-${Date.now()}`,
+        choices: [{ message: { role: "assistant", content: result }, finishReason: "stop" }],
+      });
+    }
+
+    const chunks = client.streamText({
+      provider: options.provider,
+      model: body.model ?? options.model,
+      messages,
+      temperature: body.temperature,
+      maxTokens: body.maxTokens,
+      tools: body.tools ?? options.tools,
+      maxSteps: body.maxSteps ?? options.maxSteps,
     });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    return createSSEResponse(chunks);
   }
 
   return { POST };
@@ -87,20 +106,21 @@ export function createCompletionHandler(options: {
   async function POST(req: Request): Promise<Response> {
     const body = await req.json();
 
+    const client = new HilbrasClient();
+    client.addProviderFromCatalog(options.provider, body.model ?? options.model, process.env.AI_API_KEY ?? "");
+
+    const result = await client.complete({
+      provider: options.provider,
+      model: options.model,
+      messages: [{ role: "user", content: body.prompt ?? "" }],
+    });
+
     return Response.json({
       id: `cmpl-${Date.now()}`,
       choices: [{
-        message: {
-          role: "assistant",
-          content: `Response to: ${body.prompt || ""}`,
-        },
+        message: { role: "assistant", content: result },
         finishReason: "stop",
       }],
-      usage: {
-        promptTokens: 10,
-        completionTokens: 20,
-        totalTokens: 30,
-      },
     });
   }
 
