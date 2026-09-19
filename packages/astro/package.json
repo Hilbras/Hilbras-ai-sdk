@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/astro",
-  "version": "0.26.0",
+  "version": "0.26.5",
   "description": "Astro integration for @hilbras/sdk — islands, endpoints, streaming",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@hilbras/sdk": ">=0.26.0",
+    "@hilbras/sdk": ">=0.26.5",
     "astro": ">=4.0.0"
   },
   "devDependencies": {

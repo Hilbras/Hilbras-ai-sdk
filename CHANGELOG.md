@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.26.5] - 2026-09-19
+
+### Updated
+
+- **Provider catalog with September 2026 frontier models** — Updated catalog based on live research from provider documentation and AI model trackers:
+
+| Provider | New Models | Context Window |
+|----------|------------|----------------|
+| OpenAI | GPT-6 Astra, GPT-5.6 Sol/Terra/Luna, GPT-5.5, GPT-5.4 Pro | 200K–1.05M |
+| Anthropic | Claude Fable 5.1, Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5 | 200K–1M |
+| Google | Gemini 3.8/3.7/3.6/3.5 Flash, Gemini 3.1 Pro, Gemini 3 Flash | 1M |
+| Azure | GPT-6 Astra, GPT-5.6 Sol/Terra, o3 | 200K–1.05M |
+| Groq | Llama 3.3 70B, Llama 3.2 90B/11B/3B, Qwen 2.5 Coder/72B | 32K–131K |
+| Bedrock | Claude Fable 5.1, Opus 5, Sonnet 5, Haiku 4.5, Nova Pro/Lite | 200K–1M |
+| Vertex | Gemini 3.8/3.7 Flash, 3.1 Pro, 2.5 Pro | 1M |
+| Hugging Face | Llama 4 Maverick/Scout, Qwen 3.8 Max, DeepSeek V4 Pro/Flash | 1M–10M |
+| DeepSeek | V4 Pro, V4.1 Flash | 1M |
+| xAI | Grok 4.6, 4.5, 4.3, 4.20 Reasoning | 500K–1M |
+| Together | Llama 4 Maverick/Scout, DeepSeek V4 Pro/Flash | 1M–10M |
+| Fireworks | Llama 4 Maverick/Scout, DeepSeek V4 Pro | 1M–10M |
+| Cohere | Command A+, Command A, Command R+ | 128K–256K |
+| Ollama | Llama 4 Maverick/Scout, Qwen 3.8 Max, DeepSeek V4 Pro/Flash | 1M–10M |
+| Voyage AI | Voyage 3 Large, Voyage Code 3 | 32K |
+| Z.ai | GLM-5 | 200K |
+| Mistral | Mistral Large 3, Mistral Large 2 | 128K–256K |
+
+- **Version bumped to 0.26.5** across all packages
+
 ### Fixed
 
 - **Broken local dev workflow** — `npm test` now works after a fresh clone following CONTRIBUTING.md. Added `pretest` script that builds `packages/cli` (the only package whose tests require compiled output). CI workflow simplified to use `npm test` instead of a hidden manual `npx tsc -p packages/cli/tsconfig.json` step.
