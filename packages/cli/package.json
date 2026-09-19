@@ -1,6 +1,6 @@
 {
   "name": "hilbras",
-  "version": "0.26.6",
+  "version": "1.0.0",
   "description": "CLI for @hilbras/sdk — manage providers, models, and budgets",
   "type": "module",
   "bin": {
