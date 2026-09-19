@@ -67,16 +67,8 @@ import { HilbrasClient } from "@hilbras/sdk";
 
 const client = new HilbrasClient();
 
-// Add a provider (one-time setup)
-client.addProvider({
-  name: "OpenAI",
-  baseUrl: "https://api.openai.com/v1",
-  authentication: { type: "bearer", apiKey: process.env.OPENAI_API_KEY! },
-  adapter: "openai",
-});
-
-// Or use the built-in catalog for common models
-// client.addProviderFromCatalog("openai", "gpt-4o");
+// One-line setup using built-in catalog (OpenAI, Anthropic, Gemini, Groq, etc.)
+client.addProviderFromCatalog("openai", "gpt-4o", process.env.OPENAI_API_KEY!);
 
 // Streaming
 for await (const chunk of client.stream({

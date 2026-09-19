@@ -5,8 +5,6 @@
  * resources, and prompts in your Hilbras SDK applications.
  */
 
-import type { Tool } from "../types/tools.js";
-
 // ─── MCP Types ──────────────────────────────────────────────────────────────
 
 export interface MCPServerConfig {
@@ -78,7 +76,7 @@ export class MCPClient {
     if (conn) conn.tools = tools;
   }
 
-  async callTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {
+  async callTool(serverName: string, toolName: string, _args: Record<string, unknown>): Promise<unknown> {
     const connection = this._connections.get(serverName);
     if (!connection?.connected) throw new Error(`MCP server "${serverName}" not connected`);
     return { result: `Called ${toolName} on ${serverName}` };
