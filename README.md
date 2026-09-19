@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1278%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1406%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -58,26 +58,30 @@ npm install @hilbras/sdk
 
 ## Quick start
 
+```bash
+npm install @hilbras/sdk
+```
+
 ```typescript
 import { HilbrasClient } from "@hilbras/sdk";
 
 const client = new HilbrasClient();
 
+// Add a provider (one-time setup)
 client.addProvider({
   name: "OpenAI",
   baseUrl: "https://api.openai.com/v1",
   authentication: { type: "bearer", apiKey: process.env.OPENAI_API_KEY! },
   adapter: "openai",
-  models: [
-    { id: "gpt-5.6", contextWindow: 1_048_576, maxOutputTokens: 131_072,
-      capabilities: { streaming: true, tools: true, vision: true, reasoning: true, structuredOutput: true, parallelTools: true, systemPrompts: true } },
-  ],
 });
+
+// Or use the built-in catalog for common models
+// client.addProviderFromCatalog("openai", "gpt-4o");
 
 // Streaming
 for await (const chunk of client.stream({
   provider: "OpenAI",
-  model: "gpt-5.6",
+  model: "gpt-4o",
   messages: [{ role: "user", content: "Hello!" }],
 })) {
   if (chunk.type === "text") process.stdout.write(chunk.text);
@@ -86,7 +90,7 @@ for await (const chunk of client.stream({
 // Non-streaming
 const reply = await client.complete({
   provider: "OpenAI",
-  model: "gpt-5.6",
+  model: "gpt-4o",
   messages: [{ role: "user", content: "Hello!" }],
 });
 ```
