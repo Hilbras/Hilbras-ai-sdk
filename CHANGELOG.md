@@ -11,6 +11,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.26.6] - 2026-09-19
+
+### Changed
+
+- **Package consolidation** — Consolidated 13 separate packages into the core `@hilbras/sdk` package. Users now import from a single package with subpath exports instead of installing 16 separate packages.
+
+#### New Subpath Exports
+
+| Path | Description |
+|------|-------------|
+| `@hilbras/sdk/react` | React hooks (useChat, useCompletion, useObject) |
+| `@hilbras/sdk/vue` | Vue composition functions |
+| `@hilbras/sdk/svelte` | Svelte stores and utilities |
+| `@hilbras/sdk/solid` | Solid.js hooks |
+| `@hilbras/sdk/qwik` | Qwik hooks |
+| `@hilbras/sdk/angular` | Angular services |
+| `@hilbras/sdk/nextjs` | Next.js route handlers and client |
+| `@hilbras/sdk/astro` | Astro endpoints and hooks |
+| `@hilbras/sdk/remix` | Remix action handlers |
+| `@hilbras/sdk/agent` | Agent/Tool Loop functionality |
+| `@hilbras/sdk/eval` | Evaluation framework and metrics |
+| `@hilbras/sdk/rag` | RAG pipeline and vector stores |
+| `@hilbras/sdk/fine-tune` | Fine-tuning data preparation |
+
+#### Migration
+
+```diff
+- import { useChat } from "@hilbras/react";
++ import { useChat } from "@hilbras/sdk/react";
+
+- import { evaluate } from "@hilbras/eval";
++ import { evaluate } from "@hilbras/sdk/eval";
+```
+
+### Added
+
+- Optional peer dependencies for all framework libraries (react, vue, svelte, solid, etc.)
+- `experimentalDecorators` enabled in tsconfig for Angular compatibility
+- Framework test files consolidated into main `tests/` directory
+
+### Removed
+
+- Separate `@hilbras/{react,vue,svelte,solid,qwik,angular,nextjs,astro,remix,agent,eval,rag,fine-tune}` packages (now available as subpath exports of `@hilbras/sdk`)
+- `@hilbras/cli` and `@hilbras/create-hilbras-app` remain as separate packages
+
+---
+
 ## [0.26.5] - 2026-09-19
 
 ### Updated
