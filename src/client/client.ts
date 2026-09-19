@@ -45,7 +45,7 @@ import type { HookEvent, HookEventType, HookListener } from "../types/observabil
 import { BudgetTracker } from "../cost/tracker.js";
 import type { BudgetConfig, CostReport } from "../cost/types.js";
 import { estimateTokens } from "../tokens/counter.js";
-import { loadCatalog, getProviderCatalog, getModelsForProvider } from "../catalog/index.js";
+import { getProviderCatalog, getModelsForProvider } from "../catalog/index.js";
 import type { AdapterName } from "../types/providers.js";
 import type { ModelCapabilities } from "../types/models.js";
 
@@ -832,7 +832,7 @@ export class HilbrasClient implements AsyncDisposable {
     requestId: string,
     providerName: string,
     modelId: string,
-    operation: string,
+    _operation: string,
     fn: (signal: AbortSignal | undefined) => Promise<T>,
     userSignal: AbortSignal | undefined,
   ): Promise<T> {
