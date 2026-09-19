@@ -1035,6 +1035,9 @@ export class HilbrasClient implements AsyncDisposable {
       const stepToolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }> = [];
       let stepUsage: { promptTokens: number; completionTokens: number } | undefined;
 
+      // Accumulate tool call arguments across incremental deltas (keyed by index)
+      const pendingToolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+
       for await (const chunk of this.stream({
         ...params,
         messages: currentMessages,
@@ -1043,22 +1046,66 @@ export class HilbrasClient implements AsyncDisposable {
           stepText += chunk.text;
           yield chunk;
         } else if (chunk.type === "tool_call") {
-          const args = JSON.parse(chunk.argumentsDelta ?? "{}");
-          stepToolCalls.push({ name: chunk.name ?? "unknown", args, result: undefined });
+          const idx = chunk.index ?? 0;
 
-          // Execute tool if handler provided
-          if (params.toolExecution) {
+          // Accumulate incremental argument deltas
+          if (!pendingToolCalls.has(idx)) {
+            pendingToolCalls.set(idx, {
+              id: chunk.id,
+              name: chunk.name ?? "unknown",
+              arguments: "",
+            });
+          }
+          const pending = pendingToolCalls.get(idx)!;
+          if (chunk.name) pending.name = chunk.name;
+          if (chunk.argumentsDelta) pending.arguments += chunk.argumentsDelta;
+
+          // Only finalize when done=true, or if done field is absent (backwards compat: treat as complete)
+          if (chunk.done === true || chunk.done === undefined) {
+            let parsedArgs: Record<string, unknown>;
             try {
-              const result = await params.toolExecution(chunk.name ?? "unknown", args);
-              stepToolCalls[stepToolCalls.length - 1].result = result;
-            } catch (err) {
-              stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+              parsedArgs = JSON.parse(pending.arguments || "{}");
+            } catch {
+              parsedArgs = { raw: pending.arguments };
             }
+
+            stepToolCalls.push({ name: pending.name, args: parsedArgs, result: undefined });
+
+            // Execute tool if handler provided
+            if (params.toolExecution) {
+              try {
+                const result = await params.toolExecution(pending.name, parsedArgs);
+                stepToolCalls[stepToolCalls.length - 1].result = result;
+              } catch (err) {
+                stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+              }
+            }
+
+            pendingToolCalls.delete(idx);
           }
         } else if (chunk.type === "usage") {
           stepUsage = { promptTokens: chunk.inputTokens ?? 0, completionTokens: chunk.outputTokens ?? 0 };
         } else {
           yield chunk;
+        }
+      }
+
+      // Flush any remaining pending tool calls (stream ended without done=true)
+      for (const [, tc] of pendingToolCalls) {
+        let parsedArgs: Record<string, unknown>;
+        try {
+          parsedArgs = JSON.parse(tc.arguments || "{}");
+        } catch {
+          parsedArgs = { raw: tc.arguments };
+        }
+        stepToolCalls.push({ name: tc.name, args: parsedArgs, result: undefined });
+        if (params.toolExecution) {
+          try {
+            const result = await params.toolExecution(tc.name, parsedArgs);
+            stepToolCalls[stepToolCalls.length - 1].result = result;
+          } catch (err) {
+            stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+          }
         }
       }
 

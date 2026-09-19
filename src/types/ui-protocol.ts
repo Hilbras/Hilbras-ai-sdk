@@ -117,8 +117,10 @@ export interface UseChatActions {
   setInput: (input: string) => void;
   /** Submit a new user message */
   handleSubmit: (e?: { preventDefault: () => void }) => Promise<void>;
-  /** Add a message programmatically */
-  append: (message: UIMessage) => Promise<void>;
+  /** Add a message programmatically and get a response */
+  append: (message: UIMessage | { role: "user"; content: string }) => Promise<void>;
+  /** Reload the last assistant message */
+  reload: () => Promise<void>;
   /** Replace all messages */
   setMessages: (messages: UIMessage[]) => void;
   /** Stop the current stream */
