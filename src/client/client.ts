@@ -41,6 +41,8 @@ import { resolvePolicy } from "../reliability/presets.js";
 import { ModelRouter } from "../router/model-router.js";
 import { buildJsonSystemInstruction, buildRepairPrompt, extractJson, buildJsonModeParams } from "../output/structured.js";
 import { ClientHooks } from "./hooks.js";
+import type { StructuredLogger } from "../telemetry/structured-logger.js";
+import type { OpenTelemetryExporter } from "../telemetry/opentelemetry.js";
 import type { HookEvent, HookEventType, HookListener } from "../types/observability.js";
 import { BudgetTracker } from "../cost/tracker.js";
 import type { BudgetConfig, CostReport } from "../cost/types.js";
@@ -81,6 +83,16 @@ export interface HilbrasClientConfig {
    * `sessionBudget`, `perRequestBudget`.
    */
   sdkConfig?: import("../config/schema.js").SDKConfig;
+  /**
+   * v1.1.0: Optional telemetry sinks. When provided, the client automatically
+   * forwards lifecycle events to the configured sinks.
+   */
+  telemetry?: {
+    /** Structured JSON logger for production */
+    structuredLogger?: StructuredLogger;
+    /** OpenTelemetry exporter for traces and metrics */
+    openTelemetry?: OpenTelemetryExporter;
+  };
 }
 
 export class HilbrasClient implements AsyncDisposable {
@@ -109,6 +121,23 @@ export class HilbrasClient implements AsyncDisposable {
     this._defaultPolicy = config?.policy ?? (sdk ? this._policyFromSDK(sdk) : undefined);
     const sdkBudget = sdk ? this._budgetFromSDK(sdk) : undefined;
     this._budgetTracker = new BudgetTracker(config?.budget ?? sdkBudget);
+
+    // v1.1.0: Register providers from SDKConfig if provided
+    if (sdk?.providers?.length) {
+      for (const provider of sdk.providers) {
+        if (!this._registry.get(provider.name)) {
+          this.addProvider(provider);
+        }
+      }
+    }
+
+    // v1.1.0: Wire telemetry sinks
+    if (config?.telemetry?.structuredLogger) {
+      config.telemetry.structuredLogger.instrumentClient(this as any);
+    }
+    if (config?.telemetry?.openTelemetry) {
+      config.telemetry.openTelemetry.instrumentClient(this as any);
+    }
   }
 
   /**

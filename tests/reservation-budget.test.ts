@@ -145,7 +145,7 @@ describe("Atomicity", () => {
   it("no double-reservation of same ID — second is rejected", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     expect(t.reserve("r1", 0.3)).not.toBeNull();
-    expect(t.reserve("r1", 0.3)).toBeNull(); // rejected
+    expect(() => t.reserve("r1", 0.3)).toThrow(); // rejected
     expect(t.report().totalReserved).toBe(0.3); // first reservation intact
   });
 

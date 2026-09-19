@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-09-19
+
+### Fixed
+- **BUG-01 (P0):** Env-var API key no longer redacted before storage — `HILBRAS_PROVIDER_KEY` now works correctly
+- **BUG-02 (P1):** ReasoningNormalizer buffer leak — no more duplicate reasoning content across chunks
+- **BUG-03 (P2):** FetchTransport double-release — pool count no longer goes negative on errors
+- **BUG-06 (P2):** FetchTransport cleanup interval now properly cleared via `destroy()` method
+- **BUG-07 (P3):** Circuit-breaker `halfOpenCalls` can no longer go negative
+- **BUG-08 (P3):** Duplicate reservation IDs now throw descriptive error instead of silent `null`
+- **BUG-09 (P3):** `extractJson` returns empty string for empty input instead of raw text
+- **A3 (P1):** Anthropic adapter now correctly translates `tool` role messages to `tool_result` format
+- **SEC-01 (P2):** RealtimeSession WebSocket URLs now validated through SSRF guard
+- **R1 (P2):** `RealtimeSession.connect()` now times out after 30s instead of hanging forever
+- **C5 (P1):** `SDKConfig.providers` now auto-registered in `HilbrasClient` constructor
+
+### Added
+- Telemetry wiring: `HilbrasClientConfig.telemetry` option for `StructuredLogger` and `OpenTelemetryExporter`
+- `FetchTransport.destroy()` method to clean up intervals and abort in-flight requests
+- `stream()` and `complete()` integration tests
+- Comprehensive audit fix plan (`v1.1.0-AUDIT-FIX-PLAN.md`)
+
+---
+
 ## [Unreleased]
 
 ---

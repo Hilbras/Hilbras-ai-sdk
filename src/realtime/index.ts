@@ -5,6 +5,8 @@
  * Supports OpenAI Realtime API, Google Live, and xAI Realtime.
  */
 
+import { validateBaseUrl } from "../security/url-guard.js";
+
 export interface RealtimeSessionConfig {
   provider: "openai" | "google" | "xai";
   model: string;
@@ -46,6 +48,14 @@ export class RealtimeSession {
     if (!WebSocket) throw new Error("WebSocket not available in this environment");
 
     const baseUrl = this._config.baseUrl ?? this._getBaseUrl();
+    // v1.1.0: Validate custom URLs against SSRF guard
+    if (this._config.baseUrl) {
+      const httpsUrl = baseUrl.replace(/^wss:\/\//i, "https://").replace(/^ws:\/\//i, "http://");
+      const guard = validateBaseUrl(httpsUrl, { allowInsecure: httpsUrl.startsWith("http://") });
+      if (!guard.ok) {
+        throw new Error(`RealtimeSession URL rejected by SSRF guard: ${guard.reason}`);
+      }
+    }
     this._ws = new WebSocket(`${baseUrl}?model=${this._config.model}`);
 
     this._ws.onopen = () => {
@@ -72,8 +82,18 @@ export class RealtimeSession {
     this._ws.onerror = (error: any) => this._emit({ type: "error", error: new Error(error.message ?? "WebSocket error") });
     this._ws.onclose = (event: any) => { this._connected = false; this._emit({ type: "disconnected", reason: event.reason }); };
 
-    return new Promise((resolve) => {
-      const check = setInterval(() => { if (this._connected) { clearInterval(check); resolve(); } }, 50);
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("RealtimeSession connection timeout after 30000ms"));
+      }, 30000);
+      
+      const check = setInterval(() => {
+        if (this._connected) {
+          clearInterval(check);
+          clearTimeout(timeout);
+          resolve();
+        }
+      }, 50);
     });
   }
 

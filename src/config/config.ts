@@ -76,7 +76,7 @@ function loadFromEnv(): Partial<SDKConfig> {
     config.providers = [{
       name: providerName || "default",
       baseUrl: providerUrl,
-      authentication: { type: "bearer", apiKey: redact(providerKey) },
+      authentication: { type: "bearer", apiKey: providerKey },
       models: [],
       adapter: inferredAdapter,
       allowInsecure: providerUrl.startsWith("http://"),

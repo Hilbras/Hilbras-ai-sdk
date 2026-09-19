@@ -32,6 +32,7 @@ export class FetchTransport implements Transport {
   private _maxConnections: number;
   private _idleTimeout: number;
   private _coalesce: boolean;
+  private _cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: FetchTransportOptions = {}) {
     this._maxConnections = options.maxConnectionsPerOrigin ?? 6;
@@ -40,7 +41,7 @@ export class FetchTransport implements Transport {
 
     // Clean up idle connections periodically
     if (typeof setInterval !== "undefined") {
-      setInterval(() => this._cleanupPools(), this._idleTimeout);
+      this._cleanupTimer = setInterval(() => this._cleanupPools(), this._idleTimeout);
     }
   }
 
@@ -128,24 +129,19 @@ export class FetchTransport implements Transport {
       }
     };
 
-    try {
-      const promise = requestFn();
+    const promise = requestFn();
 
-      if (this._coalesce) {
-        const key = this._getRequestKey(url, init);
-        this._pendingRequests.set(key, promise);
-        try {
-          return await promise;
-        } finally {
-          this._pendingRequests.delete(key);
-        }
+    if (this._coalesce) {
+      const key = this._getRequestKey(url, init);
+      this._pendingRequests.set(key, promise);
+      try {
+        return await promise;
+      } finally {
+        this._pendingRequests.delete(key);
       }
-
-      return await promise;
-    } catch (error) {
-      this._release(origin);
-      throw error;
     }
+
+    return await promise;
   }
 
   async stream(url: string, init: TransportRequestInit): Promise<ReadableStream<Uint8Array>> {
@@ -154,6 +150,17 @@ export class FetchTransport implements Transport {
       throw new Error(`Response body is null for ${url}`);
     }
     return res.body;
+  }
+
+  /**
+   * Clean up resources. Call this when the transport is no longer needed.
+   */
+  destroy(): void {
+    if (this._cleanupTimer !== null) {
+      clearInterval(this._cleanupTimer);
+      this._cleanupTimer = null;
+    }
+    this.abort();
   }
 
   /**

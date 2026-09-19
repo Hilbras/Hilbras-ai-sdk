@@ -62,6 +62,10 @@ export function buildRepairPrompt(
 export function extractJson(raw: string): string {
   let text = raw.trim();
 
+  if (text.length === 0) {
+    return text;
+  }
+
   // Strip markdown code fences: ```json ... ``` or ``` ... ```
   const fenceMatch = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
   if (fenceMatch) {
@@ -153,7 +157,12 @@ export function validateOutput<T>(
   schema: SchemaValidator<T>,
   attempt: number,
 ): T {
-  const json = extractJson(raw);
+  let json: string;
+  try {
+    json = extractJson(raw);
+  } catch (err) {
+    throw new ValidationError(attempt, err, raw);
+  }
 
   let parsed: unknown;
   try {
