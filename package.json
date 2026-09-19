@@ -288,10 +288,10 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.6.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "oxlint": "^1.79.0",
+    "oxlint": "^1.83.0",
     "react": "^19.3.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
