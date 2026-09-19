@@ -154,6 +154,28 @@ export { redactPii, detectPii, createPiiRedactor } from "./security/pii-guard.js
 export type { PiiType, PiiMatch, PiiGuardConfig } from "./security/pii-guard.js";
 export { AuditLogger, createRetentionPolicy } from "./security/audit-logger.js";
 export type { AuditCategory, AuditSeverity, AuditEntry, AuthAuditEntry, DataAccessAuditEntry, ConfigChangeAuditEntry, SecurityAuditEntry, AuditLoggerConfig } from "./security/audit-logger.js";
+export { RateLimiter, createRateLimiter, RateLimiterRegistry } from "./security/rate-limiter.js";
+export type { RateLimiterConfig, ThrottleInfo, RateLimiterStats } from "./security/rate-limiter.js";
+
+// ─── Security: Prompt Injection ──────────────────────────────────────────────
+export {
+  detectInjection,
+  scanMessages,
+  createInjectionGuard,
+  INJECTION_PATTERNS,
+} from "./security/prompt-injection-guard.js";
+export type {
+  InjectionDetection,
+  InjectionMatch,
+  InjectionGuardConfig,
+} from "./security/prompt-injection-guard.js";
+
+// ─── Security: Enhanced SSRF ─────────────────────────────────────────────────
+export {
+  validateResolvedAddress,
+  normalizeHostname,
+  validateUrlForTransport,
+} from "./security/url-guard.js";
 
 // ─── OIDC Credentials ───────────────────────────────────────────────────────
 export { OidcCredentialProvider, OidcError, oidcSource } from "./credentials/oidc.js";
