@@ -19,7 +19,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-const VERSION = "0.26.0";
+const VERSION = "0.26.6";
 
 const HELP = `
 hilbras v${VERSION}

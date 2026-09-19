@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "0.26.0",
+  "version": "0.26.6",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -162,6 +162,58 @@
     "./devtools": {
       "import": "./dist/devtools/index.js",
       "types": "./dist/devtools/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/frameworks/react/index.js",
+      "types": "./dist/frameworks/react/index.d.ts"
+    },
+    "./vue": {
+      "import": "./dist/frameworks/vue/index.js",
+      "types": "./dist/frameworks/vue/index.d.ts"
+    },
+    "./svelte": {
+      "import": "./dist/frameworks/svelte/index.js",
+      "types": "./dist/frameworks/svelte/index.d.ts"
+    },
+    "./solid": {
+      "import": "./dist/frameworks/solid/index.js",
+      "types": "./dist/frameworks/solid/index.d.ts"
+    },
+    "./qwik": {
+      "import": "./dist/frameworks/qwik/index.js",
+      "types": "./dist/frameworks/qwik/index.d.ts"
+    },
+    "./angular": {
+      "import": "./dist/frameworks/angular/index.js",
+      "types": "./dist/frameworks/angular/index.d.ts"
+    },
+    "./nextjs": {
+      "import": "./dist/frameworks/nextjs/index.js",
+      "types": "./dist/frameworks/nextjs/index.d.ts"
+    },
+    "./astro": {
+      "import": "./dist/frameworks/astro/index.js",
+      "types": "./dist/frameworks/astro/index.d.ts"
+    },
+    "./remix": {
+      "import": "./dist/frameworks/remix/index.js",
+      "types": "./dist/frameworks/remix/index.d.ts"
+    },
+    "./agent": {
+      "import": "./dist/features/agent/index.js",
+      "types": "./dist/features/agent/index.d.ts"
+    },
+    "./eval": {
+      "import": "./dist/features/eval/index.js",
+      "types": "./dist/features/eval/index.d.ts"
+    },
+    "./rag": {
+      "import": "./dist/features/rag/index.js",
+      "types": "./dist/features/rag/index.d.ts"
+    },
+    "./fine-tune": {
+      "import": "./dist/features/fine-tune/index.js",
+      "types": "./dist/features/fine-tune/index.d.ts"
     }
   },
   "files": [
@@ -190,6 +242,50 @@
   },
   "bugs": {
     "url": "https://github.com/Hilbras/Hilbras-ai-sdk/issues"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "vue": ">=3.4",
+    "svelte": ">=5",
+    "solid-js": ">=1.8.0",
+    "@angular/core": ">=19",
+    "@angular/common": ">=19",
+    "next": ">=14",
+    "astro": ">=4.0.0",
+    "@remix-run/react": ">=2",
+    "rxjs": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    },
+    "@angular/core": {
+      "optional": true
+    },
+    "@angular/common": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "astro": {
+      "optional": true
+    },
+    "@remix-run/react": {
+      "optional": true
+    },
+    "rxjs": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
