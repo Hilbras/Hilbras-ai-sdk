@@ -78,7 +78,9 @@ export class BudgetTracker {
     if (estimatedCost < 0 || !Number.isFinite(estimatedCost)) return null;
 
     // Reject duplicate IDs — prevents orphaned reservations
-    if (this._reservations.has(requestId)) return null;
+    if (this._reservations.has(requestId)) {
+      throw new Error(`Duplicate reservation ID: ${requestId}`);
+    }
 
     // Per-request check
     if (this.wouldExceedBudget(estimatedCost)) return null;

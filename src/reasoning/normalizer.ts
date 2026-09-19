@@ -19,6 +19,7 @@ const TAG_PATTERNS = [
 export class ReasoningNormalizer {
   private _buffer = "";
   private _inTag = false;
+  private _lastReturnedIndex = 0;
 
   /**
    * Feed text that might be reasoning. Returns a ReasoningChunk if the
@@ -34,6 +35,7 @@ export class ReasoningNormalizer {
           this._inTag = true;
           // Strip the opening tag
           this._buffer = this._buffer.replace(TAG_PATTERNS[0], "");
+          this._lastReturnedIndex = this._buffer.length;
           return this._buffer.length > 0
             ? { type: "reasoning", text: this._buffer }
             : null;
@@ -47,12 +49,16 @@ export class ReasoningNormalizer {
     if (/<\/(?:thinking|reasoning|reason)>/i.test(this._buffer)) {
       this._inTag = false;
       const cleaned = this._buffer.replace(TAG_PATTERNS[1], "").trim();
+      const newText = cleaned.slice(this._lastReturnedIndex).trim();
       this._buffer = "";
-      return cleaned ? { type: "reasoning", text: cleaned } : null;
+      this._lastReturnedIndex = 0;
+      return newText ? { type: "reasoning", text: newText } : null;
     }
 
-    // Still accumulating inside tag
-    return { type: "reasoning", text: this._buffer };
+    // Still accumulating inside tag — return only new content
+    const newText = this._buffer.slice(this._lastReturnedIndex);
+    this._lastReturnedIndex = this._buffer.length;
+    return { type: "reasoning", text: newText };
   }
 
   /** Explicitly yield a reasoning chunk (for adapters with native reasoning fields) */
@@ -60,13 +66,14 @@ export class ReasoningNormalizer {
     return { type: "reasoning", text };
   }
 
-  /** Check if text starts with a reasoning tag */
+  /** Check if text looks like a reasoning opening or closing tag */
   static looksLikeReasoningTag(text: string): boolean {
-    return /^<(?:thinking|reasoning|reason)>/i.test(text);
+    return /^<(?:\/)?(?:thinking|reasoning|reason)>/i.test(text);
   }
 
   reset(): void {
     this._buffer = "";
     this._inTag = false;
+    this._lastReturnedIndex = 0;
   }
 }

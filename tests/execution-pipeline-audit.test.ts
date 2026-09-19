@@ -69,7 +69,7 @@ describe("Phase 2: Budget + Reservation Integrity", () => {
   it("duplicate reservation IDs are rejected — accounting invariant preserved", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("same", 0.5);
-    expect(t.reserve("same", 0.3)).toBeNull(); // rejected
+    expect(() => t.reserve("same", 0.3)).toThrow(); // rejected
     expect(t.report().totalReserved).toBeCloseTo(0.5); // first reservation intact
     expect(t.report().activeReservations).toBe(1);
     t.settle("same", 0.2, { provider: "p", model: "m", phase: "execute" });

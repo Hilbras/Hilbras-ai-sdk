@@ -99,7 +99,7 @@ describe("Phase 3: Duplicate ID Certification", () => {
   it("active duplicate rejected", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     expect(t.reserve("A", 0.5)).not.toBeNull();
-    expect(t.reserve("A", 0.3)).toBeNull(); // rejected
+    expect(() => t.reserve("A", 0.3)).toThrow(); // rejected
   });
 
   it("settled ID is reusable", () => {
@@ -119,8 +119,7 @@ describe("Phase 3: Duplicate ID Certification", () => {
   it("no silent overwrite — accounting invariant preserved", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("A", 0.5);
-    const second = t.reserve("A", 0.3);
-    expect(second).toBeNull();
+    expect(() => t.reserve("A", 0.3)).toThrow();
     expect(t.report().totalReserved).toBe(0.5); // not 0.8
     assertBudgetInvariant(t);
   });
@@ -138,8 +137,11 @@ describe("Phase 4: ID Collision Fuzzing", () => {
       for (let j = 0; j < 50; j++) {
         const id = ids[j % ids.length];
         const cost = Math.random() * 0.1;
-        if (Math.random() > 0.3) t.reserve(id, cost);
-        else t.settle(id, Math.random() * cost, { provider: "p", model: "m", phase: "execute" });
+        if (Math.random() > 0.3) {
+          try { t.reserve(id, cost); } catch { /* duplicate */ }
+        } else {
+          t.settle(id, Math.random() * cost, { provider: "p", model: "m", phase: "execute" });
+        }
       }
       assertBudgetInvariant(t);
       expect(t.report().activeReservations).toBeGreaterThanOrEqual(0);
@@ -454,7 +456,7 @@ describe("Phase 26: Fuzz Testing", () => {
         const id = ids[i % ids.length];
         const cost = Math.random() * 0.2;
         if (Math.random() > 0.3) {
-          t.reserve(id, cost);
+          try { t.reserve(id, cost); } catch { /* duplicate */ }
         } else if (Math.random() > 0.5) {
           t.settle(id, Math.random() * cost, { provider: "p", model: "m", phase: "execute" });
         } else {

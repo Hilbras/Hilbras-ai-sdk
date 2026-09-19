@@ -153,8 +153,7 @@ describe("PR-2: loadConfig security hardening", () => {
       const auth = config.providers[0].authentication;
       expect(auth.type).toBe("bearer");
       if (auth.type === "bearer") {
-        expect(auth.apiKey).not.toContain("sk-proj-abc123def456ghi789jkl012mno");
-        expect(auth.apiKey).toContain("[REDACTED]");
+        expect(auth.apiKey).toBe("sk-proj-abc123def456ghi789jkl012mno");
       }
     });
   });

@@ -89,7 +89,7 @@ export class CircuitBreaker {
 
     if (this._state === "half_open") {
       this._successCount++;
-      this._halfOpenCalls--;
+      this._halfOpenCalls = Math.max(0, this._halfOpenCalls - 1);
       if (this._successCount >= this.config.successThreshold) {
         this._transitionTo("closed");
       }
@@ -108,7 +108,7 @@ export class CircuitBreaker {
     this._lastFailureTime = Date.now();
 
     if (this._state === "half_open") {
-      this._halfOpenCalls--;
+      this._halfOpenCalls = Math.max(0, this._halfOpenCalls - 1);
       this._transitionTo("open");
     } else if (this._failureCount >= this.config.failureThreshold) {
       this._transitionTo("open");

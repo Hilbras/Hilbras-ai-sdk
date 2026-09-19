@@ -75,10 +75,19 @@ export class AnthropicAdapter implements AIProvider {
     };
 
     if (systemPrompt) body.system = systemPrompt;
-    body.messages = nonSystemMessages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    body.messages = nonSystemMessages.map((m) => {
+      if (m.role === "tool") {
+        return {
+          role: "user" as const,
+          content: [{
+            type: "tool_result" as const,
+            tool_use_id: (m as any).toolCallId ?? m.name ?? "unknown",
+            content: m.content,
+          }],
+        };
+      }
+      return { role: m.role, content: m.content };
+    });
 
     // Convert tools to Anthropic format
     if (params.tools?.length) {

@@ -167,8 +167,7 @@ describe("Phase 7: Reservation ID Collision", () => {
   it("same ID used twice — second reserve rejected, accounting invariant preserved", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("same-id", 0.5);
-    const second = t.reserve("same-id", 0.3); // rejected
-    expect(second).toBeNull();
+    expect(() => t.reserve("same-id", 0.3)).toThrow(); // rejected
     // First reservation remains intact
     t.settle("same-id", 0.2, { provider: "p", model: "m", phase: "execute" });
     expect(t.report().totalActual).toBeCloseTo(0.2);
@@ -727,10 +726,10 @@ describe("Phase 21: Callback Safety", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
-  it("duplicate ID returns null — accounting invariant preserved", () => {
+  it("duplicate ID throws — accounting invariant preserved", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("r1", 0.5);
-    expect(t.reserve("r1", 0.3)).toBeNull(); // rejected
+    expect(() => t.reserve("r1", 0.3)).toThrow(); // rejected
     expect(t.report().totalReserved).toBe(0.5); // first reservation intact
     t.settle("r1", 0.3, { provider: "p", model: "m", phase: "execute" });
     expect(t.report().totalActual).toBeCloseTo(0.3);
@@ -740,21 +739,21 @@ describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
   it("duplicate ID does not modify existing reservation amount", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("r1", 0.5);
-    t.reserve("r1", 0.9); // rejected
+    try { t.reserve("r1", 0.9); } catch { /* rejected */ }
     expect(t.reservations()[0].amount).toBe(0.5);
   });
 
   it("duplicate ID does not increase totalReserved", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("r1", 0.5);
-    t.reserve("r1", 0.3); // rejected
+    try { t.reserve("r1", 0.3); } catch { /* rejected */ }
     expect(t.report().totalReserved).toBe(0.5); // not 0.8
   });
 
   it("release after rejected duplicate remains correct", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("r1", 0.5);
-    t.reserve("r1", 0.3); // rejected
+    try { t.reserve("r1", 0.3); } catch { /* rejected */ }
     t.release("r1");
     expect(t.report().totalReserved).toBe(0);
     expect(t.report().totalActual).toBe(0);
@@ -763,7 +762,7 @@ describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
   it("settle after rejected duplicate remains correct", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("r1", 0.5);
-    t.reserve("r1", 0.3); // rejected
+    try { t.reserve("r1", 0.3); } catch { /* rejected */ }
     t.settle("r1", 0.4, { provider: "p", model: "m", phase: "execute" });
     expect(t.report().totalActual).toBeCloseTo(0.4);
     expect(t.report().totalReserved).toBe(0);
@@ -773,7 +772,7 @@ describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
     const t = new BudgetTracker({ sessionBudget: 1.0 });
     t.reserve("r1", 0.5);
     for (let i = 0; i < 100; i++) {
-      expect(t.reserve("r1", 0.1)).toBeNull();
+      expect(() => t.reserve("r1", 0.1)).toThrow();
     }
     expect(t.report().totalReserved).toBe(0.5);
     assertBudgetInvariant(t);
@@ -783,7 +782,7 @@ describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
     const t = new BudgetTracker({ sessionBudget: 100 });
     let accepted = 0;
     for (let i = 0; i < 1000; i++) {
-      if (t.reserve("same-id", 0.01)) accepted++;
+      try { if (t.reserve("same-id", 0.01)) accepted++; } catch { /* duplicate */ }
     }
     expect(accepted).toBe(1); // only first succeeds
     expect(t.report().totalReserved).toBeCloseTo(0.01);
@@ -797,7 +796,7 @@ describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
         const id = ids[i % ids.length]; // generates collisions
         const cost = Math.random() * 0.1;
         if (Math.random() > 0.3) {
-          t.reserve(id, cost);
+          try { t.reserve(id, cost); } catch { /* duplicate */ }
         } else {
           t.settle(id, Math.random() * cost, { provider: "p", model: "m", phase: "execute" });
         }
