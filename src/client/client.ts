@@ -45,6 +45,9 @@ import type { HookEvent, HookEventType, HookListener } from "../types/observabil
 import { BudgetTracker } from "../cost/tracker.js";
 import type { BudgetConfig, CostReport } from "../cost/types.js";
 import { estimateTokens } from "../tokens/counter.js";
+import { loadCatalog, getProviderCatalog, getModelsForProvider } from "../catalog/index.js";
+import type { AdapterName } from "../types/providers.js";
+import type { ModelCapabilities } from "../types/models.js";
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
@@ -199,9 +202,69 @@ export class HilbrasClient implements AsyncDisposable {
     return this._registry.list();
   }
 
+  /**
+   * Add a provider from the built-in catalog with one line.
+   *
+   * @example
+   * ```ts
+   * client.addProviderFromCatalog("openai", "gpt-4o", process.env.OPENAI_API_KEY!);
+   * ```
+   */
+  addProviderFromCatalog(providerId: string, modelId: string, apiKey: string): void {
+    const provider = getProviderCatalog(providerId);
+    if (!provider) throw new ConfigurationError(`Unknown provider: ${providerId}`);
+    const models = getModelsForProvider(providerId);
+    const model = models.find((m) => m.id === modelId);
+    if (!model) throw new ConfigurationError(`Model ${modelId} not found for provider ${providerId}`);
+
+    const adapter = provider.adapters[0] as AdapterName ?? "openai-compatible";
+    this.addProvider({
+      name: provider.name,
+      baseUrl: provider.baseUrl,
+      authentication: { type: "bearer", apiKey },
+      adapter,
+      models: [
+        {
+          id: model.id,
+          contextWindow: model.contextWindow,
+          maxOutputTokens: model.maxOutput,
+          capabilities: this._parseCapabilities(model.capabilities, providerId),
+        },
+      ],
+    });
+  }
+
   /** Access the adapter registry for plugins */
   get adapterRegistry(): AdapterRegistry {
     return this._adapterRegistry;
+  }
+
+  /**
+   * Parse catalog capabilities string array to ModelCapabilities object.
+   */
+  private _parseCapabilities(capabilities: string[], providerId: string): ModelCapabilities {
+    const cap: ModelCapabilities = {
+      streaming: false,
+      tools: false,
+      vision: false,
+      reasoning: false,
+      structuredOutput: false,
+      parallelTools: false,
+      systemPrompts: false,
+      embeddings: false,
+      imageGeneration: false,
+      speech: false,
+      transcription: false,
+      reranking: false,
+    };
+    for (const c of capabilities) {
+      if (c in cap) cap[c as keyof ModelCapabilities] = true;
+    }
+    // Provider-specific defaults
+    if (providerId === "openai" || providerId === "anthropic" || providerId === "google") {
+      cap.systemPrompts = true;
+    }
+    return cap;
   }
 
   /** Access the model router */
