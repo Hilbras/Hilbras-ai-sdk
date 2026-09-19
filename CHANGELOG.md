@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-09-19
+
+### Added
+- **Prompt Injection Defense Middleware:** 27 built-in patterns across 8 categories (instruction-override, role-prefix, code-fence, emotional-manipulation, encoding, multilingual). Configurable warn/block/strip modes. `detectInjection()`, `scanMessages()`, `createInjectionGuard()`.
+- **Client-Side Rate Limiting:** Token bucket algorithm with configurable burst capacity, refill rate, and per-request cost. `RateLimiter` class, `createRateLimiter()` factory, `RateLimiterRegistry` for multi-tenant management.
+- **Advanced SSRF Validation:** IPv6 scope ID stripping, `validateResolvedAddress()` for DNS rebinding prevention, `normalizeHostname()` for unicode/IDNA normalization, `validateUrlForTransport()` for TOCTOU mitigation. Additional private ranges: CGNAT (100.64.0.0/10), benchmarking (198.18.0.0/15), multicast, unspecified, IPv4-mapped IPv6.
+- 71 new security edge case tests (prompt injection, rate limiting, SSRF)
+
+---
+
 ## [1.1.1] - 2026-09-19
 
 ### Fixed

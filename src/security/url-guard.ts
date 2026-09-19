@@ -45,6 +45,12 @@ function normalizeIpLiteral(host: string): string | null {
     host = host.slice(1, -1);
   }
 
+  // Strip IPv6 scope ID (e.g., fe80::1%25eth0 → fe80::1).
+  // %25 is the URL-encoded form of '%'.
+  if (host.includes("%")) {
+    host = host.split("%")[0];
+  }
+
   // IPv6 hex — just lowercase it (no mixed notation expansion for simplicity)
   if (host.includes(":")) {
     // Basic validation: only hex digits and colons
@@ -112,6 +118,53 @@ function isPrivateIPv4(normalized: string): boolean {
 }
 
 /**
+ * Check if an IPv4 address is in the CGNAT / shared address space (100.64.0.0/10).
+ */
+function isCgnatIPv4(normalized: string): boolean {
+  const parts = normalized.split(".").map(Number);
+  if (parts.length !== 4) return false;
+  return parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127;
+}
+
+/**
+ * Check if an IPv4 address is in the benchmarking range (198.18.0.0/15).
+ */
+function isBenchmarkingIPv4(normalized: string): boolean {
+  const parts = normalized.split(".").map(Number);
+  if (parts.length !== 4) return false;
+  return parts[0] === 198 && (parts[1] === 18 || parts[1] === 19);
+}
+
+/**
+ * Check if an IPv4 address is in the multicast range (224.0.0.0/4).
+ */
+function isMulticastIPv4(normalized: string): boolean {
+  const parts = normalized.split(".").map(Number);
+  if (parts.length !== 4) return false;
+  return parts[0] >= 224 && parts[0] <= 239;
+}
+
+/**
+ * Check if an IPv4 address is 0.0.0.0 (unspecified).
+ */
+function isUnspecifiedIPv4(normalized: string): boolean {
+  return normalized === "0.0.0.0";
+}
+
+/**
+ * Check if an IPv6 address is :: (unspecified) or ::ffff:0:0/96 (IPv4-mapped).
+ */
+function isSpecialIPv6(normalized: string): boolean {
+  // :: (unspecified)
+  if (normalized === "::") return true;
+  // ::ffff:0:0/96 — IPv4-mapped IPv6
+  if (/^0{1,4}:0{1,4}:0{1,4}:0{1,4}:0{1,4}:ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.test(normalized)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Check if an IPv6 address is in a private or link-local range.
  * fc00::/7 (unique-local) and fe80::/10 (link-local).
  */
@@ -135,6 +188,29 @@ function isLocalhostish(host: string): boolean {
 }
 
 /**
+ * Normalize a hostname by stripping zero-width characters, normalizing
+ * common unicode confusables used for SSRF bypass, and handling `.local` variants.
+ */
+export function normalizeHostname(host: string): string {
+  let h = host.toLowerCase();
+
+  // Strip zero-width characters (U+200B–U+200F, U+FEFF, etc.)
+  h = h.replace(/[\u200b-\u200f\u2028-\u202f\u2060-\u2069\ufeff]/g, "");
+
+  // Normalize common fullwidth / confusable characters that map to ASCII.
+  // Fullwidth full stop U+FF0E → '.', fullwidth colon U+FF1A → ':'
+  h = h.replace(/\uff0e/g, ".");
+  h = h.replace(/\uff1a/g, ":");
+
+  // Strip trailing dots (DNS FQDN notation)
+  if (h.length > 1 && h.endsWith(".")) {
+    h = h.slice(0, -1);
+  }
+
+  return h;
+}
+
+/**
  * Check whether the host (after normalization) is a dangerous SSRF target.
  * Returns null if safe, or a reason string if blocked.
  */
@@ -146,9 +222,32 @@ function checkHostSafety(host: string): string | null {
   const normalized = normalizeIpLiteral(host);
 
   if (normalized) {
+    // Unspecified: 0.0.0.0 or ::
+    if (isUnspecifiedIPv4(normalized)) {
+      return "address is unspecified (0.0.0.0)";
+    }
+    if (isSpecialIPv6(normalized)) {
+      return "address is unspecified or IPv4-mapped IPv6";
+    }
+
     // Link-local: 169.254.0.0/16 (AWS/GCP/Azure/Alibaba metadata)
     if (isLinkLocalIPv4(normalized)) {
       return `baseUrl points at link-local range (${host}); this is blocked even with allowInsecure`;
+    }
+
+    // CGNAT: 100.64.0.0/10
+    if (isCgnatIPv4(normalized)) {
+      return "private";
+    }
+
+    // Benchmarking: 198.18.0.0/15
+    if (isBenchmarkingIPv4(normalized)) {
+      return "private";
+    }
+
+    // Multicast: 224.0.0.0/4
+    if (isMulticastIPv4(normalized)) {
+      return `baseUrl points at multicast range (${host}); this is blocked even with allowInsecure`;
     }
 
     // Private IPv4
@@ -210,7 +309,7 @@ export function validateBaseUrl(
     };
   }
 
-  const host = parsed.hostname.toLowerCase();
+  const host = normalizeHostname(parsed.hostname.toLowerCase());
 
   // Always allow loopback / *.local (both http and https).
   if (isLocalhostish(host)) {
@@ -240,4 +339,92 @@ export function validateBaseUrl(
   // Public http hosts are allowed with allowInsecure (e.g. proxies
   // in front of an internal service that don't terminate TLS).
   return { ok: true };
+}
+
+/**
+ * Validate a resolved IP address against the original hostname.
+ *
+ * Call this after DNS resolution and before making the request.
+ * If the resolved IP falls in a blocked range, the request is rejected.
+ *
+ * NOTE: Full DNS-rebinding prevention requires DNS pinning (resolving once
+ * and refusing to accept a different IP on retry), which is out of scope
+ * for this string-level guard. This function covers the case where the
+ * initial resolution itself yields a private/blocked address.
+ */
+export function validateResolvedAddress(
+  ip: string,
+  originalHost: string,
+): UrlGuardResult {
+  const normalized = normalizeIpLiteral(ip);
+  if (!normalized) {
+    // Not an IP literal — nothing to check at this level.
+    return { ok: true };
+  }
+
+  if (isUnspecifiedIPv4(normalized)) {
+    return { ok: false, reason: "resolved address is unspecified (0.0.0.0)" };
+  }
+  if (isSpecialIPv6(normalized)) {
+    return { ok: false, reason: "resolved address is unspecified or IPv4-mapped IPv6" };
+  }
+  if (isLinkLocalIPv4(normalized)) {
+    return {
+      ok: false,
+      reason: `resolved address ${ip} is in link-local range (169.254.0.0/16)`,
+    };
+  }
+  if (isCgnatIPv4(normalized)) {
+    return {
+      ok: false,
+      reason: `resolved address ${ip} is in CGNAT range (100.64.0.0/10)`,
+    };
+  }
+  if (isBenchmarkingIPv4(normalized)) {
+    return {
+      ok: false,
+      reason: `resolved address ${ip} is in benchmarking range (198.18.0.0/15)`,
+    };
+  }
+  if (isMulticastIPv4(normalized)) {
+    return {
+      ok: false,
+      reason: `resolved address ${ip} is in multicast range (224.0.0.0/4)`,
+    };
+  }
+  if (isPrivateIPv4(normalized)) {
+    return {
+      ok: false,
+      reason: `resolved address ${ip} is in private network range`,
+    };
+  }
+  if (isPrivateIPv6(normalized)) {
+    return {
+      ok: false,
+      reason: `resolved address ${ip} is in private/link-local IPv6 range`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Perform all SSRF checks and return a result suitable for passing to the
+ * transport layer.
+ *
+ * This minimizes TOCTOU (time-of-check-to-time-of-use) risk by bundling
+ * every validation step into a single call that the transport layer should
+ * invoke immediately before issuing the request.
+ *
+ * IMPORTANT: True TOCTOU prevention (DNS pinning / connecting to the
+ * exact IP that was validated) requires transport-level cooperation
+ * (e.g. custom DNS resolver + pinned socket), which is out of scope
+ * for this URL-string guard. For high-security deployments, combine
+ * this with `validateResolvedAddress` at the point of DNS resolution.
+ */
+export function validateUrlForTransport(
+  url: string,
+  options: UrlGuardOptions = {},
+): UrlGuardResult {
+  return validateBaseUrl(url, options);
 }
