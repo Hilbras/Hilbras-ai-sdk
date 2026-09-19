@@ -1070,6 +1070,140 @@ Keeps the edge/browser portability claim honest.
 | I1 | 3 telemetry sinks + audit logger exist but are unwired |
 
 ---
+### P2 — Medium
+
+| ID | Finding |
+|---|---|
+| BUG-03 | `FetchTransport` double-release of connection slots |
+| BUG-05 | `setTokenizer` is process-global |
+| BUG-06 | `FetchTransport` interval never cleared |
+| SEC-01 | `RealtimeSession` WebSocket URL bypasses the SSRF guard |
+| C2 / C3 | Malformed config file silently ignored; no shape validation |
+| C4 | `validateConfig` never called by `loadConfig` |
+| D3 | `node:crypto` / `node:fs` reachable via the root barrel |
+| D5 | Orchestration logic duplicated in `client.ts` |
+| D6 | Two unreconciled model catalogs |
+| P1 | RAG linear scan (future risk) |
+| P6 | 23 adapters eagerly imported via the root barrel |
+| S1 | `HilbrasClient` is a 1,217-line god file |
+| R1 | `RealtimeSession.connect()` can hang forever |
+| G1 | `PlanAndExecuteAgent.replanOnFailure` does not re-plan |
+| T3 | No concurrency tests for budget-reservation atomicity |
+| T4 | `credentials/provider.ts` has zero tests |
+
 ---
 
+### P3 — Low
+
+| ID | Finding |
+|---|---|
+| BUG-07 | Circuit-breaker `_halfOpenCalls` transiently negative |
+| BUG-08 | Duplicate requestId reported as a budget error |
+| BUG-09 | `extractJson` returns raw text when no JSON is found |
+| D1 | Source cycle via root barrel (`tool-loop.ts`) |
+| D2 | `ReasoningNormalizer` in the wrong layer |
+| D4 | `logging/` is a hidden hub dependency |
+| D7 | CLI maintains a parallel provider/pricing registry |
+| A4 | `"private"` sentinel string conflates value and type |
+| A5 | Three divergent `instrumentClient` signatures |
+| A6 | Framework hooks redefine UI protocol types |
+| C6 / C7 / C8 | Config naming, adapter inference, env-var asymmetry |
+| P3 | `estimateTokens` per-character loop |
+| P4 | 10 ms spin-wait for connection slots |
+| Dead | `sdkLogger`, `chunk` helper, 5 no-op `*AdapterConfig` aliases |
+| Docs | v0.9.3-era analysis docs unlabelled; README test count self-contradicts |
+
+---
+## 23. Evidence Requirements
+
+Every finding in §6, §9, §10, and §14 carries: **Finding / Location / Category / Priority / Evidence / Why it matters / Failure scenario / Impact / Recommended action / Confidence**.
+Confidence levels used in this report:
+
+
+- **Confirmed** — directly readable from the source; the stated outcome follows from the control flow as written.
+- **High** — strongly implied by the code but depends on one runtime assumption (e.g. a provider's response shape).
+- **Medium** — supported by structure and naming but not fully traced.
+- **Low** — plausible; would require execution to establish.
+- **Unverified** — explicitly flagged in-line. Instances in this report: README test counts; whether non-Next.js framework route handlers build a real client; whether the 1,406/1,278 test counts pass; whether external consumers use the Category B exports; DNS-rebinding behaviour at request time.
+
+**What was executed vs. read.** This audit was performed by reading source and tests and by regex/`find` sweeps. `npm test`, `npm run build`, and `npm run test:coverage` were **not** run, so no runtime behaviour, pass/fail state, or coverage figure is asserted. §13's gap list is structural (inventory-based), not coverage-derived.
+## 24. Refactoring Roadmap
+
+Sequenced so each step reduces risk for the next. Line references are to `src/client/client.ts` unless noted.
+
+### Phase 1 — Correctness (no public API change)
+
+1. **BUG-01** — in `config/config.ts:79`, apply `redact()` only to the redacted mirror, store the raw key in the credential field. Add a test that loads `HILBRAS_PROVIDER_KEY` and asserts the credential resolves.
+2. **BUG-02** — in `reasoning/normalizer.ts`, move the `pendingProse`/tag-buffer state into a per-stream instance and clear it in `flush()`/`end()`. Add a multi-chunk prose-then-tag regression test.
+3. **BUG-04** — route `streamObject` through `validateAndRepair` (or validate the assembled value after stream completion). Reuse `output/structured.ts`.
+4. **BUG-03 / BUG-06** — `FetchTransport`: make slot release idempotent; clear the stats interval in `dispose()`.
+5. **BUG-07 / BUG-08 / BUG-09** — circuit-breaker half-open counter guard; `duplicate_request` error class in `cost/tracker.ts`; `extractJson` null contract.
+
+Exit criteria: every finding in §6 has a regression test; `npm test` green.
+
+### Phase 2 — Wiring (small API additions, no breaks)
+
+6. Add `HilbrasClientConfig.telemetry?: TelemetrySink[]` (or accept hooks in the constructor) and call `instrumentClient` for `StructuredLogger`, `OpenTelemetryExporter`, `UsageDashboard`. Fixes `require()` in `telemetry/otel.ts` first.
+7. Bridge `AuditLogger` to the same hook interface.
+8. Decide the `SDKConfig` ↔ `HilbrasClientConfig` relationship (C5). Recommended: `loadConfig()` returns `HilbrasClientConfig`-shaped overrides; the client optionally accepts them.
+9. Route `RealtimeSession`'s WebSocket URL through `validateOutboundUrl` (SEC-01).
+
+Exit criteria: the four immediate/one-call integrations from §15 Tier 1 are live and documented.
+
+### Phase 3 — Structure (internal refactors, no behaviour change)
+
+10. Move retry + fallback loops from `stream()`/`complete()` into `pipeline.ts`; the client methods become: resolve context → call pipeline → emit events. Target: `client.ts` under ~600 lines.
+11. Extract a shared `HookSubscriber` used by the three `instrumentClient` implementations.
+12. Generate `provider-catalog.json` from `catalog/models.ts` in a build step; delete the CLI's parallel `MODEL_PRICING` table (D7).
+13. Delete the five no-op `*AdapterConfig` aliases; extract `tests/helpers/mock-transport.ts`.
+
+### Phase 4 — Surface (public API changes, minor bump)
+
+14. Deprecate `setTokenizer` in favour of a per-client `tokenizer` config field (BUG-05).
+15. Split Node-only modules out of the root barrel; keep subpath exports (D3, P6).
+16. Implement `MCPClient` (stdio + SSE) or remove it from the barrel (D8).
+17. Wire or remove: `credentials/`, `middleware/`, `request-signer.ts`, `degradation.ts`, `pii-guard.ts` (§21 step 4).
+
+### Phase 5 — Post-audit hygiene
+
+18. Add concurrency tests for budget reservation (T3) and direct `stream()`/`complete()` integration tests (T1/T2).
+19. Label the v0.9.3-era docs in `docs/analysis/` with their version; reconcile the README badge and body test counts.
+20. Benchmark: run `tests/benchmarks/performance.bench.ts` and record P3/P4 baselines before optimizing.
+
+---
+
+## 25. Audit Limitations and Residual Risk
+
+1. **No test execution.** The suite was not run. Any finding about runtime behaviour beyond what the code directly expresses is inferred, not observed.
+2. **No coverage data.** §13 is an inventory of what *should* be tested versus what test files exist; true line/branch coverage is unknown.
+3. **Adapter correctness against live providers** (OpenAI, Anthropic, Bedrock, Vertex, Mistral, Groq, Cohere, DeepSeek, xAI, Ollama, Together, Fireworks, Perplexity, vLLM, LM Studio, Hugging Face, Azure, Amazon, Google, OpenRouter, Custom, Infrence, Zhipu, MiniMax) was assessed against the adapters' own transformations only. Wire-format assumptions were checked where the transformation is visible (A2, A3) but not against live APIs.
+4. **Framework packages** (`packages/*-ai-sdk`) were read at the surface level (build targets, hook definitions, route handlers). Their downstream build validity under each framework's bundler was not verified.
+5. **Showcase app integration** (`examples/showcase` and similar) was noted as present in the repo tree but was not systematically traced to confirm whether the showcase apps build real `HilbrasClient` instances or mock ones.
+6. **DNS-rebinding in `url-guard.ts`.** The guard resolves and blocks private IPs at validation time, but re-resolution at request time is not guarded. Flagged as SEC-01-adjacent hardening, not confirmed exploitable.
+7. **`performance.bench.ts` was never executed.** All performance commentary (§11, §19) is structural.
+8. **External consumers unknown.** Whether any published consumer depends on the unwired exports (Category B) cannot be determined from the repository; §21 step 4 assumes a deprecation cycle would be required if so.
+
+---
+
+## 26. Closing Assessment
+
+Hilbras v0.26.6 is a **wide, well-tested, honestly-documented SDK with two real defects and a wiring gap**.
+
+The engineering quality inside individual modules is high. The cost tracker's reserve/settle/settle-reverse discipline, the circuit breaker's half-open state, the URL guard's IPv6 and DNS handling, and the retry policy's parameter clamping are all better than what most SDKs ship. The test suite is large, current, and regression-pinned by name. Zero `TODO`/`FIXME` markers is rare.
+
+The failure mode is **breadth outpacing integration**. Roughly 13 modules are complete, tested, documented — and disconnected from the client that should drive them. Meanwhile the client itself has become a 1,217-line orchestration point where two divergent pipelines re-implement the same retry/fallback loops that `pipeline.ts` was built to own.
+
+Three findings account for the bulk of user-facing risk:
+
+1. **BUG-01** — env-var credentials silently unusable.
+2. **BUG-02** — reasoning normalizer misclassifies user text.
+3. **C5** — the env-var config system the client never reads.
+
+Everything else is either structural debt worth scheduling (§21) or edge-case polish worth batching (§22 P2/P3).
+
+The one judgement call this report makes explicitly: the gap between what Hilbras *contains* and what Hilbras *connects* is the defining characteristic of this codebase at this version. Closing that gap is lower-risk and higher-value than expanding the feature set further.
+
+---
+
+*End of report. Sections 1–26, v0.26.6, read-only audit; sole artifact is this file.*
 ---

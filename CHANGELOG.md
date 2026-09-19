@@ -11,7 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.26.6] - 2026-09-19
+## [1.0.0] - 2026-09-19
+
+### Added
+
+- **Multi-Step Tool Calling** — `streamText()` now accumulates tool call arguments across incremental deltas using `index`/`done` fields. `useChat` hooks support `maxSteps`, `onToolCall`, and `onStepFinish` for server-side multi-step tool execution with client-side callbacks.
+- **streamObject Public API** — New `streamObject<T>()` method with `SchemaValidator<T>` support (Zod, Valibot). Streams partial objects with progressive JSON parsing. Accepts both raw JSON Schema and typed validators. Includes `onPartialObject`/`onFinalObject` callbacks. New `StreamObjectOptions<T>` and `StreamObjectChunk<T>` types exported.
+- **Data/Annotations Streaming** — New `DataChunk` and `AnnotationChunk` stream types for structured data alongside text. New `data`/`annotation` protocol events in `UIProtocolMessage`. `UIMessage` now includes `data[]` and `annotations[]` fields. `DataAnnotation` type with `type`, `data`, and optional `range`. React `useChat` supports `onData`/`onAnnotation` callbacks.
+- **Generative UI** — New `ComponentRegistry` for registering and deserializing React components. `GenerativeTool` type with `render` function for rendering components from tool results. `StreamUIOptions`/`StreamUIResult` types. `rendered` field on `UIToolInvocation`. Exported from `@hilbras/sdk/react`.
+- **SSE Streaming Utilities** — New `createSSEStream`, `createSSEResponse`, `createObjectSSEStream`, `createObjectSSEResponse` server-side utilities for SSE streaming with UI protocol support.
+- **Shared SSE Writer** — `src/utils/sse-writer.ts` converts `StreamChunk` → `UIProtocolMessage` wire format for all framework handlers.
+
+### Changed
+
+- **Next.js/Astro/Remix handlers** — Rewritten to use real `HilbrasClient` + SSE protocol with tool call support.
+- **React useChat** — Handles all 10 protocol events (text, reasoning, tool_call_*, object_delta, data, annotation). Added `append()`, `reload()`.
+- **Svelte useChat** — Added `append()`, `reload()`, tool call support.
+- **Vue useChat** — Added `append()`, `reload()`, tool call support.
+- **Solid useChat** — Rewritten with full tool call support (maxSteps, onToolCall, reload).
+- **Qwik useChat** — Rewritten for Qwik signal API with full tool call support.
+- **Angular chat service** — Added tool call support (all 10 protocol events).
+- **StreamChunk union** — Added `DataChunk` and `AnnotationChunk` types.
+- **UIToolInvocation** — Added `rendered` field for generative UI.
+- **UIProtocolMessage** — Added `object_delta`, `data`, `annotation` event types.
 
 ### Changed
 
