@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-09-20
+
+### Added
+- **Headless UI Components (`@hilbras/ui`):** Framework-agnostic components for AI chat
+  - `ChatBox` — container with provider/model config and shared context
+  - `MessageList` — renders messages with streaming cursor
+  - `Input` — auto-resizing textarea with send button
+  - `CostBadge` — real-time cost/token display
+  - `ModelSelector` — dropdown for model selection
+  - `ErrorBanner` — actionable error display with retry
+  - `ThinkingIndicator` — loading/thinking animation
+  - `ToolCallCard` — expandable tool call display
+- **Tailwind CSS styled variants (`@hilbras/ui/tailwind`):** Pre-styled components
+- Phase 2 of Vercel AI SDK feature parity roadmap
+
 ## [2.0.0] - 2026-09-20
 
 ### Added

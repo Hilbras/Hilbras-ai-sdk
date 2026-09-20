@@ -1,0 +1,32 @@
+{
+  "name": "@hilbras/ui",
+  "version": "2.1.0",
+  "description": "Headless UI components for AI chat, completion, and cost tracking — works with React, Vue, Svelte, or vanilla JS",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
+    "./tailwind": { "import": "./dist/tailwind.js", "types": "./dist/tailwind.d.ts" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@hilbras/react": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
+  },
+  "license": "MIT",
+  "keywords": ["ai", "ui", "chat", "components", "headless", "tailwind", "react"]
+}
