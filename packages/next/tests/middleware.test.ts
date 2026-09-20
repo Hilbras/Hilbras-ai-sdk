@@ -1,5 +1,27 @@
-import { describe, it, expect, vi } from "vitest";
-import { hilbrasMiddleware } from "../src/middleware.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("next/server", () => {
+  class MockHeaders extends Map {
+    constructor(init?: Record<string, string>) {
+      super();
+      if (init) Object.entries(init).forEach(([k, v]) => this.set(k, v));
+    }
+  }
+  return {
+    NextResponse: {
+      json: (data: any, init?: any) => ({
+        status: init?.status ?? 200,
+        headers: new MockHeaders(init?.headers),
+        body: JSON.stringify(data),
+      }),
+      next: () => ({ status: 200, headers: new MockHeaders() }),
+    },
+  };
+});
+
+vi.mock("next", () => ({}));
+
+import { hilbrasMiddleware } from "../src/middleware";
 
 function createRequest(path = "/api/chat", ip = "127.0.0.1") {
   return {
