@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1406%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1541%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -54,6 +54,12 @@ Application
 
 ```bash
 npm install @hilbras/sdk
+```
+
+### React (optional)
+
+```bash
+npm install @hilbras/react
 ```
 
 ## Quick start
@@ -107,7 +113,8 @@ const reply = await client.complete({
 | **Reasoning normalization** | Detect & normalize `<thinking>` / `<reasoning>` tags and native fields | [API Reference](docs/api-reference.md) |
 | **Agent framework** | ToolLoopAgent, ReActAgent, PlanAndExecuteAgent with approval, budget, cost tracking | [Agent](docs/agent.md) |
 | **Evaluation** | LLM output evaluation with built-in metrics (exact_match, similarity, toxicity) | [Eval](docs/eval.md) |
-| **Framework hooks** | React, Vue, Svelte, Solid, Qwik, Angular, Next.js, Astro, Remix | [Frameworks](docs/frameworks.md) |
+| **React hooks** | `useChat`, `useCompletion`, `useCost` with streaming, abort, retry | [React](#react-hooks) |
+| **Framework hooks** | Vue, Svelte, Solid, Qwik, Angular, Next.js, Astro, Remix | [Frameworks](docs/frameworks.md) |
 | **RAG primitives** | VectorStore, Retriever, RAGPipeline, chunking | [RAG](docs/rag.md) |
 | **Provider catalog** | Runtime provider/model discovery with search | [Catalog](docs/catalog.md) |
 | **CLI** | `hilbras` CLI for init, provider management, model listing, cost estimation | [CLI](docs/cli.md) |
@@ -115,6 +122,92 @@ const reply = await client.complete({
 | **Fine-tuning** | Export training data in 6 formats, data splitting, quality validation | [Fine-tune](docs/fine-tune.md) |
 | **Scaffolding** | `npx create-hilbras-app` project scaffolding | [CLI](docs/cli.md) |
 | **Zero runtime deps** | Pure TypeScript, no transitive dependencies | — |
+
+---
+
+## React Hooks
+
+First-class React integration via `@hilbras/react`. Zero runtime dependencies beyond React itself.
+
+```bash
+npm install @hilbras/react
+```
+
+### useChat — Streaming chat
+
+```tsx
+import { HilbrasProvider, useChat } from "@hilbras/react";
+
+function App() {
+  return (
+    <HilbrasProvider config={{ providers: [{ name: "openai", apiKey: process.env.OPENAI_API_KEY }] }}>
+      <Chat />
+    </HilbrasProvider>
+  );
+}
+
+function Chat() {
+  const { messages, input, setInput, handleSubmit, isLoading, stop, retry } = useChat({
+    provider: "openai",
+    model: "gpt-4o",
+    systemPrompt: "You are a helpful assistant.",
+  });
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id} className={m.role}>
+          {m.content}
+        </div>
+      ))}
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={(e) => setInput(e.target.value)} disabled={isLoading} />
+        <button type="submit" disabled={isLoading}>Send</button>
+        {isLoading && <button onClick={stop}>Stop</button>}
+      </form>
+    </div>
+  );
+}
+```
+
+### useCompletion — Text completion
+
+```tsx
+import { useCompletion } from "@hilbras/react";
+
+function AutoComplete() {
+  const { completion, prompt, setPrompt, complete, isLoading } = useCompletion({
+    provider: "openai",
+    model: "gpt-4o",
+    systemPrompt: "Complete the following text:",
+  });
+
+  return (
+    <div>
+      <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+      <button onClick={() => complete()} disabled={isLoading}>Complete</button>
+      {completion && <div>{completion}</div>}
+    </div>
+  );
+}
+```
+
+### useCost — Real-time cost tracking
+
+```tsx
+import { useCost } from "@hilbras/react";
+
+function CostDisplay() {
+  const { snapshot, isBudgetLow } = useCost();
+
+  return (
+    <div style={{ color: isBudgetLow ? "red" : "green" }}>
+      Cost: ${snapshot.totalCost.toFixed(4)} | Tokens: {snapshot.totalTokens}
+      {snapshot.remainingBudget != null && ` | Remaining: $${snapshot.remainingBudget.toFixed(2)}`}
+    </div>
+  );
+}
+```
 
 ---
 
@@ -148,7 +241,7 @@ import { FetchTransport } from "@hilbras/sdk/transport/fetch";  // Transport
 import { validateBaseUrl } from "@hilbras/sdk";                 // SSRF guard
 
 // Packages
-import { useChat } from "@hilbras/react";          // React hooks
+import { useChat, useCompletion, useCost, HilbrasProvider } from "@hilbras/react";  // React hooks
 import { useChat } from "@hilbras/vue";            // Vue composables
 import { useChat } from "@hilbras/svelte";         // Svelte stores
 import { useChat } from "@hilbras/solid";          // Solid signals
@@ -168,7 +261,7 @@ import { exportTrainingData } from "@hilbras/fine-tune";  // Fine-tuning
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run 1278 tests
+npm test             # Run 1541 tests
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```
