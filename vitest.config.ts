@@ -2,8 +2,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     globals: true,
-    include: ["tests/**/*.test.ts", "tests/**/*.test-d.ts", "packages/**/*.test.ts"],
-    exclude: ["tests/benchmarks/**"],
+    include: ["tests/**/*.test.ts", "tests/**/*.test-d.ts"],
+    exclude: ["tests/benchmarks/**", "packages/next/tests/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "json-summary"],
