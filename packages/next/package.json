@@ -1,0 +1,30 @@
+{
+  "name": "@hilbras/next",
+  "version": "2.2.0",
+  "description": "Next.js integration for @hilbras/sdk — streaming API routes, middleware, edge runtime",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@hilbras/sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "next": ">=14.0.0"
+  },
+  "devDependencies": {
+    "next": "^15.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
+  },
+  "license": "MIT",
+  "keywords": ["ai", "nextjs", "streaming", "edge", "openai", "anthropic"]
+}

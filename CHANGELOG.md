@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-09-20
+
+### Added
+- **Next.js Integration (`@hilbras/next`):**
+  - `createStreamHandler` — streaming chat API route for App Router
+  - `createStreamCompletionHandler` — streaming completion API route
+  - `hilbrasMiddleware` — rate limiting middleware with per-IP tracking
+  - Edge runtime support
+- Phase 3 of Vercel AI SDK feature parity roadmap
+
 ## [2.1.0] - 2026-09-20
 
 ### Added
