@@ -1,0 +1,35 @@
+{
+  "name": "@hilbras/react",
+  "version": "2.0.0",
+  "description": "React hooks and components for @hilbras/sdk — streaming chat, completion, cost tracking",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@hilbras/sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
+  },
+  "license": "MIT",
+  "keywords": ["ai", "llm", "react", "hooks", "chat", "openai", "anthropic", "streaming"]
+}
