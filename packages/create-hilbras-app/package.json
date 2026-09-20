@@ -1,6 +1,6 @@
 {
   "name": "create-hilbras-app",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Scaffold a new project with @hilbras/sdk — npx create-hilbras-app",
   "type": "module",
   "main": "dist/index.js",

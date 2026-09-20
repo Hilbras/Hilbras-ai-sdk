@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.0] - 2026-09-20
+
+### Added
+- **Memory Module:** Automatic context window management with token-aware eviction
+  - `Memory` class with sliding, priority, and hybrid eviction strategies
+  - `buildContext()` — builds context message array within token budget
+  - Token-aware entry management with configurable estimator
+  - Search, remove, and stats operations
+  - `onEvict` callback for monitoring
+- Phase 4 of Vercel AI SDK feature parity roadmap
+
 ## [2.2.0] - 2026-09-20
 
 ### Added
