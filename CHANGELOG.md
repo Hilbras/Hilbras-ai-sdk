@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.4.0] - 2026-09-21
+
+### Fixed
+- **BUG-02 (P1):** ReasoningNormalizer buffer leak — `feedText()` now trims unbounded buffer growth when non-reasoning text is received, keeping only a small tail for cross-chunk tag detection
+- **BUG-04 (P1):** `streamObject` now throws `ValidationError` when final schema validation fails instead of silently dropping the result
+- **BUG-05 (P2):** `client.dispose()` now calls `transport.destroy()` when available, properly clearing FetchTransport's cleanup interval (previously only called `abort()`, leaking the `setInterval`)
+
+### Changed
+- Added optional `destroy?()` method to the `Transport` interface for full resource cleanup (timers, connection pools) beyond basic request abort
+
 ## [2.3.0] - 2026-09-20
 
 ### Added
