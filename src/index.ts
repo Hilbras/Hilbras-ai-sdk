@@ -240,8 +240,12 @@ export { RealtimeSession } from "./realtime/index.js";
 export type { RealtimeSessionConfig, RealtimeEvent, RealtimeEventHandler } from "./realtime/index.js";
 
 // ─── DevTools ───────────────────────────────────────────────────────────────
-export { DevTools } from "./devtools/index.js";
-export type { DevToolsConfig, LogEntry, RequestMetrics } from "./devtools/index.js";
+export { DevTools, DevToolsDashboard } from "./devtools/index.js";
+export type {
+  DevToolsConfig, LogEntry, RequestMetrics,
+  DashboardConfig, DashboardSnapshot, RequestTimelineEntry,
+  ProviderHealth, CostSnapshot, RoutingDecision, ThroughputSample,
+} from "./devtools/index.js";
 
 // ─── SSE Streaming Utilities ────────────────────────────────────────────────
 export {

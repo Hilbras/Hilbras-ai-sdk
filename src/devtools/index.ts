@@ -6,6 +6,17 @@
  * and provider details in a structured format.
  */
 
+export { DevToolsDashboard } from './dashboard.js';
+export type {
+  DashboardConfig,
+  DashboardSnapshot,
+  RequestTimelineEntry,
+  ProviderHealth,
+  CostSnapshot,
+  RoutingDecision,
+  ThroughputSample,
+} from './dashboard.js';
+
 export interface DevToolsConfig {
   logLevel?: "minimal" | "detailed" | "verbose";
   maxHistory?: number;

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-09-20
+
+### Added
+- **DevTools Dashboard Prototype:** Unified `DevToolsDashboard` class that aggregates data from hooks, cost tracker, circuit breaker registry, and model router into a single queryable snapshot. Features include:
+  - Request timeline tracking (pending/completed/failed/retrying)
+  - Latency percentiles (p50/p95/p99) and TTFT (time to first token)
+  - Per-provider health status from circuit breaker registry
+  - Cost breakdown by provider and phase from budget tracker
+  - Routing decision aggregation with success rates
+  - Retry, fallback, and validation failure tracking
+  - Real-time throughput sampling with configurable intervals
+  - `onUpdate()` push notifications on every event
+  - `renderText()` monospace text renderer for CLI output
+  - `exportJson()` for programmatic consumption
+  - Configurable retention limits for all data types
+- 33 new DevTools dashboard tests
+
+---
+
 ## [1.2.0] - 2026-09-19
 
 ### Added
