@@ -21,4 +21,12 @@ export interface Transport {
 
   /** Abort any in-flight requests */
   abort(): void;
+
+  /**
+   * Optional full cleanup: aborts in-flight requests AND releases resources
+   * (timers, connection pools, etc.). Implementations that hold intervals or
+   * pooled connections should override this. The client calls `destroy()`
+   * when available, falling back to `abort()`.
+   */
+  destroy?(): void;
 }

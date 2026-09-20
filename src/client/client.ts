@@ -1290,18 +1290,24 @@ export class HilbrasClient implements AsyncDisposable {
       } else if (chunk.type === "finish") {
         // Final validation of complete object
         const extracted = extractJson(accumulatedText);
+        const { ValidationError: VError } = await import("../errors/index.js");
         try {
           const finalObject = JSON.parse(extracted) as T;
           if (schemaValidator) {
             const result = schemaValidator.safeParse(finalObject);
             if (result.success) {
               onFinalObject?.(result.data);
+            } else {
+              // v2.4.0 BUG-04: throw ValidationError instead of silently dropping
+              throw new VError(1, result.error, accumulatedText);
             }
           } else {
             onFinalObject?.(finalObject);
           }
-        } catch {
-          // Final parse failed — the stream still completes
+        } catch (err) {
+          // Re-throw ValidationError; swallow only JSON parse errors (incomplete stream)
+          if (err instanceof VError) throw err;
+          // Final parse failed (incomplete JSON) — the stream still completes
         }
         yield chunk;
       } else {
@@ -1313,7 +1319,13 @@ export class HilbrasClient implements AsyncDisposable {
   // ─── Cleanup ────────────────────────────────────────────────────────────
 
   async dispose(): Promise<void> {
-    this._transport.abort();
+    // v2.4.0: Call destroy() when available to clear timers and pooled
+    // connections; fall back to abort() for basic transports.
+    if (typeof this._transport.destroy === "function") {
+      this._transport.destroy();
+    } else {
+      this._transport.abort();
+    }
     this._adapters.clear();
     this._registry.clear();
   }

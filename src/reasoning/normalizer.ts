@@ -41,7 +41,13 @@ export class ReasoningNormalizer {
             : null;
         }
       }
-      // Not a reasoning tag — return null (caller should yield as text)
+      // Not a reasoning tag — return null (caller should yield as text).
+      // v2.4.0 BUG-02: keep only a small tail for cross-chunk tag detection
+      // (e.g. chunk ends with "<think") to prevent unbounded buffer growth.
+      const MAX_TAG_PREFIX = 11; // "<reasoning>" is the longest opening tag
+      if (this._buffer.length > MAX_TAG_PREFIX) {
+        this._buffer = this._buffer.slice(-MAX_TAG_PREFIX);
+      }
       return null;
     }
 
