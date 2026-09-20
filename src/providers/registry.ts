@@ -25,7 +25,7 @@ export class ProviderRegistry {
 
   getOrThrow(name: string): ProviderConfig {
     const p = this._providers.get(name);
-    if (!p) throw new ProviderNotFoundError(name);
+    if (!p) throw new ProviderNotFoundError(name, this.list().map((c) => c.name));
     return p;
   }
 

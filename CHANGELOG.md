@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-09-20
+
+### Changed
+- **Actionable Error Messages:** All SDK errors now carry structured context: request ID, provider, model, cost, human-readable hints, retry-after timing, and available alternatives
+  - `ProviderRequestError`: HTTP status-specific hints (401→check API key, 429→rate limit, 500→transient), retryable flag, parsed retry-after from response body
+  - `CircuitBreakerOpenError`: retry-after timing, failure count, fallback suggestion
+  - `ModelNotFoundError`: lists available models on the provider
+  - `ProviderNotFoundError`: lists all registered providers
+  - `ConfigurationError`: contextual hints (budget remaining + options, feature support by provider, catalog model lists)
+  - `ValidationError`: schema fix suggestions
+  - `StreamError`: retry guidance
+  - `HilbrasSdkError.toSummary()` — formatted summary for logging
+- 25 new error message tests
+
 ## [1.3.1] - 2026-09-20
 
 ### Fixed

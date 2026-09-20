@@ -241,10 +241,10 @@ export class HilbrasClient implements AsyncDisposable {
    */
   addProviderFromCatalog(providerId: string, modelId: string, apiKey: string): void {
     const provider = getProviderCatalog(providerId);
-    if (!provider) throw new ConfigurationError(`Unknown provider: ${providerId}`);
+    if (!provider) throw new ConfigurationError(`Unknown provider: ${providerId}`, `Available catalog providers: openai, anthropic, google-vertex, google-genai, groq, mistral, deepseek, cohere, huggingface, ollama, bedrock, azure, elevenlabs, voyageai`);
     const models = getModelsForProvider(providerId);
     const model = models.find((m) => m.id === modelId);
-    if (!model) throw new ConfigurationError(`Model ${modelId} not found for provider ${providerId}`);
+    if (!model) throw new ConfigurationError(`Model ${modelId} not found for provider ${providerId}`, `Available models for ${providerId}: ${models.map((m) => m.id).join(", ")}`);
 
     const adapter = provider.adapters[0] as AdapterName ?? "openai-compatible";
     this.addProvider({
@@ -354,7 +354,7 @@ export class HilbrasClient implements AsyncDisposable {
 
   private _getAdapter(providerName: string): AIProvider {
     const adapter = this._adapters.get(providerName);
-    if (!adapter) throw new ProviderNotFoundError(providerName);
+    if (!adapter) throw new ProviderNotFoundError(providerName, this._registry.list().map((c) => c.name));
     return adapter;
   }
 
@@ -390,7 +390,10 @@ export class HilbrasClient implements AsyncDisposable {
       });
       if (!circuitBreaker.isAvailable()) {
         this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
-        throw new CircuitBreakerOpenError(providerName);
+        throw new CircuitBreakerOpenError(providerName, {
+          failureCount: circuitBreaker.stats.failureCount,
+          retryAfterMs: resolved.circuitBreaker.timeoutMs,
+        });
       }
     }
     const retryConfig = createRetryConfig({
@@ -504,7 +507,7 @@ export class HilbrasClient implements AsyncDisposable {
     const { providerName, modelId } = this._resolveProviderModel(params);
     const providerConfig = this._registry.getOrThrow(providerName);
     const model = providerConfig.models.find((m) => m.id === modelId);
-    if (!model) throw new ModelNotFoundError(modelId, providerName);
+    if (!model) throw new ModelNotFoundError(modelId, providerName, providerConfig.models.map((m) => m.id));
 
     this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
@@ -527,7 +530,10 @@ export class HilbrasClient implements AsyncDisposable {
     estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
     const initialReservation = this._budgetTracker.reserve(requestId, estimatedCost);
     if (!initialReservation) {
-      throw new ConfigurationError(`Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`);
+      throw new ConfigurationError(
+        `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
+        `Remaining budget: $${this._budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
+      );
     }
     reservationActive = true;
 
@@ -694,7 +700,7 @@ export class HilbrasClient implements AsyncDisposable {
     const resolved_ = this._resolveProviderModel({ ...params, hasOutput: !!params.output });
     const providerConfig = this._registry.getOrThrow(resolved_.providerName);
     const model = providerConfig.models.find((m) => m.id === resolved_.modelId);
-    if (!model) throw new ModelNotFoundError(resolved_.modelId, resolved_.providerName);
+    if (!model) throw new ModelNotFoundError(resolved_.modelId, resolved_.providerName, providerConfig.models.map((m) => m.id));
     const providerName = resolved_.providerName;
     const modelId = resolved_.modelId;
 
@@ -736,7 +742,10 @@ export class HilbrasClient implements AsyncDisposable {
     const estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
     const reservation = this._budgetTracker.reserve(requestId, estimatedCost);
     if (!reservation) {
-      throw new ConfigurationError(`Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`);
+      throw new ConfigurationError(
+        `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
+        `Remaining budget: $${this._budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
+      );
     }
 
     for (let attempt = 0; ; attempt++) {
@@ -794,7 +803,7 @@ export class HilbrasClient implements AsyncDisposable {
 
         // Exhausted repair attempts
         this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: "Validation failed after repair attempts" });
-        throw new ValidationError(maxRepairAttempts + 1, validation.error, result);
+        throw new ValidationError(maxRepairAttempts + 1, validation.error, result, { requestId, model: modelId });
       } catch (err: unknown) {
         // Don't retry validation errors through the retry loop
         if (err instanceof ValidationError) {
@@ -835,7 +844,7 @@ export class HilbrasClient implements AsyncDisposable {
               const parsed = JSON.parse(json);
               const validation = outputConfig.schema.safeParse(parsed);
               if (validation.success) return validation.data;
-              throw new ValidationError(maxRepairAttempts + 1, validation.error, result);
+              throw new ValidationError(maxRepairAttempts + 1, validation.error, result, { requestId, model: fb.model });
             } catch {
               this._budgetTracker.release(`${requestId}_fb_${fb.model}`);
             }
@@ -914,7 +923,10 @@ export class HilbrasClient implements AsyncDisposable {
   }): Promise<EmbeddingResult> {
     const adapter = this._getAdapter(params.provider);
     if (!adapter.embed) {
-      throw new ConfigurationError(`Provider "${params.provider}" does not support embeddings`);
+      throw new ConfigurationError(
+        `Provider "${params.provider}" does not support embeddings`,
+        `Providers supporting embeddings: openai, voyageai, cohere, huggingface, google-vertex, google-genai`,
+      );
     }
     const requestId = this._nextRequestId();
     return this._runMultiModal(requestId, params.provider, params.model, "embed", (signal) =>
@@ -937,7 +949,10 @@ export class HilbrasClient implements AsyncDisposable {
   }): Promise<ImageResult> {
     const adapter = this._getAdapter(params.provider);
     if (!adapter.generateImage) {
-      throw new ConfigurationError(`Provider "${params.provider}" does not support image generation`);
+      throw new ConfigurationError(
+        `Provider "${params.provider}" does not support image generation`,
+        `Providers supporting image generation: openai (DALL-E), google-genai, stability-ai`,
+      );
     }
     const requestId = this._nextRequestId();
     return this._runMultiModal(requestId, params.provider, params.model, "generateImage", (signal) =>
@@ -961,7 +976,10 @@ export class HilbrasClient implements AsyncDisposable {
   }): Promise<SpeechResult> {
     const adapter = this._getAdapter(params.provider);
     if (!adapter.generateSpeech) {
-      throw new ConfigurationError(`Provider "${params.provider}" does not support speech synthesis`);
+      throw new ConfigurationError(
+        `Provider "${params.provider}" does not support speech synthesis`,
+        `Providers supporting speech synthesis: openai (TTS), elevenlabs`,
+      );
     }
     const requestId = this._nextRequestId();
     return this._runMultiModal(requestId, params.provider, params.model, "generateSpeech", (signal) =>
@@ -986,7 +1004,10 @@ export class HilbrasClient implements AsyncDisposable {
   }): Promise<TranscriptionResult> {
     const adapter = this._getAdapter(params.provider);
     if (!adapter.transcribe) {
-      throw new ConfigurationError(`Provider "${params.provider}" does not support transcription`);
+      throw new ConfigurationError(
+        `Provider "${params.provider}" does not support transcription`,
+        `Providers supporting transcription: openai (Whisper), deepgram, google-genai, elevenlabs`,
+      );
     }
     const requestId = this._nextRequestId();
     return this._runMultiModal(requestId, params.provider, params.model, "transcribe", (signal) =>
@@ -1010,7 +1031,10 @@ export class HilbrasClient implements AsyncDisposable {
   }): Promise<RerankResult> {
     const adapter = this._getAdapter(params.provider);
     if (!adapter.rerank) {
-      throw new ConfigurationError(`Provider "${params.provider}" does not support reranking`);
+      throw new ConfigurationError(
+        `Provider "${params.provider}" does not support reranking`,
+        `Providers supporting reranking: cohere, voyageai`,
+      );
     }
     const requestId = this._nextRequestId();
     return this._runMultiModal(requestId, params.provider, params.model, "rerank", (signal) =>

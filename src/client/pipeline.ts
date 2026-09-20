@@ -142,7 +142,10 @@ export function buildPipelineContext(args: BuildContextArgs): PipelineContext {
         timestamp: performance.now(),
         provider: args.providerConfig.name,
       });
-      throw new CircuitBreakerOpenError(args.providerConfig.name);
+      throw new CircuitBreakerOpenError(args.providerConfig.name, {
+        failureCount: circuitBreaker.stats.failureCount,
+        retryAfterMs: resolved.circuitBreaker.timeoutMs,
+      });
     }
   }
   const retryConfig = createRetryConfig({
@@ -193,6 +196,7 @@ export async function runStreamAttempt(
   if (!initialReservation) {
     throw new ConfigurationError(
       `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
+      `Remaining budget: $${budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
     );
   }
 
@@ -283,6 +287,7 @@ export async function runCompleteAttempt<T>(
   if (!initialReservation) {
     throw new ConfigurationError(
       `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
+      `Remaining budget: $${budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
     );
   }
 
