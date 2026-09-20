@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0] - 2026-09-20
+
+### Added
+- **React Hooks (`@hilbras/react`):** First-class React integration for the Hilbras AI SDK
+  - `useChat` — streaming chat with messages, input, abort, retry, token tracking
+  - `useCompletion` — text completion with streaming and token counts
+  - `useCost` — real-time cost/token tracking with budget alerts
+  - `HilbrasProvider` — context provider for shared client instance
+- Phase 1 of Vercel AI SDK feature parity roadmap
+
 ## [1.5.0] - 2026-09-20
 
 ### Added
