@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-09-20
+
+### Added
+- **Framework Examples:** Complete example apps for Next.js, SvelteKit, and Hono
+  - Next.js: App Router with streaming chat, structured output (Zod), cost tracking
+  - SvelteKit: Streaming chat with reactive UI, structured output
+  - Hono: Lightweight edge runtime API server with streaming, structured output, cost endpoint
+
 ## [1.4.0] - 2026-09-20
 
 ### Changed
