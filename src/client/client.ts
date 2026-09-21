@@ -28,6 +28,7 @@ import type {
 } from "../types/multi-modal.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { FetchTransport } from "../transport/fetch.js";
+import { MiddlewareTransport } from "../transport/middleware-transport.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
 import { createRetryConfig, shouldRetry, shouldRetryNetworkError } from "../reliability/retry.js";
 import { calculateBackoff, sleep } from "../reliability/backoff.js";
@@ -46,7 +47,7 @@ import type { OpenTelemetryExporter } from "../telemetry/opentelemetry.js";
 import type { HookEvent, HookEventType, HookListener } from "../types/observability.js";
 import { BudgetTracker } from "../cost/tracker.js";
 import type { BudgetConfig, CostReport } from "../cost/types.js";
-import { estimateTokens } from "../tokens/counter.js";
+import { estimateTokens, type Tokenizer } from "../tokens/counter.js";
 import { getProviderCatalog, getModelsForProvider } from "../catalog/index.js";
 import type { AdapterName } from "../types/providers.js";
 import type { ModelCapabilities } from "../types/models.js";
@@ -54,6 +55,22 @@ import type { ModelCapabilities } from "../types/models.js";
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
   transport?: Transport;
+  /**
+   * v2.5.0: Middleware pipeline applied to all transport requests.
+   * When provided, the transport is automatically wrapped with a
+   * `MiddlewareTransport` that applies the middleware chain.
+   *
+   * This is a convenience shortcut — if you already have a custom
+   * `transport` that wraps middleware, you don't need this.
+   *
+   * @example
+   * ```ts
+   * const client = new HilbrasClient({
+   *   middleware: composeMiddlewares(authMiddleware(getToken), loggingMiddleware()),
+   * });
+   * ```
+   */
+  middleware?: import("../middleware/middleware.js").Middleware;
   /** Custom adapter registry (default: built-in registry with openai, anthropic, etc.) */
   adapterRegistry?: AdapterRegistry;
   /** Default execution policy for all requests (can be overridden per-request) */
@@ -93,6 +110,22 @@ export interface HilbrasClientConfig {
     /** OpenTelemetry exporter for traces and metrics */
     openTelemetry?: OpenTelemetryExporter;
   };
+  /**
+   * v2.5.0 BUG-04: Optional per-client tokenizer for accurate token counting.
+   * When provided, this tokenizer is used instead of the global `setTokenizer()`
+   * singleton, allowing multiple clients to use different tokenizers without
+   * interfering with each other.
+   *
+   * @example
+   * ```ts
+   * import { createTokenizer } from "tiktoken";
+   * const enc = await createTokenizer("cl100k_base");
+   * const client = new HilbrasClient({
+   *   tokenizer: { count: (text) => enc.encode(text).length },
+   * });
+   * ```
+   */
+  tokenizer?: Tokenizer;
 }
 
 export class HilbrasClient implements AsyncDisposable {
@@ -107,13 +140,19 @@ export class HilbrasClient implements AsyncDisposable {
   private _budgetTracker: BudgetTracker;
   private _allowInsecureUrls: boolean;
   private _allowPrivateNetwork: boolean;
+  private _tokenizer: Tokenizer | null;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
+    // v2.5.0: Wrap transport with middleware pipeline when provided
+    if (config?.middleware) {
+      this._transport = new MiddlewareTransport(this._transport, config.middleware);
+    }
     this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
     this._router = new ModelRouter();
     this._allowInsecureUrls = config?.allowInsecureUrls ?? false;
     this._allowPrivateNetwork = config?.allowPrivateNetwork ?? false;
+    this._tokenizer = config?.tokenizer ?? null;
 
     // v0.10.0 PR-5: derive policy + budget from sdkConfig when not
     // explicitly provided. Precedence: explicit > sdkConfig > defaults.
@@ -189,6 +228,18 @@ export class HilbrasClient implements AsyncDisposable {
 
   private _nextRequestId(): string {
     return `req_${++this._requestCounter}`;
+  }
+
+  /**
+   * Client-scoped token estimation. Uses the per-client tokenizer when set,
+   * otherwise falls back to the global `estimateTokens()`.
+   *
+   * BUG-04 fix: This prevents multiple clients from fighting over the global
+   * `setTokenizer()` singleton.
+   */
+  private _estimateTokens(text: string): number {
+    if (this._tokenizer) return this._tokenizer.count(text);
+    return estimateTokens(text);
   }
 
   private _emit(event: HookEvent): void {
@@ -527,7 +578,7 @@ export class HilbrasClient implements AsyncDisposable {
     // Atomic budget reservation before any provider call. Reserves the
     // estimated cost for the entire retry+fallback chain; the reservation is
     // converted to actual on the first usage chunk, or released on failure.
-    estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
+    estimatedCost = this._budgetTracker.estimate(modelId, providerName, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
     const initialReservation = this._budgetTracker.reserve(requestId, estimatedCost);
     if (!initialReservation) {
       throw new ConfigurationError(
@@ -611,7 +662,7 @@ export class HilbrasClient implements AsyncDisposable {
                 reservationActive = false;
               }
               const fbReservationId = `${requestId}_fb_${fb.model}`;
-              const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
+              const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
               const fbReservation = this._budgetTracker.reserve(fbReservationId, fbEstimatedCost);
               if (!fbReservation) continue; // budget exceeded for this fallback
               let fbReservationActive = true;
@@ -739,7 +790,7 @@ export class HilbrasClient implements AsyncDisposable {
     const maxRepairAttempts = outputConfig?.maxRepairAttempts ?? 2;
 
     // Budget: atomic reserve before execution
-    const estimatedCost = this._budgetTracker.estimate(modelId, providerName, estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
+    const estimatedCost = this._budgetTracker.estimate(modelId, providerName, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
     const reservation = this._budgetTracker.reserve(requestId, estimatedCost);
     if (!reservation) {
       throw new ConfigurationError(

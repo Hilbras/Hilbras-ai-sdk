@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.4.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-2.5.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1541%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1563%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -95,6 +95,74 @@ const reply = await client.complete({
 
 ---
 
+## Configuration
+
+### Per-client tokenizer
+
+By default, token counting uses a heuristic word-based estimator. Pass a
+custom tokenizer to scope it to a single client instance:
+
+```typescript
+import { HilbrasClient } from "@hilbras/sdk";
+
+// Your BPE / tiktoken / ollama tokenizer
+const tokenizer = {
+  count(text: string): number {
+    return yourTokenizer.encode(text).length;
+  },
+};
+
+const client = new HilbrasClient({ tokenizer });
+
+// Every request on this client uses your tokenizer
+const reply = await client.complete({
+  provider: "openai",
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello!" }],
+});
+```
+
+> **v2.5.0:** The global `setTokenizer()` / `getTokenizer()` singletons are
+> deprecated. Use the per-client `tokenizer` config instead to avoid cross-client
+> interference.
+
+### Middleware
+
+Wrap the transport with middleware for auth, logging, or custom transforms.
+Middleware runs on **every** request (including retries) for the client:
+
+```typescript
+import { HilbrasClient } from "@hilbras/sdk";
+import { authMiddleware, loggingMiddleware, composeMiddlewares } from "@hilbras/sdk";
+
+const client = new HilbrasClient({
+  middleware: composeMiddlewares(
+    authMiddleware(() => process.env.API_KEY!),
+    loggingMiddleware(console),
+  ),
+});
+
+// All requests go through both middleware layers
+const reply = await client.complete({
+  provider: "openai",
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello!" }],
+});
+```
+
+You can also use `MiddlewareTransport` directly to wrap any transport:
+
+```typescript
+import { MiddlewareTransport, FetchTransport } from "@hilbras/sdk";
+
+const transport = new MiddlewareTransport(
+  new FetchTransport(),
+  composeMiddlewares(authMiddleware(() => "my-key")),
+);
+```
+
+---
+
 ## Features at a glance
 
 | Feature | Summary | Docs |
@@ -111,6 +179,8 @@ const reply = await client.complete({
 | **SSRF safety** | Default-reject `http://`, block AWS metadata, opt-in for local Ollama | [Security](docs/security.md) |
 | **Error redaction** | API keys auto-redacted from provider error bodies | [Security](docs/security.md#error-redaction-in-provider-responses) |
 | **Reasoning normalization** | Detect & normalize `<thinking>` / `<reasoning>` tags and native fields | [API Reference](docs/api-reference.md) |
+| **Per-client tokenizer** | Scoped BPE tokenizer per client instance — no global singletons | [API Reference](docs/api-reference.md) |
+| **Middleware pipeline** | Transport-level middleware: auth headers, logging, custom request/response transforms | [API Reference](docs/api-reference.md) |
 | **Agent framework** | ToolLoopAgent, ReActAgent, PlanAndExecuteAgent with approval, budget, cost tracking | [Agent](docs/agent.md) |
 | **Evaluation** | LLM output evaluation with built-in metrics (exact_match, similarity, toxicity) | [Eval](docs/eval.md) |
 | **React hooks** | `useChat`, `useCompletion`, `useCost` with streaming, abort, retry | [React](#react-hooks) |
@@ -238,6 +308,7 @@ import type { AIProvider } from "@hilbras/sdk/adapter";         // Provider cont
 import { estimateTokens } from "@hilbras/sdk/tokens";           // Token utilities
 import { loadConfig } from "@hilbras/sdk/config";               // Config
 import { FetchTransport } from "@hilbras/sdk/transport/fetch";  // Transport
+import { MiddlewareTransport } from "@hilbras/sdk";             // Middleware wrapper
 import { validateBaseUrl } from "@hilbras/sdk";                 // SSRF guard
 
 // Packages
@@ -261,7 +332,7 @@ import { exportTrainingData } from "@hilbras/fine-tune";  // Fine-tuning
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run 1541 tests
+npm test             # Run 1563 tests
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```

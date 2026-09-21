@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.5.0] - 2026-09-21
+
+### Added
+- **BUG-04 fix: Per-client tokenizer** — `HilbrasClientConfig` now accepts a `tokenizer` option, allowing each client instance to use its own BPE tokenizer without interfering with other clients. The global `setTokenizer()` singleton is deprecated in favor of this scoped approach
+- **MiddlewareTransport** — New `MiddlewareTransport` class that wraps any `Transport` with a middleware pipeline (`composeMiddlewares`, `authMiddleware`, etc.)
+- **Client middleware config** — `HilbrasClientConfig` now accepts a `middleware` option that automatically wraps the transport with the middleware pipeline
+- 22 new tests covering per-client tokenizer, middleware transport, and client middleware config
+
+### Deprecated
+- `setTokenizer()` / `getTokenizer()` global singleton — Use `new HilbrasClient({ tokenizer: ... })` instead
+- `sdkLogger` singleton in `logging/logger.ts` — Use `new HilbrasClient({ telemetry: { structuredLogger: ... } })` instead
+- `chunk` factory object in `types/streams.ts` — Prefer constructing typed chunk objects directly
+
+---
+
 ## [2.4.0] - 2026-09-21
 
 ### Fixed

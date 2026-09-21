@@ -105,6 +105,7 @@ export type { CostEvent, CostReport, BudgetConfig } from "./cost/types.js";
 export type { Transport, TransportRequestInit } from "./transport/transport.js";
 export { FetchTransport } from "./transport/fetch.js";
 export { WebSocketTransport } from "./transport/websocket.js";
+export { MiddlewareTransport } from "./transport/middleware-transport.js";
 
 // ─── Reliability ────────────────────────────────────────────────────────────
 export { CircuitBreaker, CircuitBreakerRegistry, getCircuitBreakerRegistry } from "./reliability/circuit-breaker.js";
