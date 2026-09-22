@@ -33,6 +33,10 @@ Commands:
   provider list                 List all configured providers
   model list [--provider <n>]   List available models
   cost estimate                 Estimate cost for a model
+  chat                          Interactive chat REPL
+  bench                         Benchmark provider latency and throughput
+  costs                         Show cost report from a session or file
+  dashboard                     Render DevTools dashboard in terminal
   doctor                        Diagnose configuration issues
 
 Options:
@@ -242,6 +246,303 @@ function cmdDoctor(): void {
   log("Doctor complete.");
 }
 
+// ─── v3.0.0: Interactive Chat ──────────────────────────────────────────────
+
+async function cmdChat(opts: { provider?: string; model?: string; temperature?: string; maxTokens?: string }): Promise<void> {
+  const { createInterface } = await import("node:readline");
+  let HilbrasClient: typeof import("@hilbras/sdk").HilbrasClient;
+  try {
+    ({ HilbrasClient } = await import("@hilbras/sdk"));
+  } catch {
+    error("chat command requires @hilbras/sdk to be installed.");
+    error("Run: npm install @hilbras/sdk");
+    process.exit(1);
+  }
+
+  const config = loadConfig();
+  const providers = (config.providers as Array<Record<string, unknown>>) ?? [];
+  if (providers.length === 0) {
+    error("No providers configured. Run 'hilbras provider add <name>' first.");
+    process.exit(1);
+  }
+
+  const providerName = opts.provider ?? providers[0]?.name as string;
+  const model = opts.model ?? (config as Record<string, unknown>).defaults
+    ? ((config as Record<string, unknown>).defaults as Record<string, unknown>)?.model as string ?? "gpt-4o"
+    : "gpt-4o";
+  const temperature = opts.temperature ? parseFloat(opts.temperature) : 0.7;
+  const maxTokens = opts.maxTokens ? parseInt(opts.maxTokens, 10) : 4096;
+
+  const client = new HilbrasClient();
+  for (const p of providers) {
+    const template = PROVIDER_TEMPLATES[p.name as string];
+    if (template) {
+      const envVal = template.envKey ? process.env[template.envKey] : undefined;
+      client.addProvider({
+        name: p.name as string,
+        baseUrl: p.baseUrl as string,
+        adapter: template.adapter as "openai" | "anthropic" | "google-genai" | "groq" | "mistral" | "deepseek" | "xai" | "together" | "fireworks" | "ollama" | "bedrock" | "google-vertex" | "huggingface" | "deepgram" | "elevenlabs" | "voyageai" | "cohere-rerank" | "openai-compatible",
+        authentication: envVal ? { type: "bearer", apiKey: envVal } : { type: "none" },
+        models: [{ id: model }],
+      });
+    }
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const messages: Array<{ role: string; content: string }> = [];
+
+  log(`hilbras chat — ${providerName}/${model}`);
+  log("Type your message and press Enter. Type 'exit' or 'quit' to leave.\n");
+
+  const prompt = (): void => {
+    rl.question("You: ", async (input) => {
+      const trimmed = input.trim();
+      if (!trimmed || trimmed === "exit" || trimmed === "quit") {
+        log("\nGoodbye!");
+        rl.close();
+        await client.dispose();
+        process.exit(0);
+      }
+
+      messages.push({ role: "user", content: trimmed });
+
+      try {
+        process.stdout.write("Assistant: ");
+        const stream = client.stream({
+          provider: providerName,
+          model,
+          messages,
+          temperature,
+          maxTokens,
+        });
+        let fullResponse = "";
+        for await (const chunk of stream) {
+          if (chunk.type === "text") {
+            process.stdout.write(chunk.text);
+            fullResponse += chunk.text;
+          }
+        }
+        process.stdout.write("\n\n");
+        messages.push({ role: "assistant", content: fullResponse });
+      } catch (err) {
+        error((err as Error).message);
+        process.stdout.write("\n");
+      }
+
+      prompt();
+    });
+  };
+
+  prompt();
+}
+
+// ─── v3.0.0: Benchmark ─────────────────────────────────────────────────────
+
+async function cmdBench(opts: { prompt?: string; providers?: string; runs?: string }): Promise<void> {
+  let HilbrasClient: typeof import("@hilbras/sdk").HilbrasClient;
+  try {
+    ({ HilbrasClient } = await import("@hilbras/sdk"));
+  } catch {
+    error("bench command requires @hilbras/sdk to be installed.");
+    error("Run: npm install @hilbras/sdk");
+    process.exit(1);
+  }
+
+  const config = loadConfig();
+  const providers = (config.providers as Array<Record<string, unknown>>) ?? [];
+  if (providers.length === 0) {
+    error("No providers configured. Run 'hilbras provider add <name>' first.");
+    process.exit(1);
+  }
+
+  const benchPrompt = opts.prompt ?? "Hello, world!";
+  const runs = opts.runs ? parseInt(opts.runs, 10) : 3;
+  const filterProviders = opts.providers?.split(",").map((s) => s.trim());
+
+  const client = new HilbrasClient();
+  for (const p of providers) {
+    const template = PROVIDER_TEMPLATES[p.name as string];
+    if (template) {
+      const envVal = template.envKey ? process.env[template.envKey] : undefined;
+      client.addProvider({
+        name: p.name as string,
+        baseUrl: p.baseUrl as string,
+        adapter: template.adapter as "openai" | "anthropic" | "google-genai" | "groq" | "mistral" | "deepseek" | "xai" | "together" | "fireworks" | "ollama" | "bedrock" | "google-vertex" | "huggingface" | "deepgram" | "elevenlabs" | "voyageai" | "cohere-rerank" | "openai-compatible",
+        authentication: envVal ? { type: "bearer", apiKey: envVal } : { type: "none" },
+        models: [{ id: "gpt-4o" }],
+      });
+    }
+  }
+
+  const targetProviders = filterProviders ?? providers.map((p) => p.name as string);
+  const results: Array<{ provider: string; avgLatency: number; tokensPerSec: number; avgCost: number; errors: number }> = [];
+
+  log(`Benchmarking ${targetProviders.length} provider(s) with ${runs} run(s) each...`);
+  log(`Prompt: "${benchPrompt}"\n`);
+
+  for (const providerName of targetProviders) {
+    const latencies: number[] = [];
+    const tokenRates: number[] = [];
+    const costs: number[] = [];
+    let errors = 0;
+
+    for (let i = 0; i < runs; i++) {
+      const start = performance.now();
+      let tokens = 0;
+      try {
+        for await (const chunk of client.stream({
+          provider: providerName,
+          model: "gpt-4o",
+          messages: [{ role: "user", content: benchPrompt }],
+        })) {
+          if (chunk.type === "text") tokens += chunk.text.length; // rough char count as proxy
+          if (chunk.type === "usage") {
+            const outT = (chunk as { outputTokens?: number }).outputTokens;
+            if (outT) tokens = outT;
+          }
+        }
+        const elapsed = performance.now() - start;
+        latencies.push(elapsed);
+        tokenRates.push(tokens / (elapsed / 1000));
+      } catch {
+        errors++;
+      }
+    }
+
+    const avgLatency = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+    const tokensPerSec = tokenRates.length > 0 ? tokenRates.reduce((a, b) => a + b, 0) / tokenRates.length : 0;
+
+    results.push({ provider: providerName, avgLatency, tokensPerSec, avgCost: 0, errors });
+  }
+
+  // Print results table
+  log("Results:");
+  log("─".repeat(70));
+  log(`${"Provider".padEnd(20)} ${"Avg Latency".padEnd(15)} ${"Tokens/sec".padEnd(15)} ${"Errors".padEnd(10)}`);
+  log("─".repeat(70));
+  for (const r of results) {
+    log(`${r.provider.padEnd(20)} ${`${r.avgLatency.toFixed(0)}ms`.padEnd(15)} ${r.tokensPerSec.toFixed(1).padEnd(15)} ${String(r.errors).padEnd(10)}`);
+  }
+  log("─".repeat(70));
+
+  await client.dispose();
+}
+
+// ─── v3.0.0: Cost Report ───────────────────────────────────────────────────
+
+function cmdCosts(opts: { file?: string }): void {
+  if (opts.file) {
+    if (!existsSync(opts.file)) {
+      error(`File not found: ${opts.file}`);
+      process.exit(1);
+    }
+    const data = JSON.parse(readFileSync(opts.file, "utf-8"));
+    printCostReport(data);
+    return;
+  }
+
+  // Try to read from a default location
+  const defaultPath = join(process.cwd(), ".hilbras-costs.json");
+  if (existsSync(defaultPath)) {
+    const data = JSON.parse(readFileSync(defaultPath, "utf-8"));
+    printCostReport(data);
+    return;
+  }
+
+  log("No cost data found. Usage:");
+  log("  hilbras costs --file <path>    Read from a saved cost report JSON");
+  log("");
+  log("To capture a cost report programmatically:");
+  log('  const report = client.costReport();');
+  log('  writeFileSync(".hilbras-costs.json", JSON.stringify(report, null, 2));');
+}
+
+function printCostReport(report: Record<string, unknown>): void {
+  log("Cost Report");
+  log("═══════════");
+  log(`  Total Actual:    $${(report.totalActual as number ?? 0).toFixed(4)}`);
+  log(`  Total Estimated: $${(report.totalEstimated as number ?? 0).toFixed(4)}`);
+  log(`  Remaining:       $${report.remainingBudget != null ? (report.remainingBudget as number).toFixed(4) : "unlimited"}`);
+  log(`  Requests:        ${report.requestCount ?? 0}`);
+  log(`  Budget Exceeded: ${report.budgetExceeded ? "YES" : "no"}`);
+
+  const byProvider = report.byProvider as Record<string, { estimated: number; actual: number; requests: number }> | undefined;
+  if (byProvider && Object.keys(byProvider).length > 0) {
+    log("\n  By Provider:");
+    for (const [name, data] of Object.entries(byProvider)) {
+      log(`    ${name.padEnd(20)} $${data.actual.toFixed(4)}  (${data.requests} requests)`);
+    }
+  }
+}
+
+// ─── v3.0.0: Dashboard ─────────────────────────────────────────────────────
+
+function cmdDashboard(opts: { file?: string }): void {
+  if (opts.file) {
+    if (!existsSync(opts.file)) {
+      error(`File not found: ${opts.file}`);
+      process.exit(1);
+    }
+    const data = JSON.parse(readFileSync(opts.file, "utf-8"));
+    printDashboard(data);
+    return;
+  }
+
+  // Try to read from a default location
+  const defaultPath = join(process.cwd(), ".hilbras-dashboard.json");
+  if (existsSync(defaultPath)) {
+    const data = JSON.parse(readFileSync(defaultPath, "utf-8"));
+    printDashboard(data);
+    return;
+  }
+
+  log("No dashboard data found. Usage:");
+  log("  hilbras dashboard --file <path>    Read from a saved dashboard JSON");
+  log("");
+  log("To capture dashboard data programmatically:");
+  log('  const dashboard = new DevToolsDashboard();');
+  log('  // ... make requests ...');
+  log('  const snapshot = dashboard.snapshot();');
+  log('  writeFileSync(".hilbras-dashboard.json", JSON.stringify(snapshot, null, 2));');
+}
+
+function printDashboard(snapshot: Record<string, unknown>): void {
+  log("Hilbras DevTools Dashboard");
+  log("══════════════════════════");
+
+  const timeline = snapshot.requestTimeline as Array<Record<string, unknown>> | undefined;
+  if (timeline && timeline.length > 0) {
+    log(`\n  Requests: ${timeline.length}`);
+    const completed = timeline.filter((r) => r.success);
+    const failed = timeline.filter((r) => !r.success);
+    log(`  Completed: ${completed.length}  Failed: ${failed.length}`);
+
+    if (completed.length > 0) {
+      const latencies = completed.map((r) => r.durationMs as number).sort((a, b) => a - b);
+      const p50 = latencies[Math.floor(latencies.length * 0.5)];
+      const p95 = latencies[Math.floor(latencies.length * 0.95)];
+      const p99 = latencies[Math.floor(latencies.length * 0.99)];
+      log(`  Latency p50: ${p50?.toFixed(0) ?? "N/A"}ms  p95: ${p95?.toFixed(0) ?? "N/A"}ms  p99: ${p99?.toFixed(0) ?? "N/A"}ms`);
+    }
+  }
+
+  const cost = snapshot.cost as Record<string, unknown> | undefined;
+  if (cost) {
+    log(`\n  Cost: $${(cost.totalActual as number ?? 0).toFixed(4)}`);
+  }
+
+  const health = snapshot.providerHealth as Record<string, Record<string, unknown>> | undefined;
+  if (health && Object.keys(health).length > 0) {
+    log("\n  Provider Health:");
+    for (const [name, h] of Object.entries(health)) {
+      const status = h.circuitBreakerOpen ? "⚠ CIRCUIT OPEN" : "✓ healthy";
+      log(`    ${name}: ${status} (${h.totalRequests ?? 0} requests)`);
+    }
+  }
+
+  log("");
+}
+
 // ─── CLI Entry Point ──────────────────────────────────────────────
 
 const args = process.argv.slice(2);
@@ -307,6 +608,44 @@ switch (command) {
   case "doctor":
     cmdDoctor();
     break;
+
+  case "chat": {
+    const providerIdx = args.indexOf("--provider");
+    const modelIdx = args.indexOf("--model");
+    const tempIdx = args.indexOf("--temperature");
+    const maxIdx = args.indexOf("--max-tokens");
+    cmdChat({
+      provider: providerIdx !== -1 ? args[providerIdx + 1] : undefined,
+      model: modelIdx !== -1 ? args[modelIdx + 1] : undefined,
+      temperature: tempIdx !== -1 ? args[tempIdx + 1] : undefined,
+      maxTokens: maxIdx !== -1 ? args[maxIdx + 1] : undefined,
+    }).catch((err) => { error(err.message); process.exit(1); });
+    break;
+  }
+
+  case "bench": {
+    const promptIdx = args.indexOf("--prompt");
+    const providersIdx = args.indexOf("--providers");
+    const runsIdx = args.indexOf("--runs");
+    cmdBench({
+      prompt: promptIdx !== -1 ? args[promptIdx + 1] : undefined,
+      providers: providersIdx !== -1 ? args[providersIdx + 1] : undefined,
+      runs: runsIdx !== -1 ? args[runsIdx + 1] : undefined,
+    }).catch((err) => { error(err.message); process.exit(1); });
+    break;
+  }
+
+  case "costs": {
+    const fileIdx = args.indexOf("--file");
+    cmdCosts({ file: fileIdx !== -1 ? args[fileIdx + 1] : undefined });
+    break;
+  }
+
+  case "dashboard": {
+    const fileIdx = args.indexOf("--file");
+    cmdDashboard({ file: fileIdx !== -1 ? args[fileIdx + 1] : undefined });
+    break;
+  }
 
   default:
     error(`Unknown command "${command}". Run 'hilbras --help' for usage.`);

@@ -27,11 +27,21 @@ let _customTokenizer: Tokenizer | null = null;
  * Set a custom tokenizer for accurate token counting.
  * Pass null to reset to the default heuristic.
  *
+ * **DEPRECATED**: Use the `tokenizer` option on `HilbrasClientConfig` instead.
+ * The global singleton approach causes conflicts when multiple clients are used
+ * in the same process. Per-client tokenizers are scoped and safe.
+ *
+ * @deprecated Use `new HilbrasClient({ tokenizer: ... })` instead.
+ *
  * @example
  * ```ts
- * import { setTokenizer } from "@hilbras/sdk";
- * // With tiktoken WASM
+ * // Instead of:
  * setTokenizer({ count: (text) => tiktoken.encode(text).length });
+ *
+ * // Use:
+ * const client = new HilbrasClient({
+ *   tokenizer: { count: (text) => tiktoken.encode(text).length },
+ * });
  * ```
  */
 export function setTokenizer(tokenizer: Tokenizer | null): void {

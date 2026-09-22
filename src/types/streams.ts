@@ -91,6 +91,16 @@ export type StreamChunk =
 
 // ─── Helper constructors ────────────────────────────────────────────────────
 
+/**
+ * Stream chunk constructors for building typed chunks manually.
+ *
+ * These factories are available as a public API for external consumers who
+ * build custom adapters or transport layers. Internally, adapters construct
+ * chunks directly as plain objects.
+ *
+ * @deprecated Prefer constructing chunk objects directly with the discriminated union types.
+ * These helpers are kept for backward compatibility but are not used internally.
+ */
 export const chunk = {
   text: (text: string): TextChunk => ({ type: "text", text }),
   reasoning: (text: string): ReasoningChunk => ({ type: "reasoning", text }),

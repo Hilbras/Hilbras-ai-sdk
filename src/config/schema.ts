@@ -55,6 +55,15 @@ export interface SDKConfig {
   sessionBudget?: number;
   /** Maximum cost per individual request (null = unlimited) */
   perRequestBudget?: number;
+
+  // ─── v3.0.0: RBAC, Cost Alerts, SLA ──────────────────────────────────────
+
+  /** Role-based access control configuration */
+  rbac?: import("../security/rbac.js").RBACConfig;
+  /** Cost alert thresholds and channels */
+  costAlerts?: import("../cost/alerts.js").CostAlertConfig;
+  /** SLA monitoring definitions */
+  sla?: Array<import("../telemetry/sla.js").SLADefinition>;
 }
 
 export const DEFAULT_CONFIG: SDKConfig = {

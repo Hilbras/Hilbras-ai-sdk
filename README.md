@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.4.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-3.0.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1541%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1586%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -11,7 +11,7 @@
 
 <p align="center">
   <strong>Provider-agnostic AI execution engine for TypeScript.</strong><br>
-  Streaming, tool calling, structured output, circuit breaker, retry, reasoning normalization, cost enforcement, and SSRF-safe provider registration — for OpenAI, Anthropic, Gemini, Azure, Groq, Ollama, Bedrock, Vertex AI, HuggingFace, Deepgram, ElevenLabs, Voyage AI, and Cohere Rerank. Zero runtime dependencies.
+  Streaming, tool calling, structured output, circuit breaker, retry, reasoning normalization, cost enforcement, plugin system, RBAC, SLA monitoring, A/B testing, and SSRF-safe provider registration — for OpenAI, Anthropic, Gemini, Azure, Groq, Ollama, Bedrock, Vertex AI, HuggingFace, Deepgram, ElevenLabs, Voyage AI, and Cohere Rerank. Zero runtime dependencies.
 </p>
 
 ---
@@ -37,6 +37,9 @@ Application
 │  Token Counting        Cost Enforcement       │
 │  Prompt Caching        Auto-Repair Output     │
 │  Middleware Pipeline   Typed Errors           │
+│  Plugin System         RBAC Access Control    │
+│  SLA Monitoring        A/B Prompt Testing     │
+│  Cost Alerts           Audit Logging          │
 └──────────────────────┬────────────────────────┘
                        │
           ┌────────────┼────────────┐
@@ -95,6 +98,74 @@ const reply = await client.complete({
 
 ---
 
+## Configuration
+
+### Per-client tokenizer
+
+By default, token counting uses a heuristic word-based estimator. Pass a
+custom tokenizer to scope it to a single client instance:
+
+```typescript
+import { HilbrasClient } from "@hilbras/sdk";
+
+// Your BPE / tiktoken / ollama tokenizer
+const tokenizer = {
+  count(text: string): number {
+    return yourTokenizer.encode(text).length;
+  },
+};
+
+const client = new HilbrasClient({ tokenizer });
+
+// Every request on this client uses your tokenizer
+const reply = await client.complete({
+  provider: "openai",
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello!" }],
+});
+```
+
+> **v2.5.0+:** The global `setTokenizer()` / `getTokenizer()` singletons are
+> deprecated. Use the per-client `tokenizer` config instead to avoid cross-client
+> interference.
+
+### Middleware
+
+Wrap the transport with middleware for auth, logging, or custom transforms.
+Middleware runs on **every** request (including retries) for the client:
+
+```typescript
+import { HilbrasClient } from "@hilbras/sdk";
+import { authMiddleware, loggingMiddleware, composeMiddlewares } from "@hilbras/sdk";
+
+const client = new HilbrasClient({
+  middleware: composeMiddlewares(
+    authMiddleware(() => process.env.API_KEY!),
+    loggingMiddleware(console),
+  ),
+});
+
+// All requests go through both middleware layers
+const reply = await client.complete({
+  provider: "openai",
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello!" }],
+});
+```
+
+You can also use `MiddlewareTransport` directly to wrap any transport:
+
+```typescript
+import { MiddlewareTransport, FetchTransport } from "@hilbras/sdk";
+
+const transport = new MiddlewareTransport(
+  new FetchTransport(),
+  composeMiddlewares(authMiddleware(() => "my-key")),
+);
+```
+
+---
+
 ## Features at a glance
 
 | Feature | Summary | Docs |
@@ -107,21 +178,88 @@ const reply = await client.complete({
 | **Circuit breaker** | Per-provider failure isolation with half-open recovery | [API Reference](docs/api-reference.md#reliability) |
 | **Retry & backoff** | Exponential backoff with jitter for 429/5xx/network errors | [API Reference](docs/api-reference.md#reliability) |
 | **Cost enforcement** | Atomic reservations, per-request and session budgets, streaming included | [Cost & Budget](docs/cost-and-budget.md) |
+| **Plugin system** | Lifecycle hooks (onRequest/onResponse/onError) for extensibility | [API Reference](docs/api-reference.md) |
+| **RBAC** | Role-based access control with provider/model restrictions and per-role rate limiting | [Security](docs/security.md) |
+| **SLA monitoring** | Latency, error rate, and availability tracking with breach alerts | [Observability](docs/observability.md) |
+| **Cost alerts** | Configurable threshold alerts via webhook or callback | [Cost & Budget](docs/cost-and-budget.md) |
+| **A/B prompt testing** | Compare prompt variants against datasets with built-in metrics | [Eval](docs/eval.md) |
 | **Observability** | Typed lifecycle events for OpenTelemetry/Datadog/etc. | [Observability](docs/observability.md) |
 | **SSRF safety** | Default-reject `http://`, block AWS metadata, opt-in for local Ollama | [Security](docs/security.md) |
 | **Error redaction** | API keys auto-redacted from provider error bodies | [Security](docs/security.md#error-redaction-in-provider-responses) |
 | **Reasoning normalization** | Detect & normalize `<thinking>` / `<reasoning>` tags and native fields | [API Reference](docs/api-reference.md) |
+| **Per-client tokenizer** | Scoped BPE tokenizer per client instance — no global singletons | [API Reference](docs/api-reference.md) |
+| **Middleware pipeline** | Transport-level middleware: auth headers, logging, custom request/response transforms | [API Reference](docs/api-reference.md) |
 | **Agent framework** | ToolLoopAgent, ReActAgent, PlanAndExecuteAgent with approval, budget, cost tracking | [Agent](docs/agent.md) |
 | **Evaluation** | LLM output evaluation with built-in metrics (exact_match, similarity, toxicity) | [Eval](docs/eval.md) |
 | **React hooks** | `useChat`, `useCompletion`, `useCost` with streaming, abort, retry | [React](#react-hooks) |
 | **Framework hooks** | Vue, Svelte, Solid, Qwik, Angular, Next.js, Astro, Remix | [Frameworks](docs/frameworks.md) |
 | **RAG primitives** | VectorStore, Retriever, RAGPipeline, chunking | [RAG](docs/rag.md) |
 | **Provider catalog** | Runtime provider/model discovery with search | [Catalog](docs/catalog.md) |
-| **CLI** | `hilbras` CLI for init, provider management, model listing, cost estimation | [CLI](docs/cli.md) |
+| **CLI** | `hilbras` CLI — chat REPL, provider benchmarking, cost reports, dashboard | [CLI](docs/cli.md) |
 | **Migration** | Guide from Vercel AI SDK | [Migration](docs/migration-from-vercel-ai-sdk.md) |
 | **Fine-tuning** | Export training data in 6 formats, data splitting, quality validation | [Fine-tune](docs/fine-tune.md) |
 | **Scaffolding** | `npx create-hilbras-app` project scaffolding | [CLI](docs/cli.md) |
 | **Zero runtime deps** | Pure TypeScript, no transitive dependencies | — |
+
+---
+
+## What's New in v3.0.0
+
+**Plugin System** — Extend the client with lifecycle hooks:
+```typescript
+client.use({
+  name: "logger",
+  onRequest(ctx) { console.log(`→ ${ctx.provider}/${ctx.model}`); },
+  onResponse(ctx) { console.log(`✓ ${ctx.durationMs}ms`); },
+  onError(ctx) { console.error(`✗ ${ctx.error.message}`); },
+});
+```
+
+**RBAC** — Role-based access control with per-role provider/model restrictions:
+```typescript
+const client = new HilbrasClient({
+  middleware: createRBACMiddleware({
+    roles: {
+      viewer: { name: "viewer", allowedProviders: ["openai"], maxTokensPerRequest: 4096 },
+      admin: { name: "admin" },
+    },
+    defaultRole: "viewer",
+  }, (ctx) => extractUserId(ctx)),
+});
+```
+
+**SLA Monitoring** — Track latency, error rate, and availability:
+```typescript
+const monitor = new SLAMonitor(client, [
+  { name: "p95 latency", metric: "latency_p95", threshold: 2000, windowMs: 60_000 },
+  { name: "availability", metric: "availability", threshold: 0.99, windowMs: 300_000 },
+]);
+```
+
+**Cost Alerts** — Get notified when spending crosses thresholds:
+```typescript
+const { budget, monitor } = createCostAlertBudget({
+  sessionBudget: 10.00,
+  thresholds: [
+    { percent: 50, channel: { type: "callback", callback: (a) => console.log("50%!") } },
+    { percent: 75, channel: { type: "webhook", url: "https://hooks.slack.com/..." } },
+  ],
+});
+```
+
+**A/B Prompt Testing** — Compare prompt variants against datasets:
+```typescript
+const result = await runABTest(client, {
+  variants: [
+    { name: "concise", systemPrompt: "Answer concisely." },
+    { name: "detailed", systemPrompt: "Answer in detail with examples." },
+  ],
+  dataset: [{ id: "1", input: "What is 2+2?", expected: "4" }],
+});
+console.log(`Winner: ${result.winner.name}`);
+```
+
+**CLI** — New commands: `hilbras chat`, `hilbras bench`, `hilbras costs`, `hilbras dashboard`
 
 ---
 
@@ -238,7 +376,15 @@ import type { AIProvider } from "@hilbras/sdk/adapter";         // Provider cont
 import { estimateTokens } from "@hilbras/sdk/tokens";           // Token utilities
 import { loadConfig } from "@hilbras/sdk/config";               // Config
 import { FetchTransport } from "@hilbras/sdk/transport/fetch";  // Transport
+import { MiddlewareTransport } from "@hilbras/sdk";             // Middleware wrapper
 import { validateBaseUrl } from "@hilbras/sdk";                 // SSRF guard
+
+// v3.0.0: Plugin system, RBAC, SLA, cost alerts, A/B testing
+import type { Plugin } from "@hilbras/sdk";                     // Plugin interface
+import { createRBACMiddleware } from "@hilbras/sdk";            // RBAC
+import { SLAMonitor } from "@hilbras/sdk";                      // SLA monitoring
+import { CostAlertMonitor } from "@hilbras/sdk";                // Cost alerts
+import { runABTest } from "@hilbras/sdk";                       // A/B testing
 
 // Packages
 import { useChat, useCompletion, useCost, HilbrasProvider } from "@hilbras/react";  // React hooks
@@ -261,7 +407,7 @@ import { exportTrainingData } from "@hilbras/fine-tune";  // Fine-tuning
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run 1541 tests
+npm test             # Run 1586 tests
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```

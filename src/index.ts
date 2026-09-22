@@ -105,6 +105,7 @@ export type { CostEvent, CostReport, BudgetConfig } from "./cost/types.js";
 export type { Transport, TransportRequestInit } from "./transport/transport.js";
 export { FetchTransport } from "./transport/fetch.js";
 export { WebSocketTransport } from "./transport/websocket.js";
+export { MiddlewareTransport } from "./transport/middleware-transport.js";
 
 // ─── Reliability ────────────────────────────────────────────────────────────
 export { CircuitBreaker, CircuitBreakerRegistry, getCircuitBreakerRegistry } from "./reliability/circuit-breaker.js";
@@ -255,3 +256,23 @@ export {
   createObjectSSEResponse,
 } from "./utils/sse-writer.js";
 export type { SSEWriterOptions } from "./utils/sse-writer.js";
+
+// ─── Plugin System (v3.0.0) ────────────────────────────────────────────────
+export type { Plugin, PluginRequestContext, PluginResponseContext, PluginErrorContext } from "./plugin/types.js";
+export { PluginRegistry } from "./plugin/registry.js";
+
+// ─── RBAC (v3.0.0) ─────────────────────────────────────────────────────────
+export { createRBACMiddleware, checkPermission } from "./security/rbac.js";
+export type { RBACRole, RBACConfig, PermissionCheck } from "./security/rbac.js";
+
+// ─── Cost Alerts (v3.0.0) ──────────────────────────────────────────────────
+export { CostAlertMonitor, createCostAlertBudget } from "./cost/alerts.js";
+export type { AlertChannel, ThresholdConfig, CostAlert, CostAlertConfig } from "./cost/alerts.js";
+
+// ─── A/B Prompt Testing (v3.0.0) ───────────────────────────────────────────
+export { runABTest } from "./features/eval/ab-test.js";
+export type { PromptVariant, ABTestConfig, VariantResult, ABTestResult } from "./features/eval/ab-test.js";
+
+// ─── SLA Monitoring (v3.0.0) ───────────────────────────────────────────────
+export { SLAMonitor } from "./telemetry/sla.js";
+export type { SLADefinition, SLABreach, SLAStatus, SLAReport, SLAMetric } from "./telemetry/sla.js";

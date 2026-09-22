@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.0] - 2026-09-22
+
+### Added
+- **Plugin System** — `Plugin` interface with `setup`, `onRequest`, `onResponse`, `onError`, `destroy` lifecycle hooks. Register via `client.use(plugin)`. Plugins fire around every LLM request for extensibility (logging, metrics, request mutation, etc.)
+- **RBAC (Role-Based Access Control)** — `RBACRole` definitions with per-role provider/model restrictions, max tokens per request, and rate limiting. `createRBACMiddleware()` returns a transport middleware that enforces access control. Integrates with `AuditLogger` for access-denied events
+- **SLA Monitoring** — `SLAMonitor` class that tracks latency (p95/p99), error rate, and availability in sliding windows. Fires configurable breach alerts. Subscribes to client lifecycle events automatically
+- **Cost Alerts** — `CostAlertMonitor` with configurable threshold percentages (e.g., 50%, 75%, 90%). Supports webhook and callback channels. `createCostAlertBudget()` helper wires alerts into the `BudgetTracker`
+- **A/B Prompt Testing** — `runABTest()` compares multiple prompt variants against a shared dataset using built-in metrics (exact_match, contains, similarity). Produces per-variant scores and a winner recommendation
+- **CLI: `hilbras chat`** — Interactive chat REPL with streaming output (`--provider`, `--model`, `--temperature`, `--max-tokens`)
+- **CLI: `hilbras bench`** — Provider benchmarking with latency, tokens/sec, and error reporting (`--prompt`, `--providers`, `--runs`)
+- **CLI: `hilbras costs`** — Display cost reports from saved JSON files
+- **CLI: `hilbras dashboard`** — Render DevTools dashboard in terminal from saved JSON
+- 38 new tests covering plugin system, RBAC, cost alerts, SLA monitoring
+
+### Changed
+- `HilbrasClient` now has a `use(...plugins)` method for plugin registration
+- `SDKConfig` extended with optional `rbac`, `costAlerts`, and `sla` fields
+- `stream()` and `complete()` now call plugin lifecycle hooks (onRequest/onResponse/onError)
+- `dispose()` now calls `destroyAll()` on registered plugins before transport cleanup
+
+---
+
+## [2.5.0] - 2026-09-21
+
+### Added
+- **BUG-04 fix: Per-client tokenizer** — `HilbrasClientConfig` now accepts a `tokenizer` option, allowing each client instance to use its own BPE tokenizer without interfering with other clients. The global `setTokenizer()` singleton is deprecated in favor of this scoped approach
+- **MiddlewareTransport** — New `MiddlewareTransport` class that wraps any `Transport` with a middleware pipeline (`composeMiddlewares`, `authMiddleware`, etc.)
+- **Client middleware config** — `HilbrasClientConfig` now accepts a `middleware` option that automatically wraps the transport with the middleware pipeline
+- 22 new tests covering per-client tokenizer, middleware transport, and client middleware config
+
+### Deprecated
+- `setTokenizer()` / `getTokenizer()` global singleton — Use `new HilbrasClient({ tokenizer: ... })` instead
+- `sdkLogger` singleton in `logging/logger.ts` — Use `new HilbrasClient({ telemetry: { structuredLogger: ... } })` instead
+- `chunk` factory object in `types/streams.ts` — Prefer constructing typed chunk objects directly
+
+---
+
 ## [2.4.0] - 2026-09-21
 
 ### Fixed

@@ -92,4 +92,13 @@ class SDKLogger {
   clear(): void { this._entries = []; }
 }
 
+/**
+ * Global SDK logger instance.
+ *
+ * **DEPRECATED**: This singleton is not wired into the client pipeline.
+ * Use the `telemetry` option on `HilbrasClientConfig` with `StructuredLogger`
+ * instead for production observability.
+ *
+ * @deprecated Use `new HilbrasClient({ telemetry: { structuredLogger: ... } })` instead.
+ */
 export const sdkLogger = new SDKLogger();
