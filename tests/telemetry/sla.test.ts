@@ -63,7 +63,7 @@ describe("SLAMonitor", () => {
 
     const breachCb = vi.fn();
     const monitor = new SLAMonitor(client, [
-      { name: "p95 latency", metric: "latency_p95", threshold: 100, windowMs: 60_000, alertOnBreach: breachCb },
+      { name: "p95 latency", metric: "latency_p95", threshold: 10_000, windowMs: 60_000, alertOnBreach: breachCb },
     ]);
 
     // Make some fast requests

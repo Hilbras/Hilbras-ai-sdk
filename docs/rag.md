@@ -1,11 +1,11 @@
 # RAG Primitives
 
-`@hilbras/rag` provides vector storage, retrieval, and RAG pipeline primitives.
+`@hilbras/sdk` provides vector storage, retrieval, and RAG pipeline primitives.
 
 ## Installation
 
 ```bash
-npm install @hilbras/rag
+npm install @hilbras/sdk
 ```
 
 ## Quick Start

@@ -99,7 +99,7 @@ export class FetchTransport implements Transport {
       const key = this._getRequestKey(url, init);
       const pending = this._pendingRequests.get(key);
       if (pending) {
-        return pending;
+        return (await pending).clone();
       }
     }
 

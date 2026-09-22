@@ -79,7 +79,11 @@ export class CircuitBreaker {
       return false;
     }
     // half_open
-    return this._halfOpenCalls < this.config.halfOpenMaxCalls;
+    if (this._halfOpenCalls < this.config.halfOpenMaxCalls) {
+      this._halfOpenCalls++;
+      return true;
+    }
+    return false;
   }
 
   recordSuccess(): void {

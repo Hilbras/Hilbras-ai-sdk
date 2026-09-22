@@ -66,7 +66,9 @@ export type ToolDefinition = Tool;
  *     },
  *     required: ["expression"],
  *     execute: async (input) => {
- *       return { result: eval(input.expression) };
+ *       // Use a safe math parser instead of eval()
+ *       const result = safeMathParse(input.expression);
+ *       return { result };
  *     },
  *   });
  *

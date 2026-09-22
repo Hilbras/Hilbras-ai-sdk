@@ -32,12 +32,12 @@ function Chat() {
 ## Vue
 
 ```bash
-npm install @hilbras/vue
+npm install @hilbras/sdk
 ```
 
 ```vue
 <script setup>
-import { useChat } from "@hilbras/vue";
+import { useChat } from "@hilbras/sdk";
 
 const { messages, input, handleSubmit, isLoading } = useChat();
 </script>
@@ -53,12 +53,12 @@ const { messages, input, handleSubmit, isLoading } = useChat();
 ## Svelte
 
 ```bash
-npm install @hilbras/svelte
+npm install @hilbras/sdk
 ```
 
 ```svelte
 <script>
-  import { useChat } from "@hilbras/svelte";
+  import { useChat } from "@hilbras/sdk";
 
   const { messages, input, handleSubmit, isLoading } = useChat();
 </script>
@@ -75,11 +75,11 @@ npm install @hilbras/svelte
 ## Solid
 
 ```bash
-npm install @hilbras/solid
+npm install @hilbras/sdk
 ```
 
 ```tsx
-import { useChat } from "@hilbras/solid";
+import { useChat } from "@hilbras/sdk";
 
 function Chat() {
   const { messages, append, clear } = useChat();
@@ -100,12 +100,12 @@ function Chat() {
 ## Angular
 
 ```bash
-npm install @hilbras/angular
+npm install @hilbras/sdk
 ```
 
 ```typescript
 import { Component } from "@angular/core";
-import { ChatService } from "@hilbras/angular";
+import { useChat } from "@hilbras/sdk";
 
 @Component({
   selector: "app-chat",
@@ -128,11 +128,11 @@ export class ChatComponent {
 ## Qwik
 
 ```bash
-npm install @hilbras/qwik
+npm install @hilbras/sdk
 ```
 
 ```tsx
-import { useChat } from "@hilbras/qwik";
+import { useChat } from "@hilbras/sdk";
 
 export const Chat = () => {
   const { messages, append, clear } = useChat();

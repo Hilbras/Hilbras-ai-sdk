@@ -146,7 +146,7 @@ interface ProviderConfig {
 ### `AdapterName`
 
 ```typescript
-type AdapterName = "openai" | "anthropic" | "responses" | "google-genai" | "azure" | "groq" | "ollama";
+type AdapterName = "openai" | "anthropic" | "google-genai" | "azure" | "groq" | "ollama" | "mistral" | "deepseek" | "xai" | "together" | "fireworks" | "cohere" | "perplexity" | "cerebras" | "deepinfra" | "bedrock" | "google-vertex" | "huggingface" | "deepgram" | "elevenlabs" | "voyageai" | "cohere-rerank" | "openai-compatible";
 ```
 
 ### `Model`

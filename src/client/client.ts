@@ -936,7 +936,7 @@ export class HilbrasClient implements AsyncDisposable {
           this._budgetTracker.release(requestId); // Release original reservation
           const fallbacks = this._getFallbacks([modelId], params);
           for (const fb of fallbacks) {
-            const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, 0, 0);
+            const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
             const fbReservation = this._budgetTracker.reserve(`${requestId}_fb_${fb.model}`, fbEstimatedCost);
             if (!fbReservation) continue; // Budget exceeded — skip this fallback
             try {

@@ -1,11 +1,11 @@
 # Evaluation Framework
 
-`@hilbras/eval` provides LLM output evaluation with built-in metrics and custom metric support.
+`@hilbras/sdk` provides LLM output evaluation with built-in metrics and custom metric support.
 
 ## Installation
 
 ```bash
-npm install @hilbras/eval
+npm install @hilbras/sdk
 ```
 
 ## Quick Start

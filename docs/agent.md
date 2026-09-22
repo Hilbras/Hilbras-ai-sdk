@@ -1,11 +1,11 @@
 # Agent Framework
 
-`@hilbras/agent` provides building blocks for multi-step AI agents.
+`@hilbras/sdk` provides building blocks for multi-step AI agents.
 
 ## Installation
 
 ```bash
-npm install @hilbras/agent
+npm install @hilbras/sdk
 ```
 
 ## ToolLoopAgent

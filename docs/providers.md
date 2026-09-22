@@ -1,6 +1,6 @@
 # Providers
 
-`@hilbras/sdk` ships with 6 built-in adapters covering the major LLM
+`@hilbras/sdk` ships with 23 built-in adapters covering the major LLM
 providers. Every adapter implements the same `AIProvider` contract so the
 rest of the SDK is provider-agnostic.
 

@@ -1,11 +1,11 @@
 # Fine-tuning Helpers
 
-`@hilbras/fine-tune` provides training data export, formatting, validation, and splitting.
+`@hilbras/sdk` provides training data export, formatting, validation, and splitting.
 
 ## Installation
 
 ```bash
-npm install @hilbras/fine-tune
+npm install @hilbras/sdk
 ```
 
 ## Export Training Data
