@@ -67,3 +67,128 @@ For lower-level HTTP-level logging, `sdkLogger` (re-exported as
 The event emitter is a synchronous listener iteration. When no listeners
 are attached, the `emit` call short-circuits to a no-op. There's no
 async overhead and no per-event allocation when no one is listening.
+
+---
+
+## SLA Monitoring — v3.0.0
+
+Track latency, error rate, and availability against defined SLA
+thresholds. The monitor subscribes to client lifecycle events
+automatically.
+
+### Setup
+
+```typescript
+import { SLAMonitor } from "@hilbras/sdk";
+
+const monitor = new SLAMonitor(client, [
+  { name: "p95 latency", metric: "latency_p95", threshold: 2000, windowMs: 60_000 },
+  { name: "availability", metric: "availability", threshold: 0.99, windowMs: 300_000 },
+  { name: "error rate", metric: "error_rate", threshold: 0.05, windowMs: 60_000 },
+]);
+```
+
+### SLA metrics
+
+| Metric | Description | Threshold meaning |
+|--------|-------------|-------------------|
+| `latency_p95` | 95th percentile latency (ms) | Breach if **above** threshold |
+| `latency_p99` | 99th percentile latency (ms) | Breach if **above** threshold |
+| `error_rate` | Fraction of failed requests (0-1) | Breach if **above** threshold |
+| `availability` | Fraction of successful requests (0-1) | Breach if **below** threshold |
+| `cost_per_request` | Average cost per request ($) | Breach if **above** threshold |
+
+### Checking compliance
+
+```typescript
+const report = monitor.report();
+
+console.log(`All SLAs met: ${report.allCompliant}`);
+
+for (const sla of report.slas) {
+  console.log(`${sla.name}: ${sla.compliant ? "✓" : "✗"} (${sla.currentValue} / ${sla.threshold})`);
+  if (sla.lastBreach) {
+    console.log(`  Last breach: ${sla.lastBreach.actual} at ${new Date(sla.lastBreach.timestamp).toISOString()}`);
+  }
+}
+```
+
+### Breach alerts
+
+Configure a callback to fire on SLA breaches:
+
+```typescript
+const monitor = new SLAMonitor(client, [
+  {
+    name: "p95 latency",
+    metric: "latency_p95",
+    threshold: 2000,
+    windowMs: 60_000,
+    alertOnBreach: (breach) => {
+      console.error(`SLA BREACH: ${breach.sla} — ${breach.actual} exceeded ${breach.threshold}`);
+      // Send to Slack, PagerDuty, etc.
+    },
+  },
+]);
+```
+
+### Manual recording
+
+For external integrations, record requests manually:
+
+```typescript
+monitor.record(durationMs: 150, success: true, cost: 0.002);
+monitor.record(durationMs: 5000, success: false);
+```
+
+### Cleanup
+
+```typescript
+monitor.dispose(); // unsubscribes from client events
+```
+
+---
+
+## Cost Alerts — v3.0.0
+
+Get notified when spending crosses configurable thresholds.
+
+### Setup with helper
+
+```typescript
+import { createCostAlertBudget } from "@hilbras/sdk";
+
+const { budget, monitor } = createCostAlertBudget({
+  sessionBudget: 10.00,
+  thresholds: [
+    { percent: 50, channel: { type: "callback", callback: (a) => console.log(`50%: $${a.report.totalActual}`) } },
+    { percent: 75, channel: { type: "webhook", url: "https://hooks.slack.com/services/..." } },
+    { percent: 90, channel: { type: "callback", callback: (a) => pageOnCall(a) } },
+  ],
+  defaultChannel: { type: "callback", callback: (a) => console.warn("Cost alert:", a.type) },
+});
+
+const client = new HilbrasClient({ budget });
+```
+
+### Alert types
+
+- **`threshold_reached`** — Fired when spending crosses a configured percentage
+- **`budget_exceeded`** — Fired when the session budget is fully consumed
+
+### Alert object
+
+```typescript
+interface CostAlert {
+  thresholdPercent: number;  // e.g. 75
+  report: CostReport;        // full cost report at time of alert
+  timestamp: number;         // Date.now()
+  type: "threshold_reached" | "budget_exceeded";
+}
+```
+
+### Resetting thresholds
+
+```typescript
+monitor.reset(); // allows thresholds to fire again (new budget period)
+```

@@ -101,3 +101,53 @@ const result = await evaluate({
 | `concurrency` | 5 | Max parallel evaluations |
 | `signal` | undefined | AbortSignal for cancellation |
 | `onEvent` | undefined | Event listener for progress |
+
+---
+
+## A/B Prompt Testing — v3.0.0
+
+Compare multiple prompt variants against a shared dataset to find the
+best-performing system prompt.
+
+```typescript
+import { runABTest } from "@hilbras/sdk";
+
+const result = await runABTest(client, {
+  variants: [
+    { name: "concise", systemPrompt: "Answer concisely in one sentence." },
+    { name: "detailed", systemPrompt: "Answer in detail with examples and context." },
+    { name: "friendly", systemPrompt: "Answer in a warm, friendly tone." },
+  ],
+  dataset: [
+    { id: "1", input: "What is 2+2?", expected: "4" },
+    { id: "2", input: "Capital of France?", expected: "Paris" },
+    { id: "3", input: "What is photosynthesis?", expected: "process by which plants convert light to energy" },
+  ],
+});
+
+console.log(`Winner: ${result.winner.name} (${(result.winner.aggregateScore * 100).toFixed(1)}%)`);
+console.log(`Margin: ${(result.margin * 100).toFixed(1)}% over runner-up`);
+
+for (const v of result.variants) {
+  console.log(`  ${v.name}: ${(v.aggregateScore * 100).toFixed(1)}%`);
+}
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `metrics` | `[{ name: "exact_match" }, { name: "contains" }]` | Metric configurations |
+| `concurrency` | 5 | Max parallel evaluations per variant |
+| `signal` | undefined | AbortSignal for cancellation |
+
+### Variant options
+
+| Option | Description |
+|--------|-------------|
+| `name` | Display name for the variant |
+| `systemPrompt` | The system prompt to test |
+| `model` | Model override (uses client default if omitted) |
+| `provider` | Provider override |
+| `temperature` | Temperature override |
+| `maxTokens` | Max tokens override |

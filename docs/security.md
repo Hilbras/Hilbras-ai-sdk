@@ -110,6 +110,85 @@ import { redact } from "@hilbras/sdk";
 const safe = redact(userProvidedText);
 ```
 
+## Role-Based Access Control (RBAC) — v3.0.0
+
+Control which providers, models, and features each user can access
+with role-based access control.
+
+### Defining roles
+
+```typescript
+import { createRBACMiddleware } from "@hilbras/sdk";
+
+const rbacMiddleware = createRBACMiddleware(
+  {
+    roles: {
+      viewer: {
+        name: "viewer",
+        allowedProviders: ["openai"],
+        allowedModels: ["gpt-4o", "gpt-4o-mini"],
+        maxTokensPerRequest: 4096,
+        rateLimit: { maxRequests: 10, windowMs: 60_000 },
+      },
+      developer: {
+        name: "developer",
+        allowedProviders: ["openai", "anthropic"],
+        // no model restriction
+      },
+      admin: {
+        name: "admin",
+        // no restrictions
+      },
+    },
+    defaultRole: "viewer",
+  },
+  (ctx) => extractUserIdFromRequest(ctx),
+);
+
+const client = new HilbrasClient({ middleware: rbacMiddleware });
+```
+
+### Permission checks
+
+You can also check permissions programmatically:
+
+```typescript
+import { checkPermission } from "@hilbras/sdk";
+
+const result = checkPermission(
+  { name: "viewer", allowedProviders: ["openai"] },
+  "anthropic",  // provider
+  "claude-3",   // model
+);
+
+if (!result.allowed) {
+  console.error(result.reason); // "Provider "anthropic" is not allowed for role "viewer""
+}
+```
+
+### Model pattern matching
+
+Roles support wildcard patterns for model restrictions:
+
+```typescript
+{
+  name: "restricted",
+  allowedModels: ["gpt-*"],  // matches gpt-4o, gpt-4o-mini, etc.
+}
+```
+
+### Audit logging
+
+RBAC access-denied events are automatically logged to the `AuditLogger`
+when one is configured:
+
+```typescript
+import { AuditLogger, createRBACMiddleware } from "@hilbras/sdk";
+
+const auditLogger = new AuditLogger({ serviceName: "my-app" });
+const rbac = createRBACMiddleware(config, getUserId, { auditLogger });
+```
+
 ## Reporting security issues
 
 Please report security issues privately via GitHub's

@@ -51,6 +51,8 @@ import { estimateTokens, type Tokenizer } from "../tokens/counter.js";
 import { getProviderCatalog, getModelsForProvider } from "../catalog/index.js";
 import type { AdapterName } from "../types/providers.js";
 import type { ModelCapabilities } from "../types/models.js";
+import { PluginRegistry } from "../plugin/registry.js";
+import type { Plugin } from "../plugin/types.js";
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
@@ -141,6 +143,7 @@ export class HilbrasClient implements AsyncDisposable {
   private _allowInsecureUrls: boolean;
   private _allowPrivateNetwork: boolean;
   private _tokenizer: Tokenizer | null;
+  private _plugins = new PluginRegistry();
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
@@ -224,6 +227,27 @@ export class HilbrasClient implements AsyncDisposable {
   /** Remove all listeners */
   removeAllListeners(event?: HookEventType): void {
     this._hooks.removeAll(event);
+  }
+
+  // ─── Plugin System ──────────────────────────────────────────────────────
+
+  /**
+   * Register one or more plugins with the client. Plugins receive lifecycle
+   * hooks that fire around every LLM request.
+   *
+   * @example
+   * ```ts
+   * client.use({
+   *   name: "logger",
+   *   onRequest(ctx) { console.log(`[${ctx.requestId}] → ${ctx.provider}/${ctx.model}`); },
+   *   onResponse(ctx) { console.log(`[${ctx.requestId}] ✓ ${ctx.durationMs}ms`); },
+   *   onError(ctx) { console.error(`[${ctx.requestId}] ✗ ${ctx.error.message}`); },
+   * });
+   * ```
+   */
+  async use(...plugins: Plugin[]): Promise<void> {
+    await this._plugins.add(...plugins);
+    await this._plugins.setupAll(this as never);
   }
 
   private _nextRequestId(): string {
@@ -575,6 +599,17 @@ export class HilbrasClient implements AsyncDisposable {
 
     const messages = this._normalizeMessages(params.messages);
 
+    // v3.0.0: Plugin onRequest hook
+    await this._plugins.fireRequest({
+      requestId,
+      provider: providerName,
+      model: modelId,
+      messages,
+      extra: params.extra,
+      signal: params.signal,
+      timestamp: startTime,
+    });
+
     // Atomic budget reservation before any provider call. Reserves the
     // estimated cost for the entire retry+fallback chain; the reservation is
     // converted to actual on the first usage chunk, or released on failure.
@@ -631,6 +666,8 @@ export class HilbrasClient implements AsyncDisposable {
             reservationActive = false;
           }
           this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, inputTokens, outputTokens, structuredOutput: false });
+          // v3.0.0: Plugin onResponse hook
+          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, inputTokens, outputTokens, streaming: true });
           return;
         } catch (err: unknown) {
           // Check if we should retry
@@ -702,6 +739,8 @@ export class HilbrasClient implements AsyncDisposable {
 
           circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
           this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
+          // v3.0.0: Plugin onError hook
+          await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
           throw err;
         }
       }
@@ -770,6 +809,17 @@ export class HilbrasClient implements AsyncDisposable {
 
     const messages = this._normalizeMessages(params.messages);
 
+    // v3.0.0: Plugin onRequest hook
+    await this._plugins.fireRequest({
+      requestId,
+      provider: providerName,
+      model: modelId,
+      messages,
+      extra: params.extra,
+      signal: params.signal,
+      timestamp: startTime,
+    });
+
     // Structured output setup
     const outputConfig = params.output;
     let structuredMessages = [...messages];
@@ -816,6 +866,8 @@ export class HilbrasClient implements AsyncDisposable {
         if (!outputConfig) {
           this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
           this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: false });
+          // v3.0.0: Plugin onResponse hook
+          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, streaming: false });
           return result as T;
         }
 
@@ -827,6 +879,8 @@ export class HilbrasClient implements AsyncDisposable {
           this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
           this._emit({ type: "structured.validate.pass", requestId, timestamp: performance.now() });
           this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: true });
+          // v3.0.0: Plugin onResponse hook
+          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, streaming: false });
           return validation.data;
         }
 
@@ -906,6 +960,8 @@ export class HilbrasClient implements AsyncDisposable {
         this._budgetTracker.release(requestId);
         circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
         this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
+        // v3.0.0: Plugin onError hook
+        await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
         throw err;
       }
     }
@@ -1370,6 +1426,8 @@ export class HilbrasClient implements AsyncDisposable {
   // ─── Cleanup ────────────────────────────────────────────────────────────
 
   async dispose(): Promise<void> {
+    // v3.0.0: Destroy all plugins before transport cleanup
+    await this._plugins.destroyAll();
     // v2.4.0: Call destroy() when available to clear timers and pooled
     // connections; fall back to abort() for basic transports.
     if (typeof this._transport.destroy === "function") {

@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
