@@ -250,7 +250,14 @@ function cmdDoctor(): void {
 
 async function cmdChat(opts: { provider?: string; model?: string; temperature?: string; maxTokens?: string }): Promise<void> {
   const { createInterface } = await import("node:readline");
-  const { HilbrasClient } = await import("@hilbras/sdk");
+  let HilbrasClient: typeof import("@hilbras/sdk").HilbrasClient;
+  try {
+    ({ HilbrasClient } = await import("@hilbras/sdk"));
+  } catch {
+    error("chat command requires @hilbras/sdk to be installed.");
+    error("Run: npm install @hilbras/sdk");
+    process.exit(1);
+  }
 
   const config = loadConfig();
   const providers = (config.providers as Array<Record<string, unknown>>) ?? [];
@@ -332,7 +339,14 @@ async function cmdChat(opts: { provider?: string; model?: string; temperature?: 
 // ─── v3.0.0: Benchmark ─────────────────────────────────────────────────────
 
 async function cmdBench(opts: { prompt?: string; providers?: string; runs?: string }): Promise<void> {
-  const { HilbrasClient } = await import("@hilbras/sdk");
+  let HilbrasClient: typeof import("@hilbras/sdk").HilbrasClient;
+  try {
+    ({ HilbrasClient } = await import("@hilbras/sdk"));
+  } catch {
+    error("bench command requires @hilbras/sdk to be installed.");
+    error("Run: npm install @hilbras/sdk");
+    process.exit(1);
+  }
 
   const config = loadConfig();
   const providers = (config.providers as Array<Record<string, unknown>>) ?? [];

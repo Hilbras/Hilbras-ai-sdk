@@ -222,7 +222,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "pretest": "npx tsc -p packages/cli/tsconfig.json",
+    "pretest": "npx tsc --noEmit",
+    "pretest:cli": "npx tsc -p packages/cli/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
