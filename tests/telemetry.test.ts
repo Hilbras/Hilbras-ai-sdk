@@ -148,6 +148,13 @@ describe("StructuredLogger", () => {
     logSpy.mockRestore();
   });
 
+  it("redacts nested structured metadata", () => {
+    const dest = vi.fn();
+    const logger = new StructuredLogger({ destination: dest });
+    logger.info("test", { meta: { nested: { token: "sk-proj-abc123def456ghi789jkl012mno345pqr" } } });
+    expect(JSON.stringify(dest.mock.calls[0][0])).not.toContain("sk-proj-abc123def456ghi789jkl012mno345pqr");
+  });
+
   it("respects log level filtering", () => {
     const entries: any[] = [];
     const logger = new StructuredLogger({
@@ -480,6 +487,12 @@ describe("BodyLogger", () => {
     expect(entries[0].body).toContain("[truncated]");
   });
 
+  it("redacts before truncating body boundaries", () => {
+    const logger = new BodyLogger({ maxBodyLength: 50, redact: true });
+    const secret = "sk-" + "a".repeat(40);
+    logger.logRequest("openai", "POST", "/v1/chat", "x ".repeat(23) + secret);
+    expect(logger.getEntries()[0].body).not.toContain("sk-");
+  });
   it("respects enabled flag", () => {
     const logger = new BodyLogger({ enabled: false });
     logger.logRequest("openai", "POST", "/v1/chat/completions", {});

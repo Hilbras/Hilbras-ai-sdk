@@ -58,8 +58,8 @@ client.removeAllListeners();                 // remove everything
 
 ## Logging
 
-For lower-level HTTP-level logging, `sdkLogger` (re-exported as
-`redact` for the underlying redaction function) is also available. See
+For lower-level HTTP-level logging, use the `redact` helper exported from the
+root package before sending text to a custom logger. See
 [Security & SSRF Protection](security.md) for the redaction patterns.
 
 ## Zero overhead
@@ -70,7 +70,7 @@ async overhead and no per-event allocation when no one is listening.
 
 ---
 
-## SLA Monitoring — v3.0.0
+## SLA Monitoring — v3.1.0
 
 Track latency, error rate, and availability against defined SLA
 thresholds. The monitor subscribes to client lifecycle events
@@ -149,7 +149,7 @@ monitor.dispose(); // unsubscribes from client events
 
 ---
 
-## Cost Alerts — v3.0.0
+## Cost Alerts — v3.1.0
 
 Get notified when spending crosses configurable thresholds.
 

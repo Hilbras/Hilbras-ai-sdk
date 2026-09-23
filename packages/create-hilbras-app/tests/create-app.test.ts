@@ -22,6 +22,10 @@ describe("create-hilbras-app", () => {
     expect(existsSync(join(TEMPLATES_DIR, "basic", "tsconfig.json"))).toBe(true);
   });
 
+  it("basic template has a gitignore for secrets and dependencies", () => {
+    expect(existsSync(join(TEMPLATES_DIR, "basic", ".gitignore"))).toBe(true);
+  });
+
   it("basic template has .env.example", () => {
     expect(existsSync(join(TEMPLATES_DIR, "basic", ".env.example"))).toBe(true);
   });

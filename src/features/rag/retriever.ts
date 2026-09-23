@@ -40,6 +40,32 @@ export interface RetrievalResult {
   metadata?: Record<string, unknown>;
 }
 
+export function buildContextFromDocuments(documents: RetrievalResult[], maxLen = 4000): string {
+  let context = "";
+  for (const result of documents) {
+    const addition = `${result.content}\n\n`;
+    if (context.length + addition.length > maxLen) break;
+    context += addition;
+  }
+  return context.trim();
+}
+
+export function buildMessagesFromDocuments(
+  query: string,
+  documents: RetrievalResult[],
+  systemPrompt?: string,
+  maxContextLength = 4000,
+): Array<{ role: string; content: string }> {
+  const context = buildContextFromDocuments(documents, maxContextLength);
+  return [
+    {
+      role: "system",
+      content: systemPrompt ?? "Answer the user's question based on the provided context. If the context doesn't contain enough information, say so.",
+    },
+    { role: "user", content: `Context:\n${context}\n\nQuestion: ${query}` },
+  ];
+}
+
 /**
  * Hybrid retriever combining vector search with optional reranking.
  */
@@ -110,16 +136,7 @@ export class Retriever {
    */
   async getContext(query: string, options?: RetrievalOptions & { maxContextLength?: number }): Promise<string> {
     const results = await this.retrieve(query, options);
-    const maxLen = options?.maxContextLength ?? 4000;
-
-    let context = "";
-    for (const r of results) {
-      const addition = `${r.content}\n\n`;
-      if (context.length + addition.length > maxLen) break;
-      context += addition;
-    }
-
-    return context.trim();
+    return buildContextFromDocuments(results, options?.maxContextLength ?? 4000);
   }
 
   /**
@@ -130,24 +147,11 @@ export class Retriever {
     systemPrompt?: string,
     options?: RetrievalOptions & { maxContextLength?: number },
   ): Promise<Array<{ role: string; content: string }>> {
-    const context = await this.getContext(query, options);
-
-    const messages: Array<{ role: string; content: string }> = [];
-
-    if (systemPrompt) {
-      messages.push({ role: "system", content: systemPrompt });
-    } else {
-      messages.push({
-        role: "system",
-        content: "Answer the user's question based on the provided context. If the context doesn't contain enough information, say so.",
-      });
-    }
-
-    messages.push({
-      role: "user",
-      content: `Context:\n${context}\n\nQuestion: ${query}`,
-    });
-
-    return messages;
+    return buildMessagesFromDocuments(
+      query,
+      await this.retrieve(query, options),
+      systemPrompt,
+      options?.maxContextLength ?? 4000,
+    );
   }
 }

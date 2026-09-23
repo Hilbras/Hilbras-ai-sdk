@@ -8,7 +8,14 @@
 import type { VectorDocument, VectorStore } from "./vector-store.js";
 import type { ChunkOptions } from "./chunker.js";
 import { chunkDocuments } from "./chunker.js";
-import { Retriever, type RetrieverConfig, type RetrievalOptions, type RetrievalResult } from "./retriever.js";
+import {
+  Retriever,
+  buildContextFromDocuments,
+  buildMessagesFromDocuments,
+  type RetrieverConfig,
+  type RetrievalOptions,
+  type RetrievalResult,
+} from "./retriever.js";
 
 export interface RAGPipelineConfig {
   /** Embedding function: text → vector */
@@ -129,11 +136,8 @@ export class RAGPipeline {
     });
 
     const documents = await retriever.retrieve(query, options);
-    const context = documents.map((d) => d.content).join("\n\n");
-    const messages = await retriever.buildMessages(query, this._systemPrompt, {
-      ...options,
-      maxContextLength: 4000,
-    });
+    const context = buildContextFromDocuments(documents);
+    const messages = buildMessagesFromDocuments(query, documents, this._systemPrompt);
 
     return { query, context, documents, messages };
   }

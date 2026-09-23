@@ -45,10 +45,10 @@ export class DeepgramAdapter implements AIProvider {
     q.set("model", params.model || "nova-2");
     if (params.language) q.set("language", params.language);
     if (params.temperature != null) q.set("smart_format", "true");
-    q.set(" punctuate", "true");
-    q.set(" paragraphs", "true");
-    q.set(" timestamps", "true");
-    q.set(" detect_language", "true");
+    q.set("punctuate", "true");
+    q.set("paragraphs", "true");
+    q.set("timestamps", "true");
+    q.set("detect_language", "true");
     return q.toString();
   }
 

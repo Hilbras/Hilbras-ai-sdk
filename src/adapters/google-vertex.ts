@@ -43,7 +43,6 @@ export class VertexAIAdapter implements AIProvider {
   private _project: string;
   private _region: string;
   private _location: string;
-  private _reasoningNormalizer = new ReasoningNormalizer();
 
   constructor(config: VertexAIAdapterConfig) {
     this._provider = config.provider;
@@ -150,6 +149,7 @@ export class VertexAIAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const url = this._modelUrl(params.model, "streamGenerateContent") + "?alt=sse";
     const body = this._buildBody({
       model: params.model,
@@ -212,7 +212,7 @@ export class VertexAIAdapter implements AIProvider {
           for (const p of contentParts) {
             // Text content
             if (typeof p.text === "string" && p.text) {
-              const reasoning = this._reasoningNormalizer.feedText(p.text);
+              const reasoning = reasoningNormalizer.feedText(p.text);
               if (reasoning) yield reasoning;
               else if (!ReasoningNormalizer.looksLikeReasoningTag(p.text)) {
                 yield { type: "text", text: p.text };

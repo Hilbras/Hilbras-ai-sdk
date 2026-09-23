@@ -11,7 +11,7 @@ npm install @hilbras/sdk
 ## Quick Start
 
 ```typescript
-import { evaluate } from "@hilbras/eval";
+import { evaluate } from "@hilbras/sdk/eval";
 
 const result = await evaluate({
   dataset: {
@@ -51,7 +51,7 @@ console.log(result.aggregates);   // { exact_match: 1, contains: 1 }
 ## Custom Metrics
 
 ```typescript
-import { evaluate, type MetricResult } from "@hilbras/eval";
+import { evaluate, type MetricResult } from "@hilbras/sdk/eval";
 
 const result = await evaluate({
   dataset: { name: "test", items: [...] },
@@ -73,7 +73,7 @@ const result = await evaluate({
 ## LLM-as-Judge
 
 ```typescript
-import { evaluate, llmJudge } from "@hilbras/eval";
+import { evaluate, llmJudge } from "@hilbras/sdk/eval";
 
 const judgeLLM = async (messages) => {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -104,7 +104,7 @@ const result = await evaluate({
 
 ---
 
-## A/B Prompt Testing — v3.0.0
+## A/B Prompt Testing — v3.1.0
 
 Compare multiple prompt variants against a shared dataset to find the
 best-performing system prompt.

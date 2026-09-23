@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { BedrockAdapter } from "../src/adapters/bedrock.js";
 import { ProviderRequestError } from "../src/errors/index.js";
@@ -440,9 +441,11 @@ describe("BedrockAdapter", () => {
 
   it("includes Authorization header with SigV4 signature", async () => {
     let capturedHeaders: Record<string, string> = {};
+    let capturedBody = "";
     const transport: Transport = {
       async request(_url, opts) {
         capturedHeaders = opts.headers as Record<string, string>;
+        capturedBody = String(opts.body ?? "");
         return new Response(
           JSON.stringify({ output: { content: [{ text: "Hi" }] } }),
           { status: 200 }
@@ -460,7 +463,9 @@ describe("BedrockAdapter", () => {
 
     expect(capturedHeaders["Authorization"]).toMatch(/^AWS4-HMAC-SHA256 /);
     expect(capturedHeaders["X-Amz-Date"]).toBeDefined();
-    expect(capturedHeaders["X-Amz-Content-Sha256"]).toBeDefined();
+    expect(capturedHeaders["X-Amz-Content-Sha256"]).toBe(
+      createHash("sha256").update(capturedBody).digest("hex"),
+    );
   });
 
   it("includes session token when provided", async () => {

@@ -1,13 +1,19 @@
 "use client";
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { HilbrasProvider, useChat, useCost, type ChatMessage, type UseChatOptions } from "@hilbras/react";
+import { createContext, useContext, useMemo, type FormEvent, type ReactNode } from "react";
+import {
+  HilbrasProvider,
+  useChat,
+  useCost,
+  type ChatMessage,
+  type UseChatOptions,
+} from "@hilbras/react";
 
 interface ChatBoxContextValue {
   messages: ChatMessage[];
   input: string;
   setInput: (v: string) => void;
-  handleSubmit: (e?: React.FormEvent) => Promise<void>;
+  handleSubmit: (e?: FormEvent) => Promise<void>;
   sendMessage: (c: string) => Promise<void>;
   isLoading: boolean;
   isStreaming: boolean;
@@ -32,21 +38,16 @@ export interface ChatBoxProps extends UseChatOptions {
   children: ReactNode;
   /** HilbrasProvider config (passed through) */
   providerConfig?: Parameters<typeof HilbrasProvider>[0]["config"];
+  /** Pre-existing client instance. Prefer this for server-proxy integrations. */
+  client?: Parameters<typeof HilbrasProvider>[0]["client"];
 }
 
-/**
- * Headless ChatBox container. Wraps children with context providing
- * chat state, cost tracking, and input handlers.
- *
- * @example
- * ```tsx
- * <ChatBox provider="openai" model="gpt-4o">
- *   <MessageList />
- *   <Input />
- * </ChatBox>
- * ```
- */
-export function ChatBox({ children, providerConfig, ...chatOptions }: ChatBoxProps) {
+interface ChatBoxContentProps extends Omit<ChatBoxProps, "children"> {
+  children: ReactNode;
+}
+
+/** Hooks must run below HilbrasProvider. */
+function ChatBoxContent({ children, client, providerConfig, ...chatOptions }: ChatBoxContentProps) {
   const chat = useChat(chatOptions);
   const cost = useCost({ enabled: true });
 
@@ -55,12 +56,22 @@ export function ChatBox({ children, providerConfig, ...chatOptions }: ChatBoxPro
       ...chat,
       costSnapshot: cost.snapshot,
     }),
-    [chat, cost.snapshot]
+    [chat, cost.snapshot],
   );
 
+  return <ChatBoxContext.Provider value={value}>{children}</ChatBoxContext.Provider>;
+}
+
+/**
+ * Headless ChatBox container. Wraps children with context providing
+ * chat state, cost tracking, and input handlers.
+ */
+export function ChatBox({ children, client, providerConfig, ...chatOptions }: ChatBoxProps) {
   return (
-    <HilbrasProvider config={providerConfig}>
-      <ChatBoxContext.Provider value={value}>{children}</ChatBoxContext.Provider>
+    <HilbrasProvider config={providerConfig} client={client}>
+      <ChatBoxContent client={client} providerConfig={providerConfig} {...chatOptions}>
+        {children}
+      </ChatBoxContent>
     </HilbrasProvider>
   );
 }

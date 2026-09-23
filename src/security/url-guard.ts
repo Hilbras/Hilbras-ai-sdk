@@ -53,8 +53,8 @@ function normalizeIpLiteral(host: string): string | null {
 
   // IPv6 hex — just lowercase it (no mixed notation expansion for simplicity)
   if (host.includes(":")) {
-    // Basic validation: only hex digits and colons
-    if (/^[0-9a-fA-F:]+$/.test(host)) return host.toLowerCase();
+    // Basic validation: hex groups, colons, and an optional embedded IPv4 tail
+    if (/^[0-9a-fA-F:.]+$/.test(host)) return host.toLowerCase();
     return null;
   }
 
@@ -151,34 +151,86 @@ function isUnspecifiedIPv4(normalized: string): boolean {
   return normalized === "0.0.0.0";
 }
 
-/**
- * Check if an IPv6 address is :: (unspecified) or ::ffff:0:0/96 (IPv4-mapped).
- */
-function isSpecialIPv6(normalized: string): boolean {
-  // :: (unspecified)
-  if (normalized === "::") return true;
-  // ::ffff:0:0/96 — IPv4-mapped IPv6
-  if (/^0{1,4}:0{1,4}:0{1,4}:0{1,4}:0{1,4}:ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.test(normalized)) {
-    return true;
-  }
-  return false;
+/** Parse an IPv6 literal into eight 16-bit groups. */
+function parseIPv6(value: string): number[] | null {
+  let host = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
+  if (host.includes("%")) host = host.split("%")[0];
+  if (!host.includes(":")) return null;
+
+  const doubleColon = host.indexOf("::");
+  if (doubleColon !== host.lastIndexOf("::")) return null;
+
+  const parsePart = (part: string): number[] | null => {
+    if (part.includes(".")) {
+      const octets = part.split(".");
+      if (octets.length !== 4 || !octets.every((part) => /^\d{1,3}$/.test(part))) return null;
+      const numbers = octets.map(Number);
+      if (!numbers.every((part) => part >= 0 && part <= 255)) return null;
+      return [(numbers[0] << 8) | numbers[1], (numbers[2] << 8) | numbers[3]];
+    }
+    if (!/^[0-9a-f]{1,4}$/i.test(part)) return null;
+    return [parseInt(part, 16)];
+  };
+
+  const parseSide = (text: string): number[] | null => {
+    if (!text) return [];
+    const groups: number[] = [];
+    for (const part of text.split(":")) {
+      const parsed = parsePart(part);
+      if (parsed === null) return null;
+      groups.push(...parsed);
+    }
+    return groups;
+  };
+
+  const leftText = doubleColon >= 0 ? host.slice(0, doubleColon) : host;
+  const rightText = doubleColon >= 0 ? host.slice(doubleColon + 2) : "";
+  const left = parseSide(leftText);
+  const right = parseSide(rightText);
+  if (left === null || right === null) return null;
+
+  if (doubleColon < 0) return left.length === 8 ? left : null;
+  const fill = 8 - left.length - right.length;
+  if (fill < 1) return null;
+  return [...left, ...Array(fill).fill(0), ...right];
+}
+
+function isLoopbackIPv4(normalized: string): boolean {
+  const first = Number(normalized.split(".")[0]);
+  return first === 127;
+}
+
+function isLoopbackIPv6(groups: number[]): boolean {
+  return groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1;
 }
 
 /**
- * Check if an IPv6 address is in a private or link-local range.
- * fc00::/7 (unique-local) and fe80::/10 (link-local).
+ * Check if an IPv6 address is :: (unspecified), loopback, or an IPv4-mapped
+ * address. Mapped and IPv4-compatible addresses must be checked as IPv4 too.
  */
+function isSpecialIPv6(normalized: string): boolean {
+  const groups = parseIPv6(normalized);
+  if (!groups) return false;
+  if (groups.every((group) => group === 0)) return true;
+  if (isLoopbackIPv6(groups)) return true;
+
+  const mapped = groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff;
+  const compatible = groups.slice(0, 6).every((group) => group === 0) && groups[6] !== 0;
+  return mapped || compatible;
+}
+
+function isLinkLocalIPv6(normalized: string): boolean {
+  const groups = parseIPv6(normalized);
+  return !!groups && groups[0] >= 0xfe80 && groups[0] <= 0xfebf;
+}
+
+/** Check if an IPv6 address is in a private or link-local range. */
 function isPrivateIPv6(normalized: string): boolean {
-  // Expand to full form for prefix checks
-  // fc00::/7 = fc00:: to fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-  // fe80::/10 = fe80:: to febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-  const firstGroup = parseInt(normalized.split(":")[0], 16);
-  if (isNaN(firstGroup)) return false;
-  // fc00::/7: first nibble is f or e, second nibble is c-f → 0xfc00–0xfdff
-  if (firstGroup >= 0xfc00 && firstGroup <= 0xfdff) return true;
-  // fe80::/10: first two nibbles = fe, third nibble is 8-b → 0xfe80–0xfebf
-  if (firstGroup >= 0xfe80 && firstGroup <= 0xfebf) return true;
-  return false;
+  const groups = parseIPv6(normalized);
+  if (!groups) return false;
+  const first = groups[0];
+  if (first >= 0xfc00 && first <= 0xfdff) return true;
+  return isLinkLocalIPv6(normalized);
 }
 
 function isLocalhostish(host: string): boolean {
@@ -226,6 +278,9 @@ function checkHostSafety(host: string): string | null {
     if (isUnspecifiedIPv4(normalized)) {
       return "address is unspecified (0.0.0.0)";
     }
+    if (isLoopbackIPv4(normalized)) {
+      return "address is loopback";
+    }
     if (isSpecialIPv6(normalized)) {
       return "address is unspecified or IPv4-mapped IPv6";
     }
@@ -255,7 +310,11 @@ function checkHostSafety(host: string): string | null {
       return "private";
     }
 
-    // Private/link-local IPv6
+    // Link-local IPv6 is never an allowable private-network opt-in.
+    if (isLinkLocalIPv6(normalized)) {
+      return "link-local";
+    }
+    // Private IPv6
     if (isPrivateIPv6(normalized)) {
       return "private";
     }
@@ -311,8 +370,21 @@ export function validateBaseUrl(
 
   const host = normalizeHostname(parsed.hostname.toLowerCase());
 
-  // Always allow loopback / *.local (both http and https).
+  // Local targets require an explicit opt-in. Do not treat arbitrary .local
+  // names as safe merely because they use a non-standard mDNS suffix.
   if (isLocalhostish(host)) {
+    if (!options.allowInsecure) {
+      return {
+        ok: false,
+        reason: `local hostname '${host}' requires allowInsecure: true`,
+      };
+    }
+    if (host.endsWith(".local") && !options.allowPrivateNetwork) {
+      return {
+        ok: false,
+        reason: `.local hostname '${host}' requires allowPrivateNetwork: true`,
+      };
+    }
     return { ok: true };
   }
 
@@ -365,6 +437,9 @@ export function validateResolvedAddress(
   if (isUnspecifiedIPv4(normalized)) {
     return { ok: false, reason: "resolved address is unspecified (0.0.0.0)" };
   }
+  if (isLoopbackIPv4(normalized)) {
+    return { ok: false, reason: "resolved address is loopback" };
+  }
   if (isSpecialIPv6(normalized)) {
     return { ok: false, reason: "resolved address is unspecified or IPv4-mapped IPv6" };
   }
@@ -398,10 +473,16 @@ export function validateResolvedAddress(
       reason: `resolved address ${ip} is in private network range`,
     };
   }
+  if (isLinkLocalIPv6(normalized)) {
+    return {
+      ok: false,
+      reason: `resolved address ${ip} is in link-local IPv6 range`,
+    };
+  }
   if (isPrivateIPv6(normalized)) {
     return {
       ok: false,
-      reason: `resolved address ${ip} is in private/link-local IPv6 range`,
+      reason: `resolved address ${ip} is in private IPv6 range`,
     };
   }
 

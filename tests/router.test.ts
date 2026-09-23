@@ -4,9 +4,17 @@
 
 import { describe, it, expect } from "vitest";
 import { ModelRouter } from "../src/router/model-router.js";
+import { BUILTIN_MODELS } from "../src/catalog/models.js";
 
 describe("ModelRouter", () => {
   const router = new ModelRouter(["openai", "anthropic", "google-genai", "groq", "ollama"]);
+
+  it("does not advertise chat capabilities for specialized models", () => {
+    const embedding = BUILTIN_MODELS.find((model) => model.id === "text-embedding-3-small");
+    const speech = BUILTIN_MODELS.find((model) => model.id === "tts-1");
+    expect(embedding?.capabilities).toMatchObject({ embeddings: true, streaming: false, tools: false });
+    expect(speech?.capabilities).toMatchObject({ speech: true, streaming: false, tools: false });
+  });
 
   it("returns results for empty requirements (all models)", () => {
     const results = router.evaluate({});

@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -32,205 +32,216 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./adapter": {
-      "import": "./dist/types/adapter.js",
-      "types": "./dist/types/adapter.d.ts"
+      "types": "./dist/types/adapter.d.ts",
+      "import": "./dist/types/adapter.js"
     },
     "./adapters/openai": {
-      "import": "./dist/adapters/openai.js",
-      "types": "./dist/adapters/openai.d.ts"
+      "types": "./dist/adapters/openai.d.ts",
+      "import": "./dist/adapters/openai.js"
     },
     "./adapters/anthropic": {
-      "import": "./dist/adapters/anthropic.js",
-      "types": "./dist/adapters/anthropic.d.ts"
+      "types": "./dist/adapters/anthropic.d.ts",
+      "import": "./dist/adapters/anthropic.js"
     },
     "./adapters/google-genai": {
-      "import": "./dist/adapters/google-genai.js",
-      "types": "./dist/adapters/google-genai.d.ts"
+      "types": "./dist/adapters/google-genai.d.ts",
+      "import": "./dist/adapters/google-genai.js"
     },
     "./adapters/azure": {
-      "import": "./dist/adapters/azure.js",
-      "types": "./dist/adapters/azure.d.ts"
+      "types": "./dist/adapters/azure.d.ts",
+      "import": "./dist/adapters/azure.js"
     },
     "./adapters/groq": {
-      "import": "./dist/adapters/groq.js",
-      "types": "./dist/adapters/groq.d.ts"
+      "types": "./dist/adapters/groq.d.ts",
+      "import": "./dist/adapters/groq.js"
     },
     "./adapters/ollama": {
-      "import": "./dist/adapters/ollama.js",
-      "types": "./dist/adapters/ollama.d.ts"
+      "types": "./dist/adapters/ollama.d.ts",
+      "import": "./dist/adapters/ollama.js"
     },
     "./adapters/openai-compatible": {
-      "import": "./dist/adapters/openai-compatible.js",
-      "types": "./dist/adapters/openai-compatible.d.ts"
+      "types": "./dist/adapters/openai-compatible.d.ts",
+      "import": "./dist/adapters/openai-compatible.js"
     },
     "./adapters/mistral": {
-      "import": "./dist/adapters/mistral.js",
-      "types": "./dist/adapters/mistral.d.ts"
+      "types": "./dist/adapters/mistral.d.ts",
+      "import": "./dist/adapters/mistral.js"
     },
     "./adapters/deepseek": {
-      "import": "./dist/adapters/deepseek.js",
-      "types": "./dist/adapters/deepseek.d.ts"
+      "types": "./dist/adapters/deepseek.d.ts",
+      "import": "./dist/adapters/deepseek.js"
     },
     "./adapters/xai": {
-      "import": "./dist/adapters/xai.js",
-      "types": "./dist/adapters/xai.d.ts"
+      "types": "./dist/adapters/xai.d.ts",
+      "import": "./dist/adapters/xai.js"
     },
     "./adapters/together": {
-      "import": "./dist/adapters/together.js",
-      "types": "./dist/adapters/together.d.ts"
+      "types": "./dist/adapters/together.d.ts",
+      "import": "./dist/adapters/together.js"
     },
     "./adapters/fireworks": {
-      "import": "./dist/adapters/fireworks.js",
-      "types": "./dist/adapters/fireworks.d.ts"
+      "types": "./dist/adapters/fireworks.d.ts",
+      "import": "./dist/adapters/fireworks.js"
     },
     "./adapters/cohere": {
-      "import": "./dist/adapters/cohere.js",
-      "types": "./dist/adapters/cohere.d.ts"
+      "types": "./dist/adapters/cohere.d.ts",
+      "import": "./dist/adapters/cohere.js"
     },
     "./adapters/perplexity": {
-      "import": "./dist/adapters/perplexity.js",
-      "types": "./dist/adapters/perplexity.d.ts"
+      "types": "./dist/adapters/perplexity.d.ts",
+      "import": "./dist/adapters/perplexity.js"
     },
     "./adapters/cerebras": {
-      "import": "./dist/adapters/cerebras.js",
-      "types": "./dist/adapters/cerebras.d.ts"
+      "types": "./dist/adapters/cerebras.d.ts",
+      "import": "./dist/adapters/cerebras.js"
     },
     "./adapters/deepinfra": {
-      "import": "./dist/adapters/deepinfra.js",
-      "types": "./dist/adapters/deepinfra.d.ts"
+      "types": "./dist/adapters/deepinfra.d.ts",
+      "import": "./dist/adapters/deepinfra.js"
     },
     "./adapters/bedrock": {
-      "import": "./dist/adapters/bedrock.js",
-      "types": "./dist/adapters/bedrock.d.ts"
+      "types": "./dist/adapters/bedrock.d.ts",
+      "import": "./dist/adapters/bedrock.js"
     },
     "./adapters/google-vertex": {
-      "import": "./dist/adapters/google-vertex.js",
-      "types": "./dist/adapters/google-vertex.d.ts"
+      "types": "./dist/adapters/google-vertex.d.ts",
+      "import": "./dist/adapters/google-vertex.js"
     },
     "./adapters/huggingface": {
-      "import": "./dist/adapters/huggingface.js",
-      "types": "./dist/adapters/huggingface.d.ts"
+      "types": "./dist/adapters/huggingface.d.ts",
+      "import": "./dist/adapters/huggingface.js"
     },
     "./adapters/deepgram": {
-      "import": "./dist/adapters/deepgram.js",
-      "types": "./dist/adapters/deepgram.d.ts"
+      "types": "./dist/adapters/deepgram.d.ts",
+      "import": "./dist/adapters/deepgram.js"
     },
     "./adapters/elevenlabs": {
-      "import": "./dist/adapters/elevenlabs.js",
-      "types": "./dist/adapters/elevenlabs.d.ts"
+      "types": "./dist/adapters/elevenlabs.d.ts",
+      "import": "./dist/adapters/elevenlabs.js"
     },
     "./adapters/voyageai": {
-      "import": "./dist/adapters/voyageai.js",
-      "types": "./dist/adapters/voyageai.d.ts"
+      "types": "./dist/adapters/voyageai.d.ts",
+      "import": "./dist/adapters/voyageai.js"
     },
     "./adapters/cohere-rerank": {
-      "import": "./dist/adapters/cohere-rerank.js",
-      "types": "./dist/adapters/cohere-rerank.d.ts"
+      "types": "./dist/adapters/cohere-rerank.d.ts",
+      "import": "./dist/adapters/cohere-rerank.js"
     },
     "./tokens": {
-      "import": "./dist/tokens/counter.js",
-      "types": "./dist/tokens/counter.d.ts"
+      "types": "./dist/tokens/counter.d.ts",
+      "import": "./dist/tokens/counter.js"
     },
     "./config": {
-      "import": "./dist/config/config.js",
-      "types": "./dist/config/config.d.ts"
+      "types": "./dist/config/config.d.ts",
+      "import": "./dist/config/config.js"
     },
     "./transport": {
-      "import": "./dist/transport/transport.js",
-      "types": "./dist/transport/transport.d.ts"
+      "types": "./dist/transport/transport.d.ts",
+      "import": "./dist/transport/transport.js"
     },
     "./transport/fetch": {
-      "import": "./dist/transport/fetch.js",
-      "types": "./dist/transport/fetch.d.ts"
+      "types": "./dist/transport/fetch.d.ts",
+      "import": "./dist/transport/fetch.js"
     },
     "./reliability/*": {
-      "import": "./dist/reliability/*.js",
-      "types": "./dist/reliability/*.d.ts"
+      "types": "./dist/reliability/*.d.ts",
+      "import": "./dist/reliability/*.js"
     },
     "./mcp": {
-      "import": "./dist/mcp/index.js",
-      "types": "./dist/mcp/index.d.ts"
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
     },
     "./realtime": {
-      "import": "./dist/realtime/index.js",
-      "types": "./dist/realtime/index.d.ts"
+      "types": "./dist/realtime/index.d.ts",
+      "import": "./dist/realtime/index.js"
     },
     "./devtools": {
-      "import": "./dist/devtools/index.js",
-      "types": "./dist/devtools/index.d.ts"
+      "types": "./dist/devtools/index.d.ts",
+      "import": "./dist/devtools/index.js"
     },
     "./react": {
-      "import": "./dist/frameworks/react/index.js",
-      "types": "./dist/frameworks/react/index.d.ts"
+      "types": "./dist/frameworks/react/index.d.ts",
+      "import": "./dist/frameworks/react/index.js"
     },
     "./vue": {
-      "import": "./dist/frameworks/vue/index.js",
-      "types": "./dist/frameworks/vue/index.d.ts"
+      "types": "./dist/frameworks/vue/index.d.ts",
+      "import": "./dist/frameworks/vue/index.js"
     },
     "./svelte": {
-      "import": "./dist/frameworks/svelte/index.js",
-      "types": "./dist/frameworks/svelte/index.d.ts"
+      "types": "./dist/frameworks/svelte/index.d.ts",
+      "import": "./dist/frameworks/svelte/index.js"
     },
     "./solid": {
-      "import": "./dist/frameworks/solid/index.js",
-      "types": "./dist/frameworks/solid/index.d.ts"
+      "types": "./dist/frameworks/solid/index.d.ts",
+      "import": "./dist/frameworks/solid/index.js"
     },
     "./qwik": {
-      "import": "./dist/frameworks/qwik/index.js",
-      "types": "./dist/frameworks/qwik/index.d.ts"
+      "types": "./dist/frameworks/qwik/index.d.ts",
+      "import": "./dist/frameworks/qwik/index.js"
     },
     "./angular": {
-      "import": "./dist/frameworks/angular/index.js",
-      "types": "./dist/frameworks/angular/index.d.ts"
+      "types": "./dist/frameworks/angular/index.d.ts",
+      "import": "./dist/frameworks/angular/index.js"
     },
     "./nextjs": {
-      "import": "./dist/frameworks/nextjs/index.js",
-      "types": "./dist/frameworks/nextjs/index.d.ts"
+      "types": "./dist/frameworks/nextjs/index.d.ts",
+      "import": "./dist/frameworks/nextjs/index.js"
     },
     "./astro": {
-      "import": "./dist/frameworks/astro/index.js",
-      "types": "./dist/frameworks/astro/index.d.ts"
+      "types": "./dist/frameworks/astro/index.d.ts",
+      "import": "./dist/frameworks/astro/index.js"
     },
     "./remix": {
-      "import": "./dist/frameworks/remix/index.js",
-      "types": "./dist/frameworks/remix/index.d.ts"
+      "types": "./dist/frameworks/remix/index.d.ts",
+      "import": "./dist/frameworks/remix/index.js"
     },
     "./agent": {
-      "import": "./dist/features/agent/index.js",
-      "types": "./dist/features/agent/index.d.ts"
+      "types": "./dist/features/agent/index.d.ts",
+      "import": "./dist/features/agent/index.js"
     },
     "./eval": {
-      "import": "./dist/features/eval/index.js",
-      "types": "./dist/features/eval/index.d.ts"
+      "types": "./dist/features/eval/index.d.ts",
+      "import": "./dist/features/eval/index.js"
     },
     "./rag": {
-      "import": "./dist/features/rag/index.js",
-      "types": "./dist/features/rag/index.d.ts"
+      "types": "./dist/features/rag/index.d.ts",
+      "import": "./dist/features/rag/index.js"
     },
     "./fine-tune": {
-      "import": "./dist/features/fine-tune/index.js",
-      "types": "./dist/features/fine-tune/index.d.ts"
+      "types": "./dist/features/fine-tune/index.d.ts",
+      "import": "./dist/features/fine-tune/index.js"
+    },
+    "./catalog": {
+      "types": "./dist/catalog/index.d.ts",
+      "import": "./dist/catalog/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node tools/clean-dist.mjs dist && tsc",
     "dev": "tsc --watch",
     "pretest": "npx tsc --noEmit",
-    "pretest:cli": "npx tsc -p packages/cli/tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "npm run test:root",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "benchmark": "vitest bench tests/benchmarks/",
     "lint": "oxlint src/",
-    "lint:custom": "node tools/check-validate-url.mjs",
-    "size": "node tools/check-size.mjs"
+    "size": "node tools/check-size.mjs",
+    "prepack": "npm run build",
+    "check:package": "npm run build && node tools/check-package.mjs",
+    "test:root": "vitest run",
+    "build:packages": "npm run build --workspaces --if-present",
+    "test:packages": "npm run build:packages && npm run test --workspace hilbras --workspace create-hilbras-app --workspace @hilbras/next --workspace @hilbras/react --workspace @hilbras/ui"
   },
   "engines": {
     "node": ">=18"
@@ -245,16 +256,16 @@
     "url": "https://github.com/Hilbras/Hilbras-ai-sdk/issues"
   },
   "peerDependencies": {
-    "react": ">=18",
-    "vue": ">=3.4",
-    "svelte": ">=5",
-    "solid-js": ">=1.8.0",
-    "@angular/core": ">=19",
     "@angular/common": ">=19",
-    "next": ">=14",
-    "astro": ">=4.0.0",
+    "@angular/core": ">=19",
     "@remix-run/react": ">=2",
-    "rxjs": ">=7"
+    "astro": ">=4.0.0",
+    "next": ">=14",
+    "react": ">=18",
+    "rxjs": ">=7",
+    "solid-js": ">=1.8.0",
+    "svelte": ">=5",
+    "vue": ">=3.4"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -291,10 +302,16 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@types/react": "^19.3.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "oxlint": "^1.79.0",
     "react": "^19.3.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
     "vue": "^3.5.43"
-  }
+  },
+  "packageManager": "npm@11.19.0",
+  "workspaces": [
+    ".",
+    "packages/*"
+  ]
 }

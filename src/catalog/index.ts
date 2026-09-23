@@ -5,7 +5,7 @@
  * Use `loadCatalog()` to get the full provider catalog at runtime.
  */
 
-import catalog from "./provider-catalog.json";
+import catalog from "./provider-catalog.js";
 
 export interface CatalogModel {
   id: string;

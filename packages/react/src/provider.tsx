@@ -22,7 +22,7 @@ export interface HilbrasProviderProps {
  *
  * @example
  * ```tsx
- * <HilbrasProvider config={{ providers: [{ name: "openai", ... }] }}>
+ * <HilbrasProvider client={client}>
  *   <App />
  * </HilbrasProvider>
  * ```

@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.0.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-3.1.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1586%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1611%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -203,7 +203,19 @@ const transport = new MiddlewareTransport(
 
 ---
 
-## What's New in v3.0.0
+## What's New in v3.1.0
+
+**Release hardening and correctness** — v3.1.0 is the first post-audit release. It makes the root package reproducibly buildable and publishable, fixes Node ESM catalog loading and export-map gaps, and closes several transport, budget, stream-state, SSRF, redaction, and tool-execution boundaries.
+
+**Package release reliability** — workspace metadata, lockfile state, companion dependency ranges, clean builds, package smoke checks, and npm publication hooks are now consistent. The root package still has zero runtime dependencies.
+
+**Documentation and security guidance** — current examples now use the published subpaths, keep provider credentials on the server, describe the stricter local-network policy, and avoid executing model-selected expressions.
+
+See [`CHANGELOG.md`](CHANGELOG.md) and [`HILBRAS-SDK-FULL-AUDIT.md`](HILBRAS-SDK-FULL-AUDIT.md) for the complete release and audit details.
+
+---
+
+## Features introduced in v3.0.0
 
 **Plugin System** — Extend the client with lifecycle hooks:
 ```typescript
@@ -273,31 +285,37 @@ npm install @hilbras/react
 
 ### useChat — Streaming chat
 
+Provider credentials belong on the server. Construct the client in a server
+component (or route handler) and pass it to the client-side provider; do not put
+an API key in browser props or a client component.
+
 ```tsx
-import { HilbrasProvider, useChat } from "@hilbras/react";
+// app/page.tsx (server component)
+import { HilbrasClient } from "@hilbras/sdk";
+import { HilbrasProvider } from "@hilbras/react";
+import { Chat } from "./chat";
 
-function App() {
-  return (
-    <HilbrasProvider config={{ providers: [{ name: "openai", apiKey: process.env.OPENAI_API_KEY }] }}>
-      <Chat />
-    </HilbrasProvider>
-  );
+export default function Page() {
+  const client = new HilbrasClient();
+  client.addProviderFromCatalog("openai", "gpt-4o", process.env.OPENAI_API_KEY!);
+  return <HilbrasProvider client={client}><Chat /></HilbrasProvider>;
 }
+```
 
-function Chat() {
-  const { messages, input, setInput, handleSubmit, isLoading, stop, retry } = useChat({
-    provider: "openai",
+```tsx
+// app/chat.tsx (client component)
+import { useChat } from "@hilbras/react";
+
+export function Chat() {
+  const { messages, input, setInput, handleSubmit, isLoading, stop } = useChat({
+    provider: "OpenAI",
     model: "gpt-4o",
     systemPrompt: "You are a helpful assistant.",
   });
 
   return (
     <div>
-      {messages.map((m) => (
-        <div key={m.id} className={m.role}>
-          {m.content}
-        </div>
-      ))}
+      {messages.map((m) => <div key={m.id}>{m.content}</div>)}
       <form onSubmit={handleSubmit}>
         <input value={input} onChange={(e) => setInput(e.target.value)} disabled={isLoading} />
         <button type="submit" disabled={isLoading}>Send</button>
@@ -379,27 +397,29 @@ import { FetchTransport } from "@hilbras/sdk/transport/fetch";  // Transport
 import { MiddlewareTransport } from "@hilbras/sdk";             // Middleware wrapper
 import { validateBaseUrl } from "@hilbras/sdk";                 // SSRF guard
 
-// v3.0.0: Plugin system, RBAC, SLA, cost alerts, A/B testing
+// v3.0.0+: Plugin system, RBAC, SLA, cost alerts, A/B testing
 import type { Plugin } from "@hilbras/sdk";                     // Plugin interface
 import { createRBACMiddleware } from "@hilbras/sdk";            // RBAC
 import { SLAMonitor } from "@hilbras/sdk";                      // SLA monitoring
 import { CostAlertMonitor } from "@hilbras/sdk";                // Cost alerts
 import { runABTest } from "@hilbras/sdk";                       // A/B testing
 
-// Packages
-import { useChat, useCompletion, useCost, HilbrasProvider } from "@hilbras/react";  // React hooks
-import { useChat } from "@hilbras/vue";            // Vue composables
-import { useChat } from "@hilbras/svelte";         // Svelte stores
-import { useChat } from "@hilbras/solid";          // Solid signals
-import { useChat } from "@hilbras/qwik";            // Qwik signals
-import { useChat } from "@hilbras/nextjs";          // Next.js
-import { createChatEndpoint } from "@hilbras/astro"; // Astro
-import { createChatAction } from "@hilbras/remix";  // Remix
-import { useChat } from "@hilbras/angular";        // Angular signals
-import { ToolLoopAgent } from "@hilbras/agent";    // Agent framework
-import { evaluate } from "@hilbras/eval";          // Evaluation
-import { RAGPipeline } from "@hilbras/rag";        // RAG
-import { exportTrainingData } from "@hilbras/fine-tune";  // Fine-tuning
+// React package
+import { useChat, useCompletion, useCost, HilbrasProvider } from "@hilbras/react";
+
+// Framework subpaths from the root package
+import { useChat } from "@hilbras/sdk/vue";
+import { useChat } from "@hilbras/sdk/svelte";
+import { useChat } from "@hilbras/sdk/solid";
+import { useChat } from "@hilbras/sdk/qwik";
+import { createChatHandler } from "@hilbras/sdk/nextjs";
+import { createChatEndpoint } from "@hilbras/sdk/astro";
+import { createChatAction } from "@hilbras/sdk/remix";
+import { useChat } from "@hilbras/sdk/angular";
+import { ToolLoopAgent } from "@hilbras/sdk/agent";
+import { evaluate } from "@hilbras/sdk/eval";
+import { RAGPipeline } from "@hilbras/sdk/rag";
+import { exportTrainingData } from "@hilbras/sdk/fine-tune";
 ```
 
 ## Development
@@ -407,7 +427,8 @@ import { exportTrainingData } from "@hilbras/fine-tune";  // Fine-tuning
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run 1586 tests
+npm test             # Run the root test suite (1611 tests)
+npm run test:packages # Build and test companion packages
 npm run test:watch   # Watch mode
 npm run lint         # Lint with oxlint
 ```

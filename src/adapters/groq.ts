@@ -20,6 +20,7 @@ import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import type { TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
+import { mergeExtraParams } from "./extra.js";
 
 export type GroqAdapterConfig = AdapterConfig;
 
@@ -33,7 +34,6 @@ export class GroqAdapter implements AIProvider {
   readonly id = "groq";
   private _provider: ProviderConfig;
   private _transport: Transport;
-  private _reasoningNormalizer = new ReasoningNormalizer();
 
   constructor(config: GroqAdapterConfig) {
     this._provider = config.provider;
@@ -84,7 +84,7 @@ export class GroqAdapter implements AIProvider {
     }
 
     if (params.extra) {
-      Object.assign(body, params.extra);
+      mergeExtraParams(body, params.extra);
     }
 
     return body;
@@ -99,6 +99,7 @@ export class GroqAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const url = `${this._provider.baseUrl}/chat/completions`;
     const body = this._buildBody({
       model: params.model,
@@ -169,7 +170,7 @@ export class GroqAdapter implements AIProvider {
 
           const content = delta.content as string | undefined;
           if (content) {
-            const reasoning = this._reasoningNormalizer.feedText(content);
+            const reasoning = reasoningNormalizer.feedText(content);
             if (reasoning) yield reasoning;
             else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {
               yield { type: "text", text: content };

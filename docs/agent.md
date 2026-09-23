@@ -13,17 +13,29 @@ npm install @hilbras/sdk
 Multi-step agent that loops through tool calls until the task is complete.
 
 ```typescript
-import { ToolLoopAgent, type AgentTool } from "@hilbras/agent";
+import { ToolLoopAgent, type AgentTool } from "@hilbras/sdk/agent";
 
 const calculatorTool: AgentTool = {
   name: "calculator",
-  description: "Perform a calculation",
+  description: "Perform one allowlisted arithmetic operation",
   parameters: {
     type: "object",
-    properties: { expression: { type: "string" } },
-    required: ["expression"],
+    properties: {
+      operation: { type: "string", enum: ["add", "subtract", "multiply", "divide"] },
+      left: { type: "number" },
+      right: { type: "number" },
+    },
+    required: ["operation", "left", "right"],
   },
-  execute: async (params) => eval(params.expression as string),
+  execute: async ({ operation, left, right }) => {
+    switch (operation) {
+      case "add": return Number(left) + Number(right);
+      case "subtract": return Number(left) - Number(right);
+      case "multiply": return Number(left) * Number(right);
+      case "divide": return Number(right) === 0 ? null : Number(left) / Number(right);
+      default: throw new Error("Unsupported calculator operation");
+    }
+  },
 };
 
 const agent = new ToolLoopAgent({
@@ -47,7 +59,7 @@ console.log(result.steps);      // Array of AgentStep
 Reasoning + Acting agent that follows the Think → Act → Observe pattern.
 
 ```typescript
-import { ReActAgent } from "@hilbras/agent";
+import { ReActAgent } from "@hilbras/sdk/agent";
 
 const agent = new ReActAgent({
   provider: "openai",
@@ -64,7 +76,7 @@ const result = await agent.run("What is the population of France divided by 2?")
 Two-phase agent: first creates a plan, then executes each step.
 
 ```typescript
-import { PlanAndExecuteAgent } from "@hilbras/agent";
+import { PlanAndExecuteAgent } from "@hilbras/sdk/agent";
 
 const agent = new PlanAndExecuteAgent({
   provider: "openai",

@@ -10,8 +10,22 @@ import { OidcCredentialProvider, OidcError, oidcSource } from "../src/credential
 import { RequestSigner, signingMiddleware } from "../src/security/request-signer.js";
 import { redactPii, detectPii, createPiiRedactor } from "../src/security/pii-guard.js";
 import { AuditLogger, createRetentionPolicy } from "../src/security/audit-logger.js";
+import { redact } from "../src/logging/logger.js";
 
-// ─── OIDC Credential Provider ───────────────────────────────────────────────
+describe("redact", () => {
+  it("redacts OAuth secret fields and common provider key formats", () => {
+    const input = 'client_secret=oauth-secret-12345 AKIAIOSFODNN7EXAMPLE AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    const result = redact(input);
+    expect(result).not.toContain("oauth-secret-12345");
+    expect(result).not.toContain("AKIAIOSFODNN7EXAMPLE");
+    expect(result).not.toContain("AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+  });
+
+  it("redacts non-bearer token authorization values", () => {
+    expect(redact("Authorization: Token abcdef123456")).not.toContain("abcdef123456");
+  });
+});
+
 
 describe("OidcCredentialProvider", () => {
   beforeEach(() => {
@@ -602,6 +616,54 @@ describe("AuditLogger", () => {
     logger.logAuth({ action: "login", success: true });
     expect(entries[0].timestamp).toBeDefined();
     expect(new Date(entries[0].timestamp).getTime()).toBeGreaterThan(0);
+  });
+
+  it("redacts PII in descriptions by default", () => {
+    logger.logSecurity({
+      action: "pii_detected",
+      eventType: "pii_detected",
+      description: "Contact john@example.com from 203.0.113.10",
+    });
+    expect(entries[0].description).not.toContain("john@example.com");
+    expect(entries[0].description).not.toContain("203.0.113.10");
+  });
+
+  it("omits source IP unless explicitly enabled", () => {
+    logger.logAuth({ action: "login", success: true, sourceIp: "203.0.113.10" });
+    expect(entries[0].sourceIp).toBeUndefined();
+  });
+
+  it("allows PII redaction to be explicitly disabled", () => {
+    const rawLogger = new AuditLogger({ redactPii: false, destination: (entry) => entries.push(entry) });
+    rawLogger.logSecurity({
+      action: "custom",
+      eventType: "custom",
+      description: "Contact john@example.com",
+    });
+    expect(entries[0].description).toBe("Contact john@example.com");
+  });
+
+  it("retention purge preserves entries newer than the cutoff", () => {
+    vi.useFakeTimers();
+    try {
+      const now = Date.now();
+      vi.setSystemTime(now - 10_000);
+      logger.logAuth({ action: "old", success: true });
+      vi.setSystemTime(now);
+      logger.logAuth({ action: "recent", success: true });
+      const policy = createRetentionPolicy(logger, 5_000);
+      expect(policy.purge()).toBe(1);
+      expect(logger.getEntries().map((entry) => entry.action)).toEqual(["recent"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("getEntries returns defensive copies", () => {
+    logger.logAuth({ action: "login", success: true, meta: { nested: { value: 1 } } });
+    const entry = logger.getEntries()[0] as any;
+    entry.meta.nested.value = 99;
+    expect((logger.getEntries()[0] as any).meta.nested.value).toBe(1);
   });
 
   it("getEntries returns all entries", () => {

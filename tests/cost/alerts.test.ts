@@ -36,6 +36,19 @@ describe("CostAlertMonitor", () => {
     );
   });
 
+  it("does not fire a future threshold at the warning callback", () => {
+    const cb = vi.fn();
+    const monitor = new CostAlertMonitor({
+      thresholds: [{ percent: 50, channel: { type: "callback", callback: cb } }],
+    });
+    monitor.handleWarning({
+      totalActual: 10, totalEstimated: 10, totalReserved: 0,
+      committedCost: 10, requestCount: 1, activeReservations: 0,
+      byProvider: {}, byPhase: {}, budgetExceeded: false, remainingBudget: 90,
+    });
+    expect(cb).not.toHaveBeenCalled();
+  });
+
   it("does not fire same threshold twice", () => {
     const cb = vi.fn();
     const monitor = new CostAlertMonitor({

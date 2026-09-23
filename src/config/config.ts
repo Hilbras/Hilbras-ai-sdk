@@ -16,7 +16,6 @@ import type { SDKConfig } from "./schema.js";
 import { DEFAULT_CONFIG } from "./schema.js";
 import type { ProviderConfig } from "./provider-config.js";
 import { validateBaseUrl } from "../security/url-guard.js";
-import { redact } from "../logging/logger.js";
 import { readFileSync } from "node:fs";
 
 /** Environment variable prefix for SDK config */

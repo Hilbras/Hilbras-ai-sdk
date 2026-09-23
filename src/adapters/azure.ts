@@ -19,6 +19,7 @@ import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import type { EmbeddingParams, EmbeddingResult, ImageParams, ImageResult, SpeechParams, SpeechResult, TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
+import { assertExtraFieldAllowed } from "./extra.js";
 
 export interface AzureAdapterConfig extends AdapterConfig {
   deployment?: string;
@@ -31,7 +32,6 @@ export class AzureAdapter implements AIProvider {
   private _transport: Transport;
   private _deployment: string;
   private _apiVersion: string;
-  private _reasoningNormalizer = new ReasoningNormalizer();
 
   constructor(config: AzureAdapterConfig) {
     this._provider = config.provider;
@@ -97,6 +97,7 @@ export class AzureAdapter implements AIProvider {
 
     if (params.extra) {
       for (const [k, v] of Object.entries(params.extra)) {
+        assertExtraFieldAllowed(k);
         if (k === "enable_thinking" && v) {
           body.thinking = { type: "enabled" };
         } else {
@@ -117,6 +118,7 @@ export class AzureAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const deployment = params.model || this._deployment;
     const url = `${this._provider.baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=${this._apiVersion}`;
     const body = this._buildBody({
@@ -194,7 +196,7 @@ export class AzureAdapter implements AIProvider {
 
           const content = delta.content as string | undefined;
           if (content) {
-            const reasoning = this._reasoningNormalizer.feedText(content);
+            const reasoning = reasoningNormalizer.feedText(content);
             if (reasoning) yield reasoning;
             else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {
               yield { type: "text", text: content };

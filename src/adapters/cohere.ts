@@ -18,6 +18,7 @@ import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import type { RerankParams, RerankResult, EmbeddingParams, EmbeddingResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
+import { mergeExtraParams } from "./extra.js";
 
 export type CohereAdapterConfig = AdapterConfig;
 
@@ -104,7 +105,7 @@ export class CohereAdapter implements AIProvider {
     }
 
     if (params.extra) {
-      Object.assign(body, params.extra);
+      mergeExtraParams(body, params.extra);
     }
 
     return body;

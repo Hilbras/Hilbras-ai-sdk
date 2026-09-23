@@ -135,7 +135,7 @@ describe("Phase 3: Retry + Budget Interaction", () => {
       await client.complete({
         provider: "Test", model: MODEL,
         messages: [{ role: "user", content: "hi" }],
-        policy: { preset: "fast", retry: { maxRetries: 1 } },
+        policy: { preset: "fast", retry: { maxRetries: 1, retryableNetworkErrors: true } },
       });
     } catch { /* expected */ }
 
@@ -265,13 +265,147 @@ describe("Phase 5: Structured Output + Repair", () => {
     expect(client.costReport().activeReservations).toBe(0);
     assertBudgetInvariant(client.cost);
   });
+
+  it("exhausted schema validation releases an active reservation", async () => {
+    const jsonTransport: Transport = {
+      async request() {
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: '{"wrong":true}' } }],
+        }), { status: 200 });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const client = new HilbrasClient({ transport: jsonTransport, budget: { sessionBudget: 1.0 } });
+    client.addProvider(MODEL_PROVIDER);
+    const schema: import("../src/types/schema.js").SchemaValidator<{ required: string }> = {
+      safeParse: () => ({ success: false, error: new Error("missing required field") }),
+    };
+
+    await expect(client.complete({
+      provider: "Test",
+      model: MODEL,
+      messages: [{ role: "user", content: "hi" }],
+      output: { schema, maxRepairAttempts: 0 },
+    })).rejects.toThrow();
+
+    expect(client.costReport().activeReservations).toBe(0);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 7: Streaming Safety
 // ═══════════════════════════════════════════════════════════════════════════
 
+describe("Tool execution boundary", () => {
+  it("does not execute a model-selected tool outside the allowlist", async () => {
+    const execute = vi.fn(async () => "executed");
+    const transport: Transport = {
+      async request() {
+        return new Response(
+          sse({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "danger", arguments: "{}" } }] } }] }) +
+          sse({ choices: [{ delta: {}, finish_reason: "tool_calls" }] }) +
+          "data: [DONE]\\n\\n",
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        );
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const client = new HilbrasClient({ transport });
+    client.addProvider(MODEL_PROVIDER);
+    const events = [];
+    for await (const event of client.streamText({
+      provider: "Test",
+      model: MODEL,
+      messages: [{ role: "user", content: "run it" }],
+      tools: [{
+        type: "function",
+        function: {
+          name: "safe",
+          description: "safe tool",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      }],
+      maxSteps: 1,
+      toolExecution: execute,
+    })) events.push(event);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === "error")).toBe(true);
+  });
+});
+
 describe("Phase 7: Streaming Safety", () => {
+  it("does not retry after a visible stream chunk", async () => {
+    let requests = 0;
+    const transport: Transport = {
+      async request() {
+        requests++;
+        let stage = 0;
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (stage++ === 0) {
+              controller.enqueue(new TextEncoder().encode(sse({ choices: [{ delta: { content: "partial" } }] })));
+            } else {
+              controller.error(new TypeError("connection lost"));
+            }
+          },
+        });
+        return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const client = new HilbrasClient({ transport, budget: { sessionBudget: 1.0 } });
+    client.addProvider(MODEL_PROVIDER);
+    const chunks: StreamChunk[] = [];
+
+    await expect((async () => {
+      for await (const chunk of client.stream({
+        provider: "Test",
+        model: MODEL,
+        messages: [{ role: "user", content: "hi" }],
+        policy: { preset: "fast", retry: { maxRetries: 1, retryableNetworkErrors: true } },
+      })) chunks.push(chunk);
+    })()).rejects.toThrow("connection lost");
+
+    expect(requests).toBe(1);
+    expect(chunks.filter((chunk) => chunk.type === "text")).toHaveLength(1);
+    expect(client.costReport().activeReservations).toBe(0);
+  });
+
+  it("does not retry a caller-aborted stream", async () => {
+    let requests = 0;
+    const controller = new AbortController();
+    const transport: Transport = {
+      async request() {
+        requests++;
+        throw new DOMException("aborted", "AbortError");
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const client = new HilbrasClient({ transport, budget: { sessionBudget: 1.0 } });
+    client.addProvider(MODEL_PROVIDER);
+
+    const consume = async () => {
+      for await (const _chunk of client.stream({
+        provider: "Test",
+        model: MODEL,
+        messages: [{ role: "user", content: "hi" }],
+        signal: controller.signal,
+        policy: { preset: "fast", retry: { maxRetries: 1, retryableNetworkErrors: true } },
+      })) { /* consume */ }
+    };
+    const pending = consume();
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(requests).toBe(1);
+    expect(client.costReport().activeReservations).toBe(0);
+  });
+
   it("stream failure releases budget", async () => {
     const client = new HilbrasClient({
       transport: failingTransport(500),
@@ -461,12 +595,12 @@ describe("Phase 15: Performance", () => {
     expect(performance.now() - start).toBeLessThan(2000);
   });
 
-  it("10K routing decisions in < 1s", () => {
+  it("10K routing decisions complete within 30s", () => {
     const router = new ModelRouter();
     const start = performance.now();
     for (let i = 0; i < 10_000; i++) {
       router.best({ task: "coding" });
     }
-    expect(performance.now() - start).toBeLessThan(60000);
-  });
+    expect(performance.now() - start).toBeLessThan(30_000);
+  }, 30_000);
 });

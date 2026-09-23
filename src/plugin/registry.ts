@@ -43,12 +43,14 @@ export class PluginRegistry {
   /**
    * Call setup() on all registered plugins.
    */
+  async setup(plugin: Plugin, client: { use: (...args: unknown[]) => unknown }): Promise<void> {
+    try {
+      await plugin.setup?.(client as never);
+    } catch { /* plugin setup errors never break the SDK */ }
+  }
+
   async setupAll(client: { use: (...args: unknown[]) => unknown }): Promise<void> {
-    for (const plugin of this._plugins) {
-      try {
-        await plugin.setup?.(client as never);
-      } catch { /* plugin setup errors never break the SDK */ }
-    }
+    for (const plugin of this._plugins) await this.setup(plugin, client);
   }
 
   /**

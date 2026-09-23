@@ -16,7 +16,7 @@ import {
   chunkText,
   Retriever,
   RAGPipeline,
-} from "@hilbras/rag";
+} from "@hilbras/sdk/rag";
 
 // Chunk documents
 const chunks = chunkText(document, { chunkSize: 500, overlap: 50 });
@@ -47,7 +47,7 @@ const answer = await pipeline.query("What is RAG?");
 ## VectorStore
 
 ```typescript
-import { InMemoryVectorStore } from "@hilbras/rag";
+import { InMemoryVectorStore } from "@hilbras/sdk/rag";
 
 const store = new InMemoryVectorStore();
 
@@ -71,7 +71,7 @@ await store.delete("1");
 ## Chunking
 
 ```typescript
-import { chunkText, chunkDocuments } from "@hilbras/rag";
+import { chunkText, chunkDocuments } from "@hilbras/sdk/rag";
 
 // Chunk raw text
 const chunks = chunkText("Long document text...", {
@@ -90,7 +90,7 @@ const chunks = chunkDocuments(docs, { chunkSize: 500 });
 ## Retriever
 
 ```typescript
-import { Retriever } from "@hilbras/rag";
+import { Retriever } from "@hilbras/sdk/rag";
 
 const retriever = new Retriever({
   store: vectorStore,
@@ -107,7 +107,7 @@ const results = await retriever.retrieve("search query");
 Implement the `VectorStore` interface to use any vector database:
 
 ```typescript
-import type { VectorStore, VectorRecord } from "@hilbras/rag";
+import type { VectorStore, VectorRecord } from "@hilbras/sdk/rag";
 
 class PineconeStore implements VectorStore {
   async upsert(records: VectorRecord[]): Promise<void> { /* ... */ }

@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { PluginRegistry } from "../../src/plugin/registry.js";
+import { HilbrasClient } from "../../src/client/client.js";
 import type { Plugin } from "../../src/plugin/types.js";
 
 function makePlugin(name: string, overrides?: Partial<Plugin>): Plugin {
@@ -77,6 +78,17 @@ describe("PluginRegistry", () => {
     // Should not throw
     await registry.setupAll({ use: () => {} } as never);
     expect(goodSetup).toHaveBeenCalled();
+  });
+
+  it("client.use sets up only newly registered plugins", async () => {
+    const client = new HilbrasClient();
+    const setupA = vi.fn();
+    const setupB = vi.fn();
+    await client.use(makePlugin("a", { setup: setupA }));
+    await client.use(makePlugin("b", { setup: setupB }));
+
+    expect(setupA).toHaveBeenCalledTimes(1);
+    expect(setupB).toHaveBeenCalledTimes(1);
   });
 
   it("fires onRequest on all plugins in order", async () => {

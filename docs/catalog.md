@@ -8,12 +8,12 @@ Runtime provider and model discovery with search capabilities.
 import { loadCatalog, listProviders, searchModels, getModelsForProvider } from "@hilbras/sdk/catalog";
 
 // Load the full catalog
-const catalog = await loadCatalog();
-console.log(catalog.providers.length);  // 17
+const catalog = loadCatalog();
+console.log(Object.keys(catalog.providers).length);
 
-// List all providers
-const providers = await listProviders();
-// Returns: [{ id, name, models, capabilities }, ...]
+// List all provider IDs
+const providers = listProviders();
+// Returns: string[]
 
 // Search models
 const results = await searchModels("gpt-4o");

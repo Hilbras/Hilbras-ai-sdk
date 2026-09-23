@@ -7,19 +7,22 @@
 
 import type { ModelCapabilities } from "../types/models.js";
 
-const DEFAULT_CAPS: ModelCapabilities = {
-  streaming: true, tools: true, vision: false, reasoning: false,
-  structuredOutput: false, parallelTools: false, systemPrompts: true,
+const ALL_FALSE_CAPS: ModelCapabilities = {
+  streaming: false, tools: false, vision: false, reasoning: false,
+  structuredOutput: false, parallelTools: false, systemPrompts: false,
   embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false,
+};
+const DEFAULT_CAPS: ModelCapabilities = {
+  ...ALL_FALSE_CAPS, streaming: true, tools: true, systemPrompts: true,
 };
 const VISION_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, vision: true };
 const REASONING_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, reasoning: true };
 const FULL_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, vision: true, reasoning: true, structuredOutput: true, parallelTools: true };
-const EMBEDDING_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, embeddings: true };
-const IMAGE_GEN_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, imageGeneration: true };
-const SPEECH_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, speech: true };
-const TRANSCRIPTION_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, transcription: true };
-const RERANK_CAPS: ModelCapabilities = { ...DEFAULT_CAPS, reranking: true };
+const EMBEDDING_CAPS: ModelCapabilities = { ...ALL_FALSE_CAPS, embeddings: true };
+const IMAGE_GEN_CAPS: ModelCapabilities = { ...ALL_FALSE_CAPS, imageGeneration: true };
+const SPEECH_CAPS: ModelCapabilities = { ...ALL_FALSE_CAPS, speech: true };
+const TRANSCRIPTION_CAPS: ModelCapabilities = { ...ALL_FALSE_CAPS, transcription: true };
+const RERANK_CAPS: ModelCapabilities = { ...ALL_FALSE_CAPS, reranking: true };
 
 export interface ModelEntry {
   id: string;

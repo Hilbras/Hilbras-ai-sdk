@@ -3,6 +3,17 @@ import { detectInjection, scanMessages, createInjectionGuard, INJECTION_PATTERNS
 
 describe("Prompt Injection Guard", () => {
   describe("detectInjection", () => {
+    it("handles zero-width and non-global custom patterns", () => {
+      const result = detectInjection("safe text", {
+        customPatterns: [
+          { name: "zero", pattern: /(?:)/g },
+          { name: "literal", pattern: /safe/ },
+        ],
+      });
+      expect(result.safe).toBe(false);
+      expect(result.detections.some((d) => d.pattern === "literal")).toBe(true);
+    });
+
     it("marks safe text as safe", () => {
       const result = detectInjection("What is the weather today?");
       expect(result.safe).toBe(true);

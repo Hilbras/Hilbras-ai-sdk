@@ -87,6 +87,19 @@ describe("PII guard phone number detection", () => {
     });
   });
 
+  describe("custom patterns", () => {
+    it("handles zero-width matches without hanging", () => {
+      const matches = detectPii("safe", { customPatterns: [{ type: "zero", pattern: /(?:)/g }] });
+      expect(matches).toHaveLength(0);
+    });
+
+    it("supports non-global custom patterns", () => {
+      const matches = detectPii("id=123", { customPatterns: [{ type: "id", pattern: /id=\d+/ }] });
+      expect(matches).toHaveLength(1);
+      expect(matches[0].value).toBe("id=123");
+    });
+  });
+
   describe("redaction works correctly", () => {
     it("redacts phone numbers in text", () => {
       const result = redactPii("Call 555-123-4567 for info");

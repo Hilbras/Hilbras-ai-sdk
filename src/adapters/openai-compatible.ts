@@ -20,6 +20,7 @@ import type { EmbeddingParams, EmbeddingResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 import { TextToolCallParser } from "./text-tool-call-parser.js";
+import { assertExtraFieldAllowed } from "./extra.js";
 
 export type GenericOpenAIAdapterConfig = AdapterConfig;
 
@@ -55,7 +56,6 @@ export class GenericOpenAIAdapter implements AIProvider {
   readonly id: string;
   protected _provider: ProviderConfig;
   protected _transport: Transport;
-  protected _reasoningNormalizer = new ReasoningNormalizer();
   private _endpoint: string;
   private _extraHeaders: Record<string, string>;
   private _transformBody?: (body: Record<string, unknown>) => Record<string, unknown>;
@@ -130,6 +130,7 @@ export class GenericOpenAIAdapter implements AIProvider {
 
     if (params.extra) {
       for (const [k, v] of Object.entries(params.extra)) {
+        assertExtraFieldAllowed(k);
         body[k] = v;
       }
     }
@@ -150,6 +151,7 @@ export class GenericOpenAIAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const url = `${this._provider.baseUrl}${this._endpoint}`;
     const doRequest = (maxTokens?: number) => {
       const body = this._buildBody({
@@ -262,7 +264,7 @@ export class GenericOpenAIAdapter implements AIProvider {
 
           const content = delta.content as string | undefined;
           if (content) {
-            const reasoning = this._reasoningNormalizer.feedText(content);
+            const reasoning = reasoningNormalizer.feedText(content);
             if (reasoning) {
               yield reasoning;
             } else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {

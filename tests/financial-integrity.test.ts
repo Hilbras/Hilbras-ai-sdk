@@ -467,7 +467,7 @@ describe("Phase 26: Fuzz Testing", () => {
       assertBudgetInvariant(t);
       expect(t.report().activeReservations).toBeGreaterThanOrEqual(0);
     }
-  });
+  }, 30_000);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

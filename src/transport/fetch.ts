@@ -87,30 +87,60 @@ export class FetchTransport implements Transport {
     }
   }
 
-  private _getRequestKey(url: string, init: TransportRequestInit): string {
-    return `${init.method || "GET"}:${url}:${init.body || ""}`;
+  private _getRequestKey(url: string, init: TransportRequestInit): string | null {
+    // Signal-bearing and non-serializable requests must not share an underlying
+    // fetch: one caller's cancellation must never affect another caller.
+    if (init.signal || (init.body !== undefined && typeof init.body !== "string")) return null;
+
+    const headers = Object.entries(init.headers ?? {})
+      .filter((entry): entry is [string, string] => entry[1] !== undefined)
+      .map(([key, value]) => [key.toLowerCase(), value] as const)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return JSON.stringify([init.method || "GET", url, init.body ?? "", headers]);
   }
 
   async request(url: string, init: TransportRequestInit): Promise<Response> {
     const origin = this._getOrigin(url);
+    const externalSignal = init.signal;
 
-    // Request coalescing: deduplicate identical in-flight requests
-    if (this._coalesce) {
-      const key = this._getRequestKey(url, init);
-      const pending = this._pendingRequests.get(key);
-      if (pending) {
-        return (await pending).clone();
-      }
+    if (externalSignal?.aborted) {
+      throw externalSignal.reason instanceof Error
+        ? externalSignal.reason
+        : new DOMException("The operation was aborted", "AbortError");
     }
 
-    // Wait for a connection slot
+    // Request coalescing: deduplicate only requests whose complete wire
+    // identity is known and which have no caller-owned cancellation.
+    const requestKey = this._coalesce ? this._getRequestKey(url, init) : null;
+    if (requestKey) {
+      const pending = this._pendingRequests.get(requestKey);
+      if (pending) return (await pending).clone();
+    }
+
+    // Wait for a connection slot without ignoring caller cancellation.
     while (!this._acquire(origin)) {
-      await new Promise((r) => setTimeout(r, 10));
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          externalSignal?.removeEventListener("abort", onAbort);
+          resolve();
+        }, 10);
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(externalSignal!.reason instanceof Error
+            ? externalSignal!.reason
+            : new DOMException("The operation was aborted", "AbortError"));
+        };
+        externalSignal?.addEventListener("abort", onAbort, { once: true });
+      });
     }
 
     const controller = new AbortController();
+    const onExternalAbort = () => controller.abort(externalSignal?.reason);
+    if (externalSignal) {
+      externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+      if (externalSignal.aborted) onExternalAbort();
+    }
     this._controllers.add(controller);
-    const signal = init.signal ?? controller.signal;
 
     const requestFn = async (): Promise<Response> => {
       try {
@@ -121,9 +151,11 @@ export class FetchTransport implements Transport {
           method: init.method,
           headers,
           body: init.body,
-          signal,
+          signal: controller.signal,
+          redirect: "error",
         });
       } finally {
+        externalSignal?.removeEventListener("abort", onExternalAbort);
         this._controllers.delete(controller);
         this._release(origin);
       }
@@ -131,13 +163,12 @@ export class FetchTransport implements Transport {
 
     const promise = requestFn();
 
-    if (this._coalesce) {
-      const key = this._getRequestKey(url, init);
-      this._pendingRequests.set(key, promise);
+    if (requestKey) {
+      this._pendingRequests.set(requestKey, promise);
       try {
         return await promise;
       } finally {
-        this._pendingRequests.delete(key);
+        this._pendingRequests.delete(requestKey);
       }
     }
 

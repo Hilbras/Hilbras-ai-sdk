@@ -118,10 +118,12 @@ export function useCompletion(options: UseCompletionOptions): UseCompletionRetur
       let inputTokens = 0;
       let outputTokens = 0;
 
-      for await (const chunk of client.stream(
-        { messages: apiMessages, model, provider },
-        { signal: controller.signal }
-      )) {
+      for await (const chunk of client.stream({
+        messages: apiMessages,
+        model,
+        provider,
+        signal: controller.signal,
+      })) {
         if (chunk.type === "text") {
           text += chunk.text;
           setCompletion(text);

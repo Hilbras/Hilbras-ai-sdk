@@ -115,6 +115,12 @@ function splitRecursive(
 export function chunkText(text: string, options?: ChunkOptions): TextChunk[] {
   const maxChunkSize = options?.maxChunkSize ?? 1000;
   const overlap = options?.overlap ?? 200;
+  if (!Number.isInteger(maxChunkSize) || maxChunkSize <= 0) {
+    throw new RangeError("maxChunkSize must be a positive integer");
+  }
+  if (!Number.isInteger(overlap) || overlap < 0 || overlap >= maxChunkSize) {
+    throw new RangeError("overlap must be a non-negative integer smaller than maxChunkSize");
+  }
   const strategy = options?.strategy ?? "recursive";
   const separators = options?.separators ?? DEFAULT_SEPARATORS;
 

@@ -7,10 +7,5 @@
     "no-unused-vars": "warn",
     "no-console": "off"
   },
-  "plugins": [],
-  "settings": {
-    "hilbras": {
-      "requireValidateUrl": true
-    }
-  }
+  "plugins": []
 }

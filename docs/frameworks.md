@@ -153,37 +153,49 @@ export const Chat = () => {
 ## Next.js
 
 ```bash
-npm install @hilbras/nextjs
+npm install @hilbras/next @hilbras/react @hilbras/sdk
 ```
 
 ### Route Handler (Server)
 
 ```ts
 // app/api/chat/route.ts
-import { createChatHandler } from "@hilbras/nextjs";
+import { createStreamHandler } from "@hilbras/next";
 
-export const { POST } = createChatHandler({
-  provider: "OpenAI",
+export const { POST } = createStreamHandler({
+  provider: "openai",
   model: "gpt-4o",
+  apiKey: process.env.OPENAI_API_KEY,
 });
 ```
 
 ### Client Component
 
+Provider credentials stay on the server. Pass a server-created client to
+`@hilbras/react`; do not call `addProviderFromCatalog` in a browser component.
+
 ```tsx
 "use client";
-import { useChat } from "@hilbras/nextjs";
+import { HilbrasProvider, useChat } from "@hilbras/react";
 
-export function Chat() {
-  const { messages, input, handleInputChange, handleSubmit } = useChat();
+export function Chat({ client }: { client: import("@hilbras/sdk").HilbrasClient }) {
+  return (
+    <HilbrasProvider client={client}>
+      <ChatBody />
+    </HilbrasProvider>
+  );
+}
 
+function ChatBody() {
+  const { messages, input, setInput, handleSubmit } = useChat({
+    provider: "OpenAI",
+    model: "gpt-4o",
+  });
   return (
     <div>
-      {messages.map((m) => (
-        <div key={m.id}>{m.role}: {m.content}</div>
-      ))}
+      {messages.map((m) => <div key={m.id}>{m.role}: {m.content}</div>)}
       <form onSubmit={handleSubmit}>
-        <input value={input} onChange={handleInputChange} />
+        <input value={input} onChange={(event) => setInput(event.target.value)} />
       </form>
     </div>
   );

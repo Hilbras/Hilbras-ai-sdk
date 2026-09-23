@@ -27,6 +27,7 @@ import type {
   RerankResult,
 } from "../types/multi-modal.js";
 import { ProviderRegistry } from "../providers/registry.js";
+import { cloneProviderConfig } from "../config/provider-config.js";
 import { FetchTransport } from "../transport/fetch.js";
 import { MiddlewareTransport } from "../transport/middleware-transport.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
@@ -48,7 +49,7 @@ import type { HookEvent, HookEventType, HookListener } from "../types/observabil
 import { BudgetTracker } from "../cost/tracker.js";
 import type { BudgetConfig, CostReport } from "../cost/types.js";
 import { estimateTokens, type Tokenizer } from "../tokens/counter.js";
-import { getProviderCatalog, getModelsForProvider } from "../catalog/index.js";
+import { getProviderCatalog, getModelsForProvider, listProviders } from "../catalog/index.js";
 import type { AdapterName } from "../types/providers.js";
 import type { ModelCapabilities } from "../types/models.js";
 import { PluginRegistry } from "../plugin/registry.js";
@@ -247,7 +248,7 @@ export class HilbrasClient implements AsyncDisposable {
    */
   async use(...plugins: Plugin[]): Promise<void> {
     await this._plugins.add(...plugins);
-    await this._plugins.setupAll(this as never);
+    for (const plugin of plugins) await this._plugins.setup(plugin, this as never);
   }
 
   private _nextRequestId(): string {
@@ -273,22 +274,24 @@ export class HilbrasClient implements AsyncDisposable {
   // ─── Provider Management ────────────────────────────────────────────────
 
   addProvider(config: ProviderConfig): void {
+    const ownedConfig = cloneProviderConfig(config);
     // v0.9.3: SSRF guard. Per-provider `allowInsecure` overrides client-wide
-    // `allowInsecureUrls`. Loopback is always allowed when either is on.
-    const guard = validateBaseUrl(config.baseUrl, {
-      allowInsecure: config.allowInsecure ?? this._allowInsecureUrls,
+    // `allowInsecureUrls`; local targets require explicit opt-in.
+    const guard = validateBaseUrl(ownedConfig.baseUrl, {
+      allowInsecure: ownedConfig.allowInsecure ?? this._allowInsecureUrls,
       allowPrivateNetwork: this._allowPrivateNetwork,
     });
     if (!guard.ok) {
       throw new ConfigurationError(
-        `Refused to register provider '${config.name}': ${guard.reason}`,
+        `Refused to register provider '${ownedConfig.name}': ${guard.reason}`,
       );
     }
-    this._registry.add(config);
-    this._adapters.set(config.name, this._adapterRegistry.create(config.adapter, {
-      provider: config,
+    const adapter = this._adapterRegistry.create(ownedConfig.adapter, {
+      provider: ownedConfig,
       transport: this._transport,
-    }));
+    });
+    this._registry.add(ownedConfig);
+    this._adapters.set(ownedConfig.name, adapter);
     this._router.updateProviders(this._registry.list().map((p) => p.name));
   }
 
@@ -314,10 +317,11 @@ export class HilbrasClient implements AsyncDisposable {
    * client.addProviderFromCatalog("openai", "gpt-4o", process.env.OPENAI_API_KEY!);
    * ```
    */
-  addProviderFromCatalog(providerId: string, modelId: string, apiKey: string): void {
-    const provider = getProviderCatalog(providerId);
+  addProviderFromCatalog(providerId: string, modelId: string, apiKey: string): string {
+    const catalogProviderId = listProviders().find((id) => id.toLowerCase() === providerId.toLowerCase()) ?? providerId;
+    const provider = getProviderCatalog(catalogProviderId);
     if (!provider) throw new ConfigurationError(`Unknown provider: ${providerId}`, `Available catalog providers: openai, anthropic, google-vertex, google-genai, groq, mistral, deepseek, cohere, huggingface, ollama, bedrock, azure, elevenlabs, voyageai`);
-    const models = getModelsForProvider(providerId);
+    const models = getModelsForProvider(catalogProviderId);
     const model = models.find((m) => m.id === modelId);
     if (!model) throw new ConfigurationError(`Model ${modelId} not found for provider ${providerId}`, `Available models for ${providerId}: ${models.map((m) => m.id).join(", ")}`);
 
@@ -332,10 +336,11 @@ export class HilbrasClient implements AsyncDisposable {
           id: model.id,
           contextWindow: model.contextWindow,
           maxOutputTokens: model.maxOutput,
-          capabilities: this._parseCapabilities(model.capabilities, providerId),
+          capabilities: this._parseCapabilities(model.capabilities, catalogProviderId),
         },
       ],
     });
+    return provider.name;
   }
 
   /** Access the adapter registry for plugins */
@@ -670,6 +675,17 @@ export class HilbrasClient implements AsyncDisposable {
           await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, inputTokens, outputTokens, streaming: true });
           return;
         } catch (err: unknown) {
+          // Once a chunk has escaped to the caller, retrying would duplicate
+          // output and potentially repeat tool side effects. Caller cancellation
+          // is terminal as well.
+          const callerAborted = params.signal?.aborted === true;
+          if (callerAborted || firstChunkEmitted) {
+            circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
+            this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
+            await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
+            throw err;
+          }
+
           // Check if we should retry
           const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
           const status = (err as { status?: number }).status;
@@ -790,7 +806,9 @@ export class HilbrasClient implements AsyncDisposable {
     const resolved_ = this._resolveProviderModel({ ...params, hasOutput: !!params.output });
     const providerConfig = this._registry.getOrThrow(resolved_.providerName);
     const model = providerConfig.models.find((m) => m.id === resolved_.modelId);
-    if (!model) throw new ModelNotFoundError(resolved_.modelId, resolved_.providerName, providerConfig.models.map((m) => m.id));
+    if (!model && providerConfig.models.length > 0) {
+      throw new ModelNotFoundError(resolved_.modelId, resolved_.providerName, providerConfig.models.map((m) => m.id));
+    }
     const providerName = resolved_.providerName;
     const modelId = resolved_.modelId;
 
@@ -849,8 +867,9 @@ export class HilbrasClient implements AsyncDisposable {
       );
     }
 
-    for (let attempt = 0; ; attempt++) {
-      try {
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
         const result = await adapter.complete({
           model: modelId,
           messages: structuredMessages,
@@ -915,6 +934,13 @@ export class HilbrasClient implements AsyncDisposable {
           throw err;
         }
 
+        if (params.signal?.aborted) {
+          circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
+          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
+          await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
+          throw err;
+        }
+
         const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
         const status = (err as { status?: number }).status;
 
@@ -964,6 +990,11 @@ export class HilbrasClient implements AsyncDisposable {
         await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
         throw err;
       }
+      }
+    } finally {
+      // Validation failures and every other terminal path must not strand an
+      // active reservation. Settled reservations are unaffected.
+      this._budgetTracker.release(requestId);
     }
   }
 
@@ -1188,6 +1219,7 @@ export class HilbrasClient implements AsyncDisposable {
   }): AsyncGenerator<StreamChunk> {
     const maxSteps = params.maxSteps ?? 1;
     const messages = this._normalizeMessages(params.messages);
+    const allowedToolNames = new Set((params.tools ?? []).map((tool) => tool.function.name));
     let currentMessages = [...messages];
 
     for (let step = 0; step < maxSteps; step++) {
@@ -1223,21 +1255,33 @@ export class HilbrasClient implements AsyncDisposable {
           // Only finalize when done=true, or if done field is absent (backwards compat: treat as complete)
           if (chunk.done === true || chunk.done === undefined) {
             let parsedArgs: Record<string, unknown>;
+            let argumentError: string | undefined;
             try {
-              parsedArgs = JSON.parse(pending.arguments || "{}");
-            } catch {
-              parsedArgs = { raw: pending.arguments };
+              const parsed = JSON.parse(pending.arguments || "{}");
+              if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                throw new Error("Tool arguments must be an object");
+              }
+              parsedArgs = parsed as Record<string, unknown>;
+            } catch (err) {
+              argumentError = err instanceof Error ? err.message : String(err);
+              parsedArgs = {};
             }
 
-            stepToolCalls.push({ name: pending.name, args: parsedArgs, result: undefined });
+            const toolCall = { name: pending.name, args: parsedArgs, result: undefined as unknown };
+            stepToolCalls.push(toolCall);
 
-            // Execute tool if handler provided
-            if (params.toolExecution) {
+            if (argumentError) {
+              toolCall.result = { error: argumentError };
+              yield { type: "error", message: `Invalid arguments for tool ${pending.name}: ${argumentError}`, retryable: false };
+            } else if (!allowedToolNames.has(pending.name)) {
+              const message = `Tool ${pending.name} is not in the configured allowlist`;
+              toolCall.result = { error: message };
+              yield { type: "error", message, retryable: false };
+            } else if (params.toolExecution) {
               try {
-                const result = await params.toolExecution(pending.name, parsedArgs);
-                stepToolCalls[stepToolCalls.length - 1].result = result;
+                toolCall.result = await params.toolExecution(pending.name, parsedArgs);
               } catch (err) {
-                stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+                toolCall.result = { error: (err as Error).message };
               }
             }
 
@@ -1253,18 +1297,31 @@ export class HilbrasClient implements AsyncDisposable {
       // Flush any remaining pending tool calls (stream ended without done=true)
       for (const [, tc] of pendingToolCalls) {
         let parsedArgs: Record<string, unknown>;
+        let argumentError: string | undefined;
         try {
-          parsedArgs = JSON.parse(tc.arguments || "{}");
-        } catch {
-          parsedArgs = { raw: tc.arguments };
+          const parsed = JSON.parse(tc.arguments || "{}");
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("Tool arguments must be an object");
+          }
+          parsedArgs = parsed as Record<string, unknown>;
+        } catch (err) {
+          argumentError = err instanceof Error ? err.message : String(err);
+          parsedArgs = {};
         }
-        stepToolCalls.push({ name: tc.name, args: parsedArgs, result: undefined });
-        if (params.toolExecution) {
+        const toolCall = { name: tc.name, args: parsedArgs, result: undefined as unknown };
+        stepToolCalls.push(toolCall);
+        if (argumentError) {
+          toolCall.result = { error: argumentError };
+          yield { type: "error", message: `Invalid arguments for tool ${tc.name}: ${argumentError}`, retryable: false };
+        } else if (!allowedToolNames.has(tc.name)) {
+          const message = `Tool ${tc.name} is not in the configured allowlist`;
+          toolCall.result = { error: message };
+          yield { type: "error", message, retryable: false };
+        } else if (params.toolExecution) {
           try {
-            const result = await params.toolExecution(tc.name, parsedArgs);
-            stepToolCalls[stepToolCalls.length - 1].result = result;
+            toolCall.result = await params.toolExecution(tc.name, parsedArgs);
           } catch (err) {
-            stepToolCalls[stepToolCalls.length - 1].result = { error: (err as Error).message };
+            toolCall.result = { error: (err as Error).message };
           }
         }
       }

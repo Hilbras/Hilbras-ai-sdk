@@ -128,6 +128,7 @@ export class CostAlertMonitor {
 
     if (report.budgetExceeded && !this._firedExceeded) {
       this._firedExceeded = true;
+      this._firedThresholds.add(100);
       const alert = this._buildAlert(100, report, "budget_exceeded");
       alerts.push(alert);
       this._dispatch(alert);
@@ -160,20 +161,30 @@ export class CostAlertMonitor {
     this._firedExceeded = false;
   }
 
+  private _currentPercent(report: CostReport): number | null {
+    if (report.remainingBudget === undefined || report.remainingBudget === null) return null;
+    const budget = report.totalActual + report.remainingBudget;
+    if (budget <= 0) return report.budgetExceeded ? 100 : null;
+    return Math.max(0, Math.min(100, (report.totalActual / budget) * 100));
+  }
+
   private _fireThresholds(report: CostReport, type: CostAlert["type"]): void {
+    const currentPercent = this._currentPercent(report);
+    if (currentPercent === null) return;
+
     const thresholds = type === "budget_exceeded"
       ? [...(this._config.thresholds ?? []), { percent: 100 }]
       : (this._config.thresholds ?? []);
 
     for (const threshold of thresholds) {
-      if (!this._firedThresholds.has(threshold.percent)) {
-        this._firedThresholds.add(threshold.percent);
-        const alert = this._buildAlert(threshold.percent, report, type);
-        this._dispatch(alert, threshold.channel);
-      }
+      if (threshold.percent > currentPercent || this._firedThresholds.has(threshold.percent)) continue;
+      this._firedThresholds.add(threshold.percent);
+      const alert = this._buildAlert(threshold.percent, report, type);
+      this._dispatch(alert, threshold.channel);
     }
 
     if (type === "budget_exceeded") {
+      this._firedThresholds.add(100);
       this._firedExceeded = true;
     }
   }

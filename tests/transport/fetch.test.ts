@@ -108,6 +108,83 @@ describe("FetchTransport per-request AbortController (PR-3)", () => {
     }
   });
 
+  it("does not coalesce requests with different authentication headers", async () => {
+    const t = new FetchTransport({ coalesceRequests: true });
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls++;
+      return new Response(String(calls), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const [a, b] = await Promise.all([
+        t.request("https://api.example.com/v1/chat", {
+          method: "POST",
+          headers: { Authorization: "Bearer A" },
+          body: "same",
+        }),
+        t.request("https://api.example.com/v1/chat", {
+          method: "POST",
+          headers: { Authorization: "Bearer B" },
+          body: "same",
+        }),
+      ]);
+      expect(calls).toBe(2);
+      expect(await a.text()).toBe("1");
+      expect(await b.text()).toBe("2");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("aborts requests that use an external signal when transport.abort() is called", async () => {
+    const t = new FetchTransport();
+    const userController = new AbortController();
+    const originalFetch = globalThis.fetch;
+    let transportSignal: AbortSignal | undefined;
+    globalThis.fetch = vi.fn((_url: any, init: any) => {
+      transportSignal = init?.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        transportSignal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    }) as typeof fetch;
+    try {
+      const request = t.request("https://api.example.com/", {
+        method: "GET",
+        signal: userController.signal,
+      }).catch((error: unknown) => error);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      t.abort();
+      const result = await request;
+      expect((result as Error).name).toBe("AbortError");
+      expect(transportSignal?.aborted).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not coalesce FormData requests", async () => {
+    const t = new FetchTransport({ coalesceRequests: true });
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls++;
+      return new Response(String(calls), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const first = new FormData();
+      first.set("value", "one");
+      const second = new FormData();
+      second.set("value", "two");
+      await Promise.all([
+        t.request("https://api.example.com/upload", { method: "POST", body: first }),
+        t.request("https://api.example.com/upload", { method: "POST", body: second }),
+      ]);
+      expect(calls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
   it("user-supplied signal aborts the request, not the transport-wide abort()", async () => {
     const t = new FetchTransport();
     const userController = new AbortController();
