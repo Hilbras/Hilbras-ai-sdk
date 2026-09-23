@@ -9,7 +9,7 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 
 ## Phase 1 — Internal contracts
 
-- [ ] 1.1 Add `RequestContext` and `ExecutionResult`
+- [x] 1.1 Add `RequestContext` and `ExecutionResult`
 - [ ] 1.2 Define injected execution ports
 
 ## Phase 2 — One-attempt execution
