@@ -119,6 +119,116 @@ describe("RequestPipeline plain complete", () => {
     expect(budget.report().requestCount).toBe(1);
   });
 
+  it("owns streaming usage settlement and completion events", async () => {
+    const streamAdapter = {
+      id: "stream-adapter",
+      complete: vi.fn(async () => "unused"),
+      stream: vi.fn(async function* () {
+        yield { type: "text", text: "hello" };
+        yield { type: "usage", inputTokens: 3, outputTokens: 2, totalTokens: 5 };
+      }),
+    };
+    const { pipeline, budget, events, plugins } = setup(async () => "unused", policy(), {
+      adapters: { test: streamAdapter },
+    });
+
+    const chunks = [];
+    for await (const chunk of pipeline.runStream({
+      requestId: "req_stream_success",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
+      getProviderTimeout: () => 0,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toHaveLength(2);
+    expect(events).toEqual(["stream.first_chunk", "request.completed"]);
+    expect(plugins.fireResponse).toHaveBeenCalledOnce();
+    expect(budget.report().activeReservations).toBe(0);
+  });
+
+  it("releases a streaming reservation when the consumer stops early", async () => {
+    const streamAdapter = {
+      id: "stream-adapter",
+      complete: vi.fn(async () => "unused"),
+      stream: vi.fn(async function* () {
+        yield { type: "text", text: "hello" };
+        yield { type: "text", text: "world" };
+      }),
+    };
+    const { pipeline, budget } = setup(async () => "unused", policy(), {
+      adapters: { test: streamAdapter },
+    });
+
+    for await (const _chunk of pipeline.runStream({
+      requestId: "req_stream_break",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
+      getProviderTimeout: () => 0,
+    })) {
+      break;
+    }
+
+    expect(budget.report().activeReservations).toBe(0);
+  });
+
+  it("uses a fallback stream candidate after a terminal primary failure", async () => {
+    const primary = {
+      id: "primary",
+      complete: vi.fn(async () => "unused"),
+      stream: vi.fn(async function* () {
+        throw new ProviderRequestError(400, "bad request", "test");
+      }),
+    };
+    const fallback = {
+      id: "fallback",
+      complete: vi.fn(async () => "unused"),
+      stream: vi.fn(async function* () {
+        yield { type: "text", text: "fallback" };
+      }),
+    };
+    const resolved = policy({ allowFallback: true });
+    const { pipeline, budget, events } = setup(async () => "unused", resolved, {
+      adapters: { test: primary, fallback },
+    });
+
+    const chunks = [];
+    for await (const chunk of pipeline.runStream({
+      requestId: "req_stream_fallback",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      fallbackCandidates: () => [{ provider: "fallback", model: "fallback-model" }],
+      estimateFallbackCost: () => 0.2,
+      getProviderTimeout: () => 0,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([{ type: "text", text: "fallback" }]);
+    expect(events).toEqual(["fallback.started", "request.completed"]);
+    expect(budget.report().activeReservations).toBe(0);
+  });
+
   it("validates structured output before reporting completion", async () => {
     const { pipeline, budget, events } = setup(async () => '{"ok":true}');
     const result = await pipeline.runStructuredComplete({

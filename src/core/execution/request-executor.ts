@@ -11,6 +11,7 @@ import { createScopedTimeout, type ScopedTimeout } from "../../reliability/timeo
 import type { ExecutionPolicy } from "../../types/policy.js";
 import type { RoutingResult } from "../../types/router.js";
 import type { GenerateParams } from "../../types/adapter.js";
+import type { StreamChunk } from "../../types/streams.js";
 import { createRequestContext, type RequestContext, type RequestOperation } from "./request-context.js";
 import { executionFailure, executionSuccess, type ExecutionResult } from "./execution-result.js";
 import type { CircuitBreakerPort, ExecutionPorts } from "./ports.js";
@@ -84,6 +85,34 @@ export class RequestExecutor {
       timeout,
       dispose: () => timeout?.cancel(),
     };
+  }
+
+  async *executeStream(
+    prepared: PreparedRequest,
+    params: Omit<GenerateParams, "signal">,
+    options: { dispose?: boolean } = {},
+  ): AsyncGenerator<StreamChunk> {
+    const adapter = this.ports.adapters.get(prepared.context.provider);
+    if (!adapter) {
+      throw new ProviderNotFoundError(prepared.context.provider);
+    }
+
+    try {
+      for await (const chunk of adapter.stream({ ...params, signal: prepared.signal })) {
+        if (prepared.signal?.aborted) {
+          throw new DOMException("The operation was aborted", "AbortError");
+        }
+        yield chunk;
+      }
+      prepared.circuitBreaker?.recordSuccess();
+    } catch (error) {
+      if (!prepared.context.callerSignal?.aborted) {
+        prepared.circuitBreaker?.recordFailure(error instanceof Error ? error : undefined);
+      }
+      throw error;
+    } finally {
+      if (options.dispose !== false) prepared.dispose();
+    }
   }
 
   async executeComplete(

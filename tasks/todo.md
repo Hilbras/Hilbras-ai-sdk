@@ -30,7 +30,7 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 
 ## Phase 5 — Streaming
 
-- [ ] 5.1 Add async-iterable pipeline support
+- [x] 5.1 Add async-iterable pipeline support
 - [ ] 5.2 Verify `streamText()` and `streamObject()` parity
 
 ## Phase 6 — Convergence and release

@@ -599,15 +599,6 @@ export class HilbrasClient implements AsyncDisposable {
   }): AsyncGenerator<StreamChunk> {
     const requestId = this._nextRequestId();
     const startTime = performance.now();
-    let inputTokens: number | undefined;
-    let outputTokens: number | undefined;
-    let firstChunkEmitted = false;
-    let adapterStartTime = 0;
-    // Budget tracking for streaming. v0.9.3: stream() now reserves like complete().
-    let estimatedCost = 0;
-    let reservationActive = false;
-    let usageSettled = false;
-
     this._emit({ type: "request.start", requestId, timestamp: startTime, provider: params.provider, model: params.model, task: params.task });
 
     // Resolve provider + model — either explicit or via router
@@ -618,185 +609,40 @@ export class HilbrasClient implements AsyncDisposable {
 
     this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
-    const adapter = this._getAdapter(providerName);
-    // v0.10.0 PR-4: extract the duplicated policy/circuit-breaker/retry/signal
-    // setup into _prepareRequest so stream() and complete() share it.
-    const { resolved, circuitBreaker, retryConfig, signal } = this._prepareRequest(
-      requestId,
-      providerName,
-      providerConfig,
-      params.policy,
-      params.signal,
-      "stream",
-    );
-
     const messages = this._normalizeMessages(params.messages);
-
-    // v3.0.0: Plugin onRequest hook
-    await this._plugins.fireRequest({
+    const estimatedCost = this._budgetTracker.estimate(
+      modelId,
+      providerName,
+      this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+      0,
+    );
+    yield* this._requestPipeline.runStream({
       requestId,
+      startTime,
       provider: providerName,
       model: modelId,
       messages,
-      extra: params.extra,
-      signal: params.signal,
-      timestamp: startTime,
+      params: {
+        model: modelId,
+        messages,
+        temperature: params.temperature,
+        maxTokens: params.maxTokens,
+        tools: params.tools,
+        extra: params.extra,
+      },
+      estimatedCost,
+      policy: params.policy,
+      providerTimeoutMs: providerConfig.timeout,
+      callerSignal: params.signal,
+      fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, params),
+      estimateFallbackCost: (candidate) => this._budgetTracker.estimate(
+        candidate.model,
+        candidate.provider,
+        this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+        0,
+      ),
+      getProviderTimeout: (provider) => this._registry.get(provider)?.timeout,
     });
-
-    // Atomic budget reservation before any provider call. Reserves the
-    // estimated cost for the entire retry+fallback chain; the reservation is
-    // converted to actual on the first usage chunk, or released on failure.
-    estimatedCost = this._budgetTracker.estimate(modelId, providerName, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-    const initialReservation = this._budgetTracker.reserve(requestId, estimatedCost);
-    if (!initialReservation) {
-      throw new ConfigurationError(
-        `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
-        `Remaining budget: $${this._budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
-      );
-    }
-    reservationActive = true;
-
-    try {
-      for (let attempt = 0; ; attempt++) {
-        try {
-          adapterStartTime = performance.now();
-          const gen = adapter.stream({
-            model: modelId,
-            messages,
-            temperature: params.temperature,
-            maxTokens: params.maxTokens,
-            tools: params.tools,
-            extra: params.extra,
-            signal,
-          });
-
-          for await (const chunk of gen) {
-            // Track first chunk latency
-            if (!firstChunkEmitted) {
-              firstChunkEmitted = true;
-              this._emit({ type: "stream.first_chunk", requestId, timestamp: performance.now(), latencyMs: performance.now() - adapterStartTime });
-            }
-            // Track usage tokens and convert reservation on first usage chunk
-            if (chunk.type === "usage") {
-              const inT = (chunk as { inputTokens?: number }).inputTokens;
-              const outT = (chunk as { outputTokens?: number }).outputTokens;
-              inputTokens = inT;
-              outputTokens = outT;
-              if (reservationActive && !usageSettled) {
-                const actualCost = this._budgetTracker.estimate(modelId, providerName, inT ?? 0, outT ?? 0);
-                this._budgetTracker.settle(requestId, actualCost, { provider: providerName, model: modelId, phase: "execute" });
-                reservationActive = false;
-                usageSettled = true;
-              }
-            }
-            yield chunk;
-          }
-
-          circuitBreaker?.recordSuccess();
-          // End-of-stream with no usage chunk: settle at the estimate
-          if (reservationActive) {
-            this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
-            reservationActive = false;
-          }
-          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, inputTokens, outputTokens, structuredOutput: false });
-          // v3.0.0: Plugin onResponse hook
-          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, inputTokens, outputTokens, streaming: true });
-          return;
-        } catch (err: unknown) {
-          // Once a chunk has escaped to the caller, retrying would duplicate
-          // output and potentially repeat tool side effects. Caller cancellation
-          // is terminal as well.
-          const callerAborted = params.signal?.aborted === true;
-          if (callerAborted || firstChunkEmitted) {
-            circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-            this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-            await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-            throw err;
-          }
-
-          // Check if we should retry
-          const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
-          const status = (err as { status?: number }).status;
-
-          if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-            const delay = calculateBackoff(attempt, resolved.backoff);
-            this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
-            await sleep(delay);
-            continue;
-          }
-          if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-            const delay = calculateBackoff(attempt, resolved.backoff);
-            this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
-            await sleep(delay);
-            continue;
-          }
-
-          // Try fallback if allowed and we have candidates
-          if (resolved.allowFallback && attempt >= retryConfig.maxRetries) {
-            const fallbacks = this._getFallbacks([modelId], params);
-            let fallbackSucceeded = false;
-            for (const fb of fallbacks) {
-              this._emit({ type: "fallback.started", requestId, timestamp: performance.now(), originalProvider: providerName, originalModel: modelId, fallbackProvider: fb.provider, fallbackModel: fb.model });
-              // Release original reservation, re-reserve under fallback id
-              if (reservationActive) {
-                this._budgetTracker.release(requestId);
-                reservationActive = false;
-              }
-              const fbReservationId = `${requestId}_fb_${fb.model}`;
-              const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-              const fbReservation = this._budgetTracker.reserve(fbReservationId, fbEstimatedCost);
-              if (!fbReservation) continue; // budget exceeded for this fallback
-              let fbReservationActive = true;
-              try {
-                const fbAdapter = this._getAdapter(fb.provider);
-                const gen = fbAdapter.stream({ model: fb.model, messages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: params.extra, signal });
-                for await (const chunk of gen) {
-                  if (chunk.type === "usage") {
-                    const inT = (chunk as { inputTokens?: number }).inputTokens;
-                    const outT = (chunk as { outputTokens?: number }).outputTokens;
-                    if (fbReservationActive) {
-                      const actualCost = this._budgetTracker.estimate(fb.model, fb.provider, inT ?? 0, outT ?? 0);
-                      this._budgetTracker.settle(fbReservationId, actualCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
-                      fbReservationActive = false;
-                    }
-                  }
-                  yield chunk;
-                }
-                // End-of-stream without usage chunk: settle at estimate
-                if (fbReservationActive) {
-                  this._budgetTracker.settle(fbReservationId, fbEstimatedCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
-                  fbReservationActive = false;
-                }
-                this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, inputTokens, outputTokens, structuredOutput: false });
-                fallbackSucceeded = true;
-                return;
-              } catch {
-                if (fbReservationActive) {
-                  this._budgetTracker.release(fbReservationId);
-                  fbReservationActive = false;
-                }
-                /* fallback also failed — continue to next */
-              }
-            }
-            if (fallbackSucceeded) return; // unreachable but for type safety
-          }
-
-          circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-          // v3.0.0: Plugin onError hook
-          await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-          throw err;
-        }
-      }
-    } finally {
-      // Guarantee release on any path that did not settle (consumer break,
-      // signal abort, unexpected throw). Idempotent: settle/release are no-ops
-      // on missing reservations.
-      if (reservationActive) {
-        this._budgetTracker.release(requestId);
-        reservationActive = false;
-      }
-    }
   }
 
   // ─── Non-Streaming Completion ───────────────────────────────────────────

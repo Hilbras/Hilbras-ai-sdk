@@ -21,6 +21,7 @@ import type {
   PluginResponseContext,
 } from "../../plugin/types.js";
 import { RequestExecutor, type RequestPreparationInput } from "./request-executor.js";
+import type { RequestOperation } from "./request-context.js";
 import type { BudgetPort } from "./ports.js";
 
 export interface PipelinePluginPort {
@@ -58,6 +59,10 @@ export interface CompletePipelineInput {
   fallbackCandidates(excludeModels: string[]): FallbackCandidate[];
   estimateFallbackCost(candidate: FallbackCandidate): number;
   getProviderTimeout(provider: string): number | undefined;
+}
+
+export interface StreamPipelineInput extends Omit<CompletePipelineInput, "params"> {
+  params: Omit<GenerateParams, "signal">;
 }
 
 export interface StructuredCompletePipelineInput extends Omit<CompletePipelineInput, "params"> {
@@ -236,6 +241,319 @@ export class RequestPipeline {
       });
       throw primaryError;
     } finally {
+      prepared.dispose();
+    }
+  }
+
+  async *runStream(input: StreamPipelineInput): AsyncGenerator<import("../../types/streams.js").StreamChunk> {
+    const prepared = this.prepare(input, "stream");
+    let reservationActive = false;
+    let inputTokens: number | undefined;
+    let outputTokens: number | undefined;
+    let firstChunkEmitted = false;
+    let attempt = 0;
+    let primaryError: unknown;
+
+    try {
+      await this.ports.plugins.fireRequest({
+        requestId: input.requestId,
+        provider: input.provider,
+        model: input.model,
+        messages: input.messages,
+        extra: input.params.extra,
+        signal: input.callerSignal,
+        timestamp: this.ports.now(),
+      });
+
+      const reservation = this.ports.budget.reserve(input.requestId, input.estimatedCost);
+      if (!reservation) {
+        const remaining = this.ports.budget.report().remainingBudget;
+        throw new ConfigurationError(
+          `Budget reservation rejected — estimated cost $${input.estimatedCost.toFixed(4)} would exceed budget`,
+          `Remaining budget: $${remaining?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
+        );
+      }
+      reservationActive = true;
+
+      for (;;) {
+        try {
+          for await (const chunk of this.ports.executor.executeStream(
+            prepared,
+            input.params,
+            { dispose: false },
+          )) {
+            if (!firstChunkEmitted) {
+              firstChunkEmitted = true;
+              this.ports.emit({
+                type: "stream.first_chunk",
+                requestId: input.requestId,
+                timestamp: this.ports.now(),
+                latencyMs: 0,
+              });
+            }
+            if (chunk.type === "usage") {
+              inputTokens = chunk.inputTokens;
+              outputTokens = chunk.outputTokens;
+              if (reservationActive) {
+                const actualCost = this.ports.budget.estimate(
+                  input.model,
+                  input.provider,
+                  chunk.inputTokens,
+                  chunk.outputTokens,
+                );
+                this.ports.budget.settle(input.requestId, actualCost, {
+                  provider: input.provider,
+                  model: input.model,
+                  phase: "execute",
+                });
+                reservationActive = false;
+              }
+            }
+            yield chunk;
+          }
+
+          if (reservationActive) {
+            this.ports.budget.settle(input.requestId, input.estimatedCost, {
+              provider: input.provider,
+              model: input.model,
+              phase: "execute",
+            });
+            reservationActive = false;
+          }
+          this.ports.emit({
+            type: "request.completed",
+            requestId: input.requestId,
+            timestamp: this.ports.now(),
+            provider: input.provider,
+            model: input.model,
+            durationMs: this.ports.now() - input.startTime,
+            attempts: attempt + 1,
+            inputTokens,
+            outputTokens,
+            structuredOutput: false,
+          });
+          await this.ports.plugins.fireResponse({
+            requestId: input.requestId,
+            provider: input.provider,
+            model: input.model,
+            durationMs: this.ports.now() - input.startTime,
+            inputTokens,
+            outputTokens,
+            streaming: true,
+          });
+          return;
+        } catch (error) {
+          primaryError = error;
+          const callerAborted = input.callerSignal?.aborted === true;
+          const internalTimeout = prepared.signal?.aborted === true;
+          if (callerAborted || firstChunkEmitted || internalTimeout) {
+            if (reservationActive) {
+              this.ports.budget.release(input.requestId);
+              reservationActive = false;
+            }
+            const terminalError = error instanceof Error ? error : new Error(String(error));
+            this.ports.emit({
+              type: "request.failed",
+              requestId: input.requestId,
+              timestamp: this.ports.now(),
+              provider: input.provider,
+              model: input.model,
+              durationMs: this.ports.now() - input.startTime,
+              attempts: attempt + 1,
+              error: terminalError.message,
+            });
+            await this.ports.plugins.fireError({
+              requestId: input.requestId,
+              provider: input.provider,
+              model: input.model,
+              error: terminalError,
+              durationMs: this.ports.now() - input.startTime,
+              attempts: attempt + 1,
+            });
+            throw error;
+          }
+
+          const status = (error as { status?: number }).status;
+          const isNetworkError = error instanceof TypeError
+            || (error instanceof Error && error.name === "AbortError");
+          const canRetry = (isNetworkError && shouldRetryNetworkError(attempt, prepared.retryConfig))
+            || (typeof status === "number" && shouldRetry(status, attempt, prepared.retryConfig));
+          if (!canRetry) {
+            if (prepared.context.policy.allowFallback) {
+              this.ports.budget.release(input.requestId);
+              reservationActive = false;
+              const attemptedModels = [input.model];
+              const fallbacks = input.fallbackCandidates(attemptedModels);
+              for (const fallback of fallbacks) {
+                if (attemptedModels.includes(fallback.model)) continue;
+                const fallbackCost = input.estimateFallbackCost(fallback);
+                if (prepared.context.policy.maxFallbackCost !== null && fallbackCost > prepared.context.policy.maxFallbackCost) continue;
+                attemptedModels.push(fallback.model);
+                this.ports.emit({
+                  type: "fallback.started",
+                  requestId: input.requestId,
+                  timestamp: this.ports.now(),
+                  originalProvider: input.provider,
+                  originalModel: input.model,
+                  fallbackProvider: fallback.provider,
+                  fallbackModel: fallback.model,
+                });
+                const fallbackId = `${input.requestId}_fb_${fallback.model}`;
+                const fallbackReservation = this.ports.budget.reserve(fallbackId, fallbackCost);
+                if (!fallbackReservation) continue;
+                let fallbackPrepared: ReturnType<RequestExecutor["prepare"]> | undefined;
+                let fallbackVisible = false;
+                let fallbackInputTokens: number | undefined;
+                let fallbackOutputTokens: number | undefined;
+                let fallbackReservationActive = true;
+                try {
+                  fallbackPrepared = this.prepare({
+                    ...input,
+                    provider: fallback.provider,
+                    model: fallback.model,
+                    params: { ...input.params, model: fallback.model },
+                    callerSignal: prepared.signal,
+                    providerTimeoutMs: 0,
+                  }, "stream");
+                  for await (const chunk of this.ports.executor.executeStream(
+                    fallbackPrepared,
+                    { ...input.params, model: fallback.model },
+                  )) {
+                    fallbackVisible = true;
+                    if (chunk.type === "usage") {
+                      fallbackInputTokens = chunk.inputTokens;
+                      fallbackOutputTokens = chunk.outputTokens;
+                      if (fallbackReservationActive) {
+                        const actualCost = this.ports.budget.estimate(
+                          fallback.model,
+                          fallback.provider,
+                          chunk.inputTokens,
+                          chunk.outputTokens,
+                        );
+                        this.ports.budget.settle(fallbackId, actualCost, {
+                          provider: fallback.provider,
+                          model: fallback.model,
+                          phase: "fallback",
+                        });
+                        fallbackReservationActive = false;
+                      }
+                    }
+                    yield chunk;
+                  }
+                  if (fallbackReservationActive) {
+                    this.ports.budget.settle(fallbackId, fallbackCost, {
+                      provider: fallback.provider,
+                      model: fallback.model,
+                      phase: "fallback",
+                    });
+                    fallbackReservationActive = false;
+                  }
+                  this.ports.emit({
+                    type: "request.completed",
+                    requestId: input.requestId,
+                    timestamp: this.ports.now(),
+                    provider: fallback.provider,
+                    model: fallback.model,
+                    durationMs: this.ports.now() - input.startTime,
+                    attempts: attempt + 2,
+                    inputTokens: fallbackInputTokens,
+                    outputTokens: fallbackOutputTokens,
+                    structuredOutput: false,
+                  });
+                  await this.ports.plugins.fireResponse({
+                    requestId: input.requestId,
+                    provider: fallback.provider,
+                    model: fallback.model,
+                    durationMs: this.ports.now() - input.startTime,
+                    inputTokens: fallbackInputTokens,
+                    outputTokens: fallbackOutputTokens,
+                    streaming: true,
+                  });
+                  return;
+                } catch (fallbackError) {
+                  if (input.callerSignal?.aborted || prepared.signal?.aborted || fallbackVisible) {
+                    primaryError = fallbackError;
+                    break;
+                  }
+                } finally {
+                  fallbackPrepared?.dispose();
+                  if (fallbackReservationActive) this.ports.budget.release(fallbackId);
+                }
+                if (input.callerSignal?.aborted || prepared.signal?.aborted) break;
+              }
+            }
+          }
+
+          if (!canRetry) {
+            if (reservationActive) {
+              this.ports.budget.release(input.requestId);
+              reservationActive = false;
+            }
+            const terminalError = error instanceof Error ? error : new Error(String(error));
+            this.ports.emit({
+              type: "request.failed",
+              requestId: input.requestId,
+              timestamp: this.ports.now(),
+              provider: input.provider,
+              model: input.model,
+              durationMs: this.ports.now() - input.startTime,
+              attempts: attempt + 1,
+              error: terminalError.message,
+            });
+            await this.ports.plugins.fireError({
+              requestId: input.requestId,
+              provider: input.provider,
+              model: input.model,
+              error: terminalError,
+              durationMs: this.ports.now() - input.startTime,
+              attempts: attempt + 1,
+            });
+            throw error;
+          }
+
+          const delay = calculateBackoff(attempt, prepared.context.policy.backoff);
+          this.ports.emit({
+            type: "request.retrying",
+            requestId: input.requestId,
+            timestamp: this.ports.now(),
+            provider: input.provider,
+            attempt,
+            delayMs: delay,
+            reason: isNetworkError ? "network error" : `HTTP ${status}`,
+          });
+          try {
+            await this.ports.sleep(delay, input.callerSignal);
+          } catch (sleepError) {
+            if (reservationActive) {
+              this.ports.budget.release(input.requestId);
+              reservationActive = false;
+            }
+            const terminalError = sleepError instanceof Error ? sleepError : new Error(String(sleepError));
+            this.ports.emit({
+              type: "request.failed",
+              requestId: input.requestId,
+              timestamp: this.ports.now(),
+              provider: input.provider,
+              model: input.model,
+              durationMs: this.ports.now() - input.startTime,
+              attempts: attempt + 1,
+              error: terminalError.message,
+            });
+            await this.ports.plugins.fireError({
+              requestId: input.requestId,
+              provider: input.provider,
+              model: input.model,
+              error: terminalError,
+              durationMs: this.ports.now() - input.startTime,
+              attempts: attempt + 1,
+            });
+            throw sleepError;
+          }
+          attempt++;
+        }
+      }
+    } finally {
+      if (reservationActive) this.ports.budget.release(input.requestId);
       prepared.dispose();
     }
   }
@@ -483,11 +801,14 @@ export class RequestPipeline {
     }
   }
 
-  private prepare(input: CompletePipelineInput | (RequestPreparationInput & { params: Omit<GenerateParams, "signal"> })): ReturnType<RequestExecutor["prepare"]> {
+  private prepare(
+    input: CompletePipelineInput | StreamPipelineInput | StructuredCompletePipelineInput | (RequestPreparationInput & { params: Omit<GenerateParams, "signal"> }),
+    operation: RequestOperation = "complete",
+  ): ReturnType<RequestExecutor["prepare"]> {
     try {
       return this.ports.executor.prepare({
         requestId: input.requestId,
-        operation: "complete",
+        operation,
         provider: input.provider,
         model: input.model,
         policy: input.policy,

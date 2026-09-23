@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { RequestExecutor } from "../../../src/core/execution/request-executor.js";
 import type { ResolvedPolicy } from "../../../src/types/policy.js";
 import type { Message } from "../../../src/types/messages.js";
+import type { StreamChunk } from "../../../src/types/streams.js";
 
 const policy: ResolvedPolicy = {
   allowFallback: false,
@@ -16,6 +17,7 @@ const messages: Message[] = [{ role: "user", content: "hello" }];
 
 function makeExecutor(overrides: Partial<{
   complete: (params: { signal?: AbortSignal }) => Promise<string>;
+  stream: (params: { signal?: AbortSignal }) => AsyncGenerator<StreamChunk>;
   available: boolean;
 }> = {}) {
   const circuit = {
@@ -27,7 +29,7 @@ function makeExecutor(overrides: Partial<{
   const adapter = {
     id: "test-adapter",
     complete: vi.fn(overrides.complete ?? (async () => "ok")),
-    stream: vi.fn(),
+    stream: vi.fn(overrides.stream ?? (async function* () { /* unused */ })),
   };
   const executor = new RequestExecutor({
     policy: { resolve: () => policy },
@@ -119,6 +121,31 @@ describe("RequestExecutor", () => {
 
     expect(result.ok).toBe(false);
     expect(circuit.recordFailure).not.toHaveBeenCalled();
+    prepared.dispose();
+  });
+
+  it("executes one stream attempt and records success after consumption", async () => {
+    const stream = vi.fn(async function* () {
+      yield { type: "text", text: "ok" } satisfies StreamChunk;
+    });
+    const { executor, circuit, adapter } = makeExecutor({ stream });
+    const prepared = executor.prepare({
+      requestId: "req_stream",
+      operation: "stream",
+      provider: "test",
+      model: "model",
+      policy: {},
+    });
+
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of executor.executeStream(prepared, { model: "model", messages })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([{ type: "text", text: "ok" }]);
+    expect(stream).toHaveBeenCalledOnce();
+    expect(circuit.recordSuccess).toHaveBeenCalledOnce();
+    expect(adapter.complete).not.toHaveBeenCalled();
     prepared.dispose();
   });
 
