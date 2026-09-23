@@ -879,189 +879,49 @@ export class HilbrasClient implements AsyncDisposable {
       }) as Promise<T>;
     }
 
-    const adapter = this._getAdapter(providerName);
-    // v0.10.0 PR-4: extract the duplicated policy/circuit-breaker/retry/signal
-    // setup into _prepareRequest so stream() and complete() share it.
-    const { resolved, circuitBreaker, retryConfig, signal } = this._prepareRequest(
-      requestId,
-      providerName,
-      providerConfig,
-      params.policy,
-      params.signal,
-      "complete",
-    );
-
-    const messages = this._normalizeMessages(params.messages);
-
-    // v3.0.0: Plugin onRequest hook
-    await this._plugins.fireRequest({
-      requestId,
-      provider: providerName,
-      model: modelId,
-      messages,
-      extra: params.extra,
-      signal: params.signal,
-      timestamp: startTime,
-    });
-
-    // Structured output setup
-    const outputConfig = params.output;
-    let structuredMessages = [...messages];
-    let structuredExtra = { ...params.extra };
-
-    if (outputConfig) {
-      // Add JSON mode params for the provider
-      const jsonModeParams = buildJsonModeParams(adapter.id);
-      structuredExtra = { ...structuredExtra, ...jsonModeParams };
-
-      // Add system instruction for JSON output
-      structuredMessages = [
-        { role: "system", content: buildJsonSystemInstruction(outputConfig.schema as never) },
-        ...messages,
-      ];
-    }
-
-    const maxRepairAttempts = outputConfig?.maxRepairAttempts ?? 2;
-
-    // Budget: atomic reserve before execution
-    const estimatedCost = this._budgetTracker.estimate(modelId, providerName, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-    const reservation = this._budgetTracker.reserve(requestId, estimatedCost);
-    if (!reservation) {
-      throw new ConfigurationError(
-        `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
-        `Remaining budget: $${this._budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
+    if (params.output) {
+      const messages = this._normalizeMessages(params.messages);
+      const estimatedCost = this._budgetTracker.estimate(
+        modelId,
+        providerName,
+        this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+        0,
       );
-    }
-
-    try {
-      for (let attempt = 0; ; attempt++) {
-        try {
-        const result = await adapter.complete({
+      return this._requestPipeline.runStructuredComplete({
+        requestId,
+        startTime,
+        provider: providerName,
+        model: modelId,
+        messages,
+        params: {
           model: modelId,
-          messages: structuredMessages,
+          messages,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
           tools: params.tools,
-          extra: structuredExtra,
-          signal,
-        });
-        circuitBreaker?.recordSuccess();
-
-        // If no structured output, settle and return
-        if (!outputConfig) {
-          this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
-          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: false });
-          // v3.0.0: Plugin onResponse hook
-          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, streaming: false });
-          return result as T;
-        }
-
-        // Validate structured output
-        const json = extractJson(result);
-        const parsed = JSON.parse(json);
-        const validation = outputConfig.schema.safeParse(parsed);
-        if (validation.success) {
-          this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
-          this._emit({ type: "structured.validate.pass", requestId, timestamp: performance.now() });
-          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: true });
-          // v3.0.0: Plugin onResponse hook
-          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, streaming: false });
-          return validation.data;
-        }
-
-        // Validation failed — attempt repair
-        this._emit({ type: "structured.validate.fail", requestId, timestamp: performance.now(), attempt, error: validation.error instanceof Error ? validation.error.message : String(validation.error) });
-        if (attempt < maxRepairAttempts) {
-          const repairPrompt = buildRepairPrompt(
-            validation.error,
-            result,
-            buildJsonSystemInstruction(outputConfig.schema as never),
-            outputConfig.repairInstructions,
-          );
-          // Replace last user message with repair prompt
-          const lastUserIdx = structuredMessages.map((m) => m.role).lastIndexOf("user");
-          if (lastUserIdx >= 0) {
-            structuredMessages = [
-              ...structuredMessages.slice(0, lastUserIdx),
-              { role: "user", content: repairPrompt },
-            ];
-          } else {
-            structuredMessages = [...structuredMessages, { role: "user", content: repairPrompt }];
-          }
-          continue;
-        }
-
-        // Exhausted repair attempts
-        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: "Validation failed after repair attempts" });
-        throw new ValidationError(maxRepairAttempts + 1, validation.error, result, { requestId, model: modelId });
-      } catch (err: unknown) {
-        // Don't retry validation errors through the retry loop
-        if (err instanceof ValidationError) {
-          throw err;
-        }
-
-        if (params.signal?.aborted) {
-          circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-          await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-          throw err;
-        }
-
-        const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
-        const status = (err as { status?: number }).status;
-
-        if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-          const delay = calculateBackoff(attempt, resolved.backoff);
-          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
-          await sleep(delay);
-          continue;
-        }
-        if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-          const delay = calculateBackoff(attempt, resolved.backoff);
-          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
-          await sleep(delay);
-          continue;
-        }
-
-        // Try fallback if allowed and retries exhausted
-        if (resolved.allowFallback && attempt >= retryConfig.maxRetries && !(err instanceof ValidationError)) {
-          this._budgetTracker.release(requestId); // Release original reservation
-          const fallbacks = this._getFallbacks([modelId], params);
-          for (const fb of fallbacks) {
-            const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-            const fbReservation = this._budgetTracker.reserve(`${requestId}_fb_${fb.model}`, fbEstimatedCost);
-            if (!fbReservation) continue; // Budget exceeded — skip this fallback
-            try {
-              const fbAdapter = this._getAdapter(fb.provider);
-              const result = await fbAdapter.complete({ model: fb.model, messages: structuredMessages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: structuredExtra, signal });
-              this._budgetTracker.settle(`${requestId}_fb_${fb.model}`, fbEstimatedCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
-              this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, structuredOutput: !!outputConfig });
-              if (!outputConfig) return result as T;
-              const json = extractJson(result);
-              const parsed = JSON.parse(json);
-              const validation = outputConfig.schema.safeParse(parsed);
-              if (validation.success) return validation.data;
-              throw new ValidationError(maxRepairAttempts + 1, validation.error, result, { requestId, model: fb.model });
-            } catch {
-              this._budgetTracker.release(`${requestId}_fb_${fb.model}`);
-            }
-          }
-        }
-
-        // Release reservation on final failure
-        this._budgetTracker.release(requestId);
-        circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-        // v3.0.0: Plugin onError hook
-        await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-        throw err;
-      }
-      }
-    } finally {
-      // Validation failures and every other terminal path must not strand an
-      // active reservation. Settled reservations are unaffected.
-      this._budgetTracker.release(requestId);
+          extra: params.extra,
+        },
+        estimatedCost,
+        policy: params.policy,
+        providerTimeoutMs: providerConfig.timeout,
+        callerSignal: params.signal,
+        output: params.output,
+        jsonModeParams: (provider) => {
+          const adapter = this._adapters.get(provider);
+          return adapter ? buildJsonModeParams(adapter.id) : {};
+        },
+        fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, params),
+        estimateFallbackCost: (candidate) => this._budgetTracker.estimate(
+          candidate.model,
+          candidate.provider,
+          this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+          0,
+        ),
+        getProviderTimeout: (provider) => this._registry.get(provider)?.timeout,
+      }) as Promise<T>;
     }
+
+    throw new Error("Unreachable completion state");
   }
 
   // ─── Multi-Modal Reliability Pipeline ──────────────────────────────────

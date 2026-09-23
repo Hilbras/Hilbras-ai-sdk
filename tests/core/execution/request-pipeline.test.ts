@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BudgetTracker } from "../../../src/cost/tracker.js";
 import { RequestExecutor } from "../../../src/core/execution/request-executor.js";
 import { RequestPipeline } from "../../../src/core/execution/request-pipeline.js";
-import { ProviderRequestError } from "../../../src/errors/index.js";
+import { ProviderRequestError, ValidationError } from "../../../src/errors/index.js";
 import type { ResolvedPolicy } from "../../../src/types/policy.js";
 import type { Message } from "../../../src/types/messages.js";
 
@@ -108,6 +108,61 @@ describe("RequestPipeline plain complete", () => {
     expect(events).toEqual(["request.retrying", "request.completed"]);
     expect(budget.report().activeReservations).toBe(0);
     expect(budget.report().requestCount).toBe(1);
+  });
+
+  it("validates structured output before reporting completion", async () => {
+    const { pipeline, budget, events } = setup(async () => '{"ok":true}');
+    const result = await pipeline.runStructuredComplete({
+      requestId: "req_4",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      output: {
+        schema: {
+          safeParse(value) {
+            return value && typeof value === "object" && "ok" in value
+              ? { success: true, data: value as { ok: boolean } }
+              : { success: false, error: new Error("missing ok") };
+          },
+        },
+      },
+      fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
+      getProviderTimeout: () => 0,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(events).toEqual(["structured.validate.pass", "request.completed"]);
+    expect(budget.report().activeReservations).toBe(0);
+  });
+
+  it("releases structured reservations when validation is exhausted", async () => {
+    const { pipeline, budget, events } = setup(async () => '{"ok":false}');
+    const promise = pipeline.runStructuredComplete({
+      requestId: "req_5",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      output: {
+        maxRepairAttempts: 0,
+        schema: { safeParse: () => ({ success: false, error: new Error("invalid") }) },
+      },
+      fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
+      getProviderTimeout: () => 0,
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(ValidationError);
+    expect(events).toEqual(["structured.validate.fail", "request.failed"]);
+    expect(budget.report().activeReservations).toBe(0);
   });
 
   it("releases the reservation and rethrows the original terminal error", async () => {
