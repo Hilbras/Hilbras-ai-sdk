@@ -89,6 +89,7 @@ export class RequestExecutor {
   async executeComplete(
     prepared: PreparedRequest,
     params: Omit<GenerateParams, "signal">,
+    options: { dispose?: boolean } = {},
   ): Promise<ExecutionResult<string>> {
     if (prepared.context.callerSignal?.aborted) {
       return executionFailure(new DOMException("The operation was aborted", "AbortError"), prepared.context);
@@ -112,7 +113,7 @@ export class RequestExecutor {
       }
       return executionFailure(error, prepared.context);
     } finally {
-      prepared.dispose();
+      if (options.dispose !== false) prepared.dispose();
     }
   }
 }

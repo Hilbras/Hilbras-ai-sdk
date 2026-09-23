@@ -38,6 +38,7 @@ export interface BudgetPort {
   reserve(requestId: string, estimatedCost: number): unknown;
   settle(requestId: string, actualCost: number, metadata: { provider: string; model: string; phase: string }): void;
   release(requestId: string): void;
+  report(): { remainingBudget: number | null };
 }
 
 export interface ClockPort {

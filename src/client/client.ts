@@ -19,7 +19,8 @@ import type { Transport } from "../transport/transport.js";
 import type { ExecutionPolicy, ResolvedPolicy } from "../types/policy.js";
 import type { RetryConfig } from "../reliability/retry.js";
 import type { CircuitBreakerPort } from "../core/execution/ports.js";
-import { RequestExecutor, type PreparedRequest } from "../core/execution/request-executor.js";
+import { RequestExecutor } from "../core/execution/request-executor.js";
+import { RequestPipeline } from "../core/execution/request-pipeline.js";
 import type { RequestOperation } from "../core/execution/request-context.js";
 import type { TaskRequirement } from "../types/router.js";
 import type { StructuredOutputConfig, StreamObjectOptions, SchemaValidator } from "../types/schema.js";
@@ -149,6 +150,7 @@ export class HilbrasClient implements AsyncDisposable {
   private _tokenizer: Tokenizer | null;
   private _plugins = new PluginRegistry();
   private _requestExecutor: RequestExecutor;
+  private _requestPipeline: RequestPipeline;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
@@ -177,6 +179,18 @@ export class HilbrasClient implements AsyncDisposable {
       },
       adapters: {
         get: (provider) => this._adapters.get(provider),
+      },
+    });
+
+    this._requestPipeline = new RequestPipeline({
+      executor: this._requestExecutor,
+      budget: this._budgetTracker,
+      plugins: this._plugins,
+      emit: (event) => this._emit(event),
+      now: () => performance.now(),
+      sleep: (ms) => sleep(ms),
+      onCircuitOpen: (requestId, provider) => {
+        this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider });
       },
     });
 
@@ -827,6 +841,43 @@ export class HilbrasClient implements AsyncDisposable {
     const modelId = resolved_.modelId;
 
     this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
+
+    if (!params.output) {
+      const messages = this._normalizeMessages(params.messages);
+      const estimatedCost = this._budgetTracker.estimate(
+        modelId,
+        providerName,
+        this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+        0,
+      );
+      return this._requestPipeline.runComplete({
+        requestId,
+        startTime,
+        provider: providerName,
+        model: modelId,
+        messages,
+        params: {
+          model: modelId,
+          messages,
+          temperature: params.temperature,
+          maxTokens: params.maxTokens,
+          tools: params.tools,
+          extra: params.extra,
+        },
+        estimatedCost,
+        policy: params.policy,
+        providerTimeoutMs: providerConfig.timeout,
+        callerSignal: params.signal,
+        fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, params),
+        estimateFallbackCost: (candidate) => this._budgetTracker.estimate(
+          candidate.model,
+          candidate.provider,
+          this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+          0,
+        ),
+        getProviderTimeout: (provider) => this._registry.get(provider)?.timeout,
+      }) as Promise<T>;
+    }
 
     const adapter = this._getAdapter(providerName);
     // v0.10.0 PR-4: extract the duplicated policy/circuit-breaker/retry/signal

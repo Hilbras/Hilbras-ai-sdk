@@ -19,7 +19,7 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 
 ## Phase 3 — Non-streaming pipeline
 
-- [ ] 3.1 Extract `RequestPipeline` for plain `complete()`
+- [x] 3.1 Extract `RequestPipeline` for plain `complete()`
 - [ ] 3.2 Migrate structured `complete()`
 
 ## Phase 4 — Reliability correctness
