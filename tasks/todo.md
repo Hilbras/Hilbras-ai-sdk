@@ -14,7 +14,7 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 
 ## Phase 2 — One-attempt execution
 
-- [ ] 2.1 Add disposable internal timeout primitive
+- [x] 2.1 Add disposable internal timeout primitive
 - [ ] 2.2 Extract `RequestExecutor`
 
 ## Phase 3 — Non-streaming pipeline
