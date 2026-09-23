@@ -774,7 +774,12 @@ export class HilbrasClient implements AsyncDisposable {
 
   /**
    * Run a multi-modal adapter method with retry, circuit breaker, timeout,
-   * and hook events — the same reliability guarantees as stream()/complete().
+   * and hook events.
+   *
+   * v3.2.0 intentionally keeps multimodal calls outside the logical budget
+   * pipeline until provider-specific pricing and reservation semantics are
+   * defined. They share the one-attempt reliability preparation, but do not
+   * silently reserve or settle new costs.
    */
   private async _runMultiModal<T>(
     requestId: string,

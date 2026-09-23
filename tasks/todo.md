@@ -5,7 +5,7 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 ## Phase 0 — Characterization
 
 - [x] 0.1 Add execution lifecycle characterization tests
-- [ ] 0.2 Add retry/fallback characterization matrix
+- [x] 0.2 Add retry/fallback characterization matrix
 
 ## Phase 1 — Internal contracts
 
@@ -35,15 +35,15 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 
 ## Phase 6 — Convergence and release
 
-- [ ] 6.1 Route multimodal calls through the executor or document deferral
-- [ ] 6.2 Make the public/export decision
+- [x] 6.1 Route multimodal calls through the executor or document deferral
+- [x] 6.2 Make the public/export decision
 - [ ] 6.3 Complete the v3.2.0 release gate
 
 ## Checkpoints
 
-- [ ] A — Characterization baseline
-- [ ] B — Internal foundation
-- [ ] C — Complete parity
-- [ ] D — Reliability decisions
+- [x] A — Characterization baseline
+- [x] B — Internal foundation
+- [x] C — Complete parity
+- [x] D — Reliability decisions
 - [x] E — Streaming parity
 - [ ] F — Release readiness
