@@ -16,7 +16,11 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { Transport } from "../transport/transport.js";
-import type { ExecutionPolicy } from "../types/policy.js";
+import type { ExecutionPolicy, ResolvedPolicy } from "../types/policy.js";
+import type { RetryConfig } from "../reliability/retry.js";
+import type { CircuitBreakerPort } from "../core/execution/ports.js";
+import { RequestExecutor, type PreparedRequest } from "../core/execution/request-executor.js";
+import type { RequestOperation } from "../core/execution/request-context.js";
 import type { TaskRequirement } from "../types/router.js";
 import type { StructuredOutputConfig, StreamObjectOptions, SchemaValidator } from "../types/schema.js";
 import type {
@@ -34,7 +38,6 @@ import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
 import { createRetryConfig, shouldRetry, shouldRetryNetworkError } from "../reliability/retry.js";
 import { calculateBackoff, sleep } from "../reliability/backoff.js";
 import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError, ValidationError, ConfigurationError } from "../errors/index.js";
-import { createTimeoutSignal } from "../reliability/timeout.js";
 
 import { AdapterRegistry, getDefaultAdapterRegistry } from "../providers/adapter-registry.js";
 import { dictToMessage } from "../types/messages.js";
@@ -145,6 +148,7 @@ export class HilbrasClient implements AsyncDisposable {
   private _allowPrivateNetwork: boolean;
   private _tokenizer: Tokenizer | null;
   private _plugins = new PluginRegistry();
+  private _requestExecutor: RequestExecutor;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
@@ -164,6 +168,17 @@ export class HilbrasClient implements AsyncDisposable {
     this._defaultPolicy = config?.policy ?? (sdk ? this._policyFromSDK(sdk) : undefined);
     const sdkBudget = sdk ? this._budgetFromSDK(sdk) : undefined;
     this._budgetTracker = new BudgetTracker(config?.budget ?? sdkBudget);
+    this._requestExecutor = new RequestExecutor({
+      policy: {
+        resolve: (policy) => resolvePolicy(policy ?? this._defaultPolicy),
+      },
+      circuitBreakers: {
+        getOrCreate: (provider, circuitPolicy) => getCircuitBreakerRegistry().getOrCreate(provider, circuitPolicy),
+      },
+      adapters: {
+        get: (provider) => this._adapters.get(provider),
+      },
+    });
 
     // v1.1.0: Register providers from SDKConfig if provided
     if (sdk?.providers?.length) {
@@ -453,39 +468,37 @@ export class HilbrasClient implements AsyncDisposable {
     providerConfig: ProviderConfig,
     policy: ExecutionPolicy | undefined,
     userSignal: AbortSignal | undefined,
+    operation: RequestOperation = "complete",
   ): {
-    resolved: ReturnType<typeof resolvePolicy>;
-    circuitBreaker: ReturnType<typeof getCircuitBreakerRegistry>["getOrCreate"] extends (...a: never[]) => infer R ? R : never;
-    retryConfig: ReturnType<typeof createRetryConfig>;
+    resolved: ResolvedPolicy;
+    circuitBreaker: CircuitBreakerPort | undefined;
+    retryConfig: RetryConfig;
     signal: AbortSignal | undefined;
+    dispose: () => void;
   } {
-    const resolved = resolvePolicy(policy ?? this._defaultPolicy);
-    let circuitBreaker: ReturnType<typeof getCircuitBreakerRegistry>["getOrCreate"] extends (...a: never[]) => infer R ? R : never = undefined as never;
-    if (resolved.circuitBreaker.enabled) {
-      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(providerName, {
-        failureThreshold: resolved.circuitBreaker.failureThreshold,
-        successThreshold: resolved.circuitBreaker.successThreshold,
-        timeoutMs: resolved.circuitBreaker.timeoutMs,
-        halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
+    try {
+      const prepared = this._requestExecutor.prepare({
+        requestId,
+        operation,
+        provider: providerName,
+        model: providerConfig.models[0]?.id ?? "",
+        policy,
+        providerTimeoutMs: providerConfig.timeout,
+        callerSignal: userSignal,
       });
-      if (!circuitBreaker.isAvailable()) {
+      return {
+        resolved: prepared.context.policy,
+        circuitBreaker: prepared.circuitBreaker,
+        retryConfig: prepared.retryConfig,
+        signal: prepared.signal,
+        dispose: prepared.dispose,
+      };
+    } catch (error) {
+      if (error instanceof CircuitBreakerOpenError) {
         this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
-        throw new CircuitBreakerOpenError(providerName, {
-          failureCount: circuitBreaker.stats.failureCount,
-          retryAfterMs: resolved.circuitBreaker.timeoutMs,
-        });
       }
+      throw error;
     }
-    const retryConfig = createRetryConfig({
-      maxRetries: resolved.retry.maxRetries,
-      retryableStatuses: resolved.retry.retryableStatuses,
-      retryableNetworkErrors: resolved.retry.retryableNetworkErrors,
-    });
-    const timeoutMs = resolved.timeout.requestTimeoutMs || providerConfig.timeout;
-    const signal = timeoutMs
-      ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, userSignal)
-      : userSignal;
-    return { resolved, circuitBreaker, retryConfig, signal };
   }
 
   // ─── Provider/Model Resolution ──────────────────────────────────────────
@@ -600,6 +613,7 @@ export class HilbrasClient implements AsyncDisposable {
       providerConfig,
       params.policy,
       params.signal,
+      "stream",
     );
 
     const messages = this._normalizeMessages(params.messages);
@@ -823,6 +837,7 @@ export class HilbrasClient implements AsyncDisposable {
       providerConfig,
       params.policy,
       params.signal,
+      "complete",
     );
 
     const messages = this._normalizeMessages(params.messages);
