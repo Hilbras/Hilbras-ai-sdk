@@ -21,7 +21,11 @@ function policy(overrides: Partial<ResolvedPolicy> = {}): ResolvedPolicy {
   };
 }
 
-function setup(complete: (params: { model: string; messages: Message[] }) => Promise<string>, resolved = policy()) {
+function setup(
+  complete: (params: { model: string; messages: Message[] }) => Promise<string>,
+  resolved = policy(),
+  options: { sleep?: (ms: number, signal?: AbortSignal) => Promise<void> } = {},
+) {
   const circuit = {
     stats: { failureCount: 0 },
     isAvailable: vi.fn(() => true),
@@ -51,7 +55,7 @@ function setup(complete: (params: { model: string; messages: Message[] }) => Pro
     emit: (event) => events.push(event.type),
     now: () => 0,
     plugins,
-    sleep: async () => {},
+    sleep: options.sleep ?? (async () => {}),
   });
   return { pipeline, budget, events, plugins };
 }
@@ -162,6 +166,37 @@ describe("RequestPipeline plain complete", () => {
 
     await expect(promise).rejects.toBeInstanceOf(ValidationError);
     expect(events).toEqual(["structured.validate.fail", "request.failed"]);
+    expect(budget.report().activeReservations).toBe(0);
+  });
+
+  it("terminates the request when cancellation interrupts backoff", async () => {
+    const caller = new AbortController();
+    const resolved = policy({ retry: { maxRetries: 1, retryableStatuses: new Set([503]), retryableNetworkErrors: false } });
+    const { pipeline, budget, events } = setup(async () => {
+      throw new ProviderRequestError(503, "busy", "test");
+    }, resolved, {
+      sleep: async () => {
+        caller.abort();
+        throw new DOMException("aborted", "AbortError");
+      },
+    });
+
+    await expect(pipeline.runComplete({
+      requestId: "req_cancel_backoff",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      callerSignal: caller.signal,
+      fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
+      getProviderTimeout: () => 0,
+    })).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(events).toEqual(["request.retrying", "request.failed"]);
     expect(budget.report().activeReservations).toBe(0);
   });
 

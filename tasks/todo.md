@@ -24,7 +24,7 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 
 ## Phase 4 — Reliability correctness
 
-- [ ] 4.1 Make backoff cancellation-aware
+- [x] 4.1 Make backoff cancellation-aware
 - [ ] 4.2 Correct fallback activation and isolation
 - [ ] 4.3 Decide and document timeout semantics
 

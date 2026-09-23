@@ -188,7 +188,7 @@ export class HilbrasClient implements AsyncDisposable {
       plugins: this._plugins,
       emit: (event) => this._emit(event),
       now: () => performance.now(),
-      sleep: (ms) => sleep(ms),
+      sleep: (ms, signal) => sleep(ms, signal),
       onCircuitOpen: (requestId, provider) => {
         this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider });
       },

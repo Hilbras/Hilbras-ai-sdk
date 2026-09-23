@@ -146,7 +146,12 @@ export class RequestPipeline {
             delayMs: delay,
             reason: isNetworkError ? "network error" : `HTTP ${status}`,
           });
-          await this.ports.sleep(delay, input.callerSignal);
+          try {
+            await this.ports.sleep(delay, input.callerSignal);
+          } catch (error) {
+            primaryError = error;
+            break;
+          }
           attempt++;
           continue;
         }
@@ -370,7 +375,12 @@ export class RequestPipeline {
             delayMs: delay,
             reason: isNetworkError ? "network error" : `HTTP ${status}`,
           });
-          await this.ports.sleep(delay, input.callerSignal);
+          try {
+            await this.ports.sleep(delay, input.callerSignal);
+          } catch (error) {
+            primaryError = error;
+            break;
+          }
           attempt++;
           continue;
         }
