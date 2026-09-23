@@ -4,7 +4,7 @@ See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, 
 
 ## Phase 0 — Characterization
 
-- [ ] 0.1 Add execution lifecycle characterization tests
+- [x] 0.1 Add execution lifecycle characterization tests
 - [ ] 0.2 Add retry/fallback characterization matrix
 
 ## Phase 1 — Internal contracts
