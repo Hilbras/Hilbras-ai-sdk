@@ -910,7 +910,7 @@ export class HilbrasClient implements AsyncDisposable {
           const adapter = this._adapters.get(provider);
           return adapter ? buildJsonModeParams(adapter.id) : {};
         },
-        fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, params),
+        fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, { ...params, needsStructuredOutput: true }),
         estimateFallbackCost: (candidate) => this._budgetTracker.estimate(
           candidate.model,
           candidate.provider,

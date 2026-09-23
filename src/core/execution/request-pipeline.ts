@@ -156,12 +156,15 @@ export class RequestPipeline {
           continue;
         }
 
-        if (prepared.context.policy.allowFallback && attempt >= prepared.retryConfig.maxRetries) {
+        if (prepared.context.policy.allowFallback) {
+          this.ports.budget.release(input.requestId);
           const attemptedModels = [input.model];
           const fallbacks = input.fallbackCandidates(attemptedModels);
           for (const fallback of fallbacks) {
-            attemptedModels.push(fallback.model);
+            if (attemptedModels.includes(fallback.model)) continue;
             const fallbackCost = input.estimateFallbackCost(fallback);
+            if (prepared.context.policy.maxFallbackCost !== null && fallbackCost > prepared.context.policy.maxFallbackCost) continue;
+            attemptedModels.push(fallback.model);
             const fallbackId = `${input.requestId}_fb_${fallback.model}`;
             const fallbackReservation = this.ports.budget.reserve(fallbackId, fallbackCost);
             if (!fallbackReservation) continue;
@@ -179,6 +182,9 @@ export class RequestPipeline {
                 fallbackPrepared,
                 { ...input.params, model: fallback.model },
               );
+              if (!fallbackResult.ok && input.callerSignal?.aborted) {
+                primaryError = fallbackResult.error;
+              }
               if (fallbackResult.ok) {
                 this.ports.budget.settle(fallbackId, fallbackCost, {
                   provider: fallback.provider,
@@ -195,12 +201,13 @@ export class RequestPipeline {
                 });
                 return fallbackResult.value;
               }
-            } catch {
-              // A failed fallback candidate is released and the next candidate is tried.
+            } catch (error) {
+              if (input.callerSignal?.aborted) primaryError = error;
             } finally {
               fallbackPrepared?.dispose();
               this.ports.budget.release(fallbackId);
             }
+            if (input.callerSignal?.aborted) break;
           }
         }
         break;
@@ -385,12 +392,15 @@ export class RequestPipeline {
           continue;
         }
 
-        if (prepared.context.policy.allowFallback && attempt >= prepared.retryConfig.maxRetries) {
+        if (prepared.context.policy.allowFallback) {
+          this.ports.budget.release(input.requestId);
           const attemptedModels = [input.model];
           const fallbacks = input.fallbackCandidates(attemptedModels);
           for (const fallback of fallbacks) {
-            attemptedModels.push(fallback.model);
+            if (attemptedModels.includes(fallback.model)) continue;
             const fallbackCost = input.estimateFallbackCost(fallback);
+            if (prepared.context.policy.maxFallbackCost !== null && fallbackCost > prepared.context.policy.maxFallbackCost) continue;
+            attemptedModels.push(fallback.model);
             const fallbackId = `${input.requestId}_fb_${fallback.model}`;
             const fallbackReservation = this.ports.budget.reserve(fallbackId, fallbackCost);
             if (!fallbackReservation) continue;
@@ -410,6 +420,9 @@ export class RequestPipeline {
                 messages: structuredMessages,
                 extra: { ...structuredExtra, ...(input.jsonModeParams?.(fallback.provider) ?? {}) },
               });
+              if (!fallbackResult.ok && input.callerSignal?.aborted) {
+                primaryError = fallbackResult.error;
+              }
               if (fallbackResult.ok) {
                 const parsed = JSON.parse(extractJson(fallbackResult.value));
                 const validation = input.output.schema.safeParse(parsed);
@@ -430,12 +443,13 @@ export class RequestPipeline {
                   return validation.data;
                 }
               }
-            } catch {
-              // Try the next fallback candidate.
+            } catch (error) {
+              if (input.callerSignal?.aborted) primaryError = error;
             } finally {
               fallbackPrepared?.dispose();
               this.ports.budget.release(fallbackId);
             }
+            if (input.callerSignal?.aborted) break;
           }
         }
         break;

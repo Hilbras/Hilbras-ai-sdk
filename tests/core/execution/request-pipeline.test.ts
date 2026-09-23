@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BudgetTracker } from "../../../src/cost/tracker.js";
 import { RequestExecutor } from "../../../src/core/execution/request-executor.js";
 import { RequestPipeline } from "../../../src/core/execution/request-pipeline.js";
+import type { AdapterPort } from "../../../src/core/execution/ports.js";
 import { ProviderRequestError, ValidationError } from "../../../src/errors/index.js";
 import type { ResolvedPolicy } from "../../../src/types/policy.js";
 import type { Message } from "../../../src/types/messages.js";
@@ -24,7 +25,10 @@ function policy(overrides: Partial<ResolvedPolicy> = {}): ResolvedPolicy {
 function setup(
   complete: (params: { model: string; messages: Message[] }) => Promise<string>,
   resolved = policy(),
-  options: { sleep?: (ms: number, signal?: AbortSignal) => Promise<void> } = {},
+  options: {
+    sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+    adapters?: Record<string, AdapterPort>;
+  } = {},
 ) {
   const circuit = {
     stats: { failureCount: 0 },
@@ -37,10 +41,11 @@ function setup(
     complete: vi.fn(complete),
     stream: vi.fn(),
   };
+  const adapters = options.adapters ?? { test: adapter as AdapterPort };
   const executor = new RequestExecutor({
     policy: { resolve: () => resolved },
     circuitBreakers: { getOrCreate: () => circuit },
-    adapters: { get: () => adapter },
+    adapters: { get: (provider) => adapters[provider] },
   });
   const budget = new BudgetTracker({ sessionBudget: 10 });
   const events: string[] = [];
@@ -166,6 +171,123 @@ describe("RequestPipeline plain complete", () => {
 
     await expect(promise).rejects.toBeInstanceOf(ValidationError);
     expect(events).toEqual(["structured.validate.fail", "request.failed"]);
+    expect(budget.report().activeReservations).toBe(0);
+  });
+
+  it("allows fallback after a non-retryable primary failure when configured", async () => {
+    const primary = {
+      id: "primary",
+      complete: vi.fn(async () => { throw new ProviderRequestError(400, "bad request", "test"); }),
+      stream: vi.fn(),
+    };
+    const fallback = {
+      id: "fallback",
+      complete: vi.fn(async () => "fallback"),
+      stream: vi.fn(),
+    };
+    const resolved = policy({
+      allowFallback: true,
+      retry: { maxRetries: 2, retryableStatuses: new Set([503]), retryableNetworkErrors: false },
+    });
+    const { pipeline, budget, events } = setup(primary.complete, resolved, {
+      adapters: { test: primary, fallback },
+    });
+
+    const result = await pipeline.runComplete({
+      requestId: "req_fallback",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      fallbackCandidates: () => [{ provider: "fallback", model: "fallback-model" }],
+      estimateFallbackCost: () => 0.2,
+      getProviderTimeout: () => 0,
+    });
+
+    expect(result).toBe("fallback");
+    expect(fallback.complete).toHaveBeenCalledOnce();
+    expect(events).toEqual(["request.completed"]);
+    expect(budget.report().activeReservations).toBe(0);
+  });
+
+  it("skips fallback candidates above the configured fallback cost", async () => {
+    const primary = {
+      id: "primary",
+      complete: vi.fn(async () => { throw new ProviderRequestError(400, "bad request", "test"); }),
+      stream: vi.fn(),
+    };
+    const fallback = {
+      id: "fallback",
+      complete: vi.fn(async () => "should-not-run"),
+      stream: vi.fn(),
+    };
+    const resolved = policy({ allowFallback: true, maxFallbackCost: 0.1 });
+    const { pipeline } = setup(primary.complete, resolved, { adapters: { test: primary, fallback } });
+
+    await expect(pipeline.runComplete({
+      requestId: "req_cost_fallback",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      fallbackCandidates: () => [{ provider: "fallback", model: "fallback-model" }],
+      estimateFallbackCost: () => 0.2,
+      getProviderTimeout: () => 0,
+    })).rejects.toBeInstanceOf(ProviderRequestError);
+
+    expect(fallback.complete).not.toHaveBeenCalled();
+  });
+
+  it("does not continue through fallback candidates after cancellation", async () => {
+    const caller = new AbortController();
+    const primary = {
+      id: "primary",
+      complete: vi.fn(async () => { throw new ProviderRequestError(400, "bad request", "test"); }),
+      stream: vi.fn(),
+    };
+    const fallback = {
+      id: "fallback",
+      complete: vi.fn(async () => {
+        caller.abort();
+        throw new DOMException("aborted", "AbortError");
+      }),
+      stream: vi.fn(),
+    };
+    const secondFallback = {
+      id: "second-fallback",
+      complete: vi.fn(async () => "should-not-run"),
+      stream: vi.fn(),
+    };
+    const resolved = policy({ allowFallback: true });
+    const { pipeline, budget } = setup(primary.complete, resolved, {
+      adapters: { test: primary, fallback, second: secondFallback },
+    });
+
+    await expect(pipeline.runComplete({
+      requestId: "req_cancel_fallback",
+      startTime: 0,
+      provider: "test",
+      model,
+      messages,
+      params: { model, messages },
+      estimatedCost: 0.5,
+      policy: {},
+      callerSignal: caller.signal,
+      fallbackCandidates: () => [
+        { provider: "fallback", model: "fallback-model" },
+        { provider: "second", model: "second-model" },
+      ],
+      estimateFallbackCost: () => 0,
+      getProviderTimeout: () => 0,
+    })).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(secondFallback.complete).not.toHaveBeenCalled();
     expect(budget.report().activeReservations).toBe(0);
   });
 
