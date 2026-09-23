@@ -176,7 +176,8 @@ export class RequestPipeline {
                 provider: fallback.provider,
                 model: fallback.model,
                 params: { ...input.params, model: fallback.model },
-                providerTimeoutMs: input.getProviderTimeout(fallback.provider),
+                callerSignal: prepared.signal,
+                providerTimeoutMs: 0,
               });
               const fallbackResult = await this.ports.executor.executeComplete(
                 fallbackPrepared,
@@ -412,7 +413,8 @@ export class RequestPipeline {
                 provider: fallback.provider,
                 model: fallback.model,
                 params: { ...input.params, model: fallback.model },
-                providerTimeoutMs: input.getProviderTimeout(fallback.provider),
+                callerSignal: prepared.signal,
+                providerTimeoutMs: 0,
               });
               const fallbackResult = await this.ports.executor.executeComplete(fallbackPrepared, {
                 ...input.params,

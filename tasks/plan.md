@@ -196,8 +196,8 @@ Evolve the v3.1.0 execution paths incrementally into a dedicated internal execut
 
 ## Open questions requiring a decision before implementation
 
-1. Is `requestTimeoutMs` intentionally a whole logical-request deadline, or should it become a per-attempt deadline in v3.2.0?
-2. Should caller cancellation record a circuit-breaker failure, or remain a neutral terminal outcome? The audit recommends neutral.
-3. Should fallback invoke plugin hooks and circuit lifecycle for every candidate, or represent candidates as internal attempts under one logical request? The recommended design is one lifecycle with attempt metadata.
-4. Should multimodal operations enter the budget lifecycle in v3.2.0, or remain explicitly deferred until pricing semantics are defined? The recommended v3.2.0 answer is deferred.
-5. Should the execution context/result types be public in v3.2.0? The recommended answer is no; keep them internal and revisit after v3.9.0.
+1. `requestTimeoutMs` remains a whole logical-request deadline in v3.2.0; fallback candidates use the primary deadline as their parent signal.
+2. Caller cancellation is a neutral terminal outcome and is not recorded as a circuit-breaker provider failure.
+3. Fallback candidates are internal attempts under one logical request lifecycle; v3.2.0 preserves one plugin lifecycle and records the successful candidate.
+4. Multimodal budget/pricing semantics remain explicitly deferred; v3.2.0 normalizes executor behavior without silently starting new billing.
+5. Execution context/result types remain internal until parity and API review.
