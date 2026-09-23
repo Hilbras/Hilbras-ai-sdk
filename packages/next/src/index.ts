@@ -5,7 +5,7 @@
  */
 
 export { createStreamHandler, createStreamCompletionHandler } from "./stream.js";
-export type { StreamChatOptions, StreamCompletionOptions } from "./stream.js";
+export type { ChatMessage, StreamChatOptions, StreamCompletionOptions } from "./stream.js";
 
 export { hilbrasMiddleware } from "./middleware.js";
 export type { HilbrasMiddlewareOptions } from "./middleware.js";

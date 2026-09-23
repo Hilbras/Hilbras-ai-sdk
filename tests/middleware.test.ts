@@ -98,6 +98,21 @@ describe("retryMiddleware", () => {
     expect(await res.text()).toBe("ok");
   });
 
+  it("does not retry an aborted request", async () => {
+    let attempts = 0;
+    const controller = new AbortController();
+    const mw = retryMiddleware(3, 1);
+    const ctx = mockCtx({
+      init: { method: "GET", signal: controller.signal },
+      next: async () => {
+        attempts++;
+        controller.abort();
+        throw new DOMException("aborted", "AbortError");
+      },
+    });
+    await expect(mw(ctx)).rejects.toThrow("aborted");
+    expect(attempts).toBe(1);
+  });
   it("throws after exhausting retries", async () => {
     let attempts = 0;
     const mw = retryMiddleware(2, 1);
@@ -143,6 +158,19 @@ describe("cacheMiddleware", () => {
     expect(callCount).toBe(1);
   });
 
+  it("does not share cached GET responses across authorization headers", async () => {
+    let callCount = 0;
+    const mw = cacheMiddleware(60_000);
+    const next = async () => {
+      callCount++;
+      return new Response(`tenant-${callCount}`);
+    };
+    const first = await mw(mockCtx({ init: { method: "GET", headers: { Authorization: "Bearer A" } }, next }));
+    const second = await mw(mockCtx({ init: { method: "GET", headers: { Authorization: "Bearer B" } }, next }));
+    expect(await first.text()).toBe("tenant-1");
+    expect(await second.text()).toBe("tenant-2");
+    expect(callCount).toBe(2);
+  });
   it("does not cache POST requests", async () => {
     let callCount = 0;
     const mw = cacheMiddleware(60_000);

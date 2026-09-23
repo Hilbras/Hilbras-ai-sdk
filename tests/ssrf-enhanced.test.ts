@@ -40,9 +40,9 @@ describe("Enhanced SSRF Validation", () => {
       expect(result.ok).toBe(false);
     });
 
-    it("allows 127.x.x.x (loopback checked at URL level, not IP level)", () => {
+    it("blocks IPv4 loopback resolved addresses", () => {
       const result = validateResolvedAddress("127.0.0.1", "localhost");
-      expect(result.ok).toBe(true); // loopback is checked by validateBaseUrl, not validateResolvedAddress
+      expect(result.ok).toBe(false);
     });
 
     it("blocks 0.0.0.0 (unspecified)", () => {
@@ -75,10 +75,9 @@ describe("Enhanced SSRF Validation", () => {
       expect(result.ok).toBe(false);
     });
 
-    it("allows IPv4-mapped IPv6 (::ffff:0:0/96 check is limited)", () => {
-      // The isSpecialIPv6 regex doesn't expand :: shorthand, so this passes through
+    it("blocks IPv4-mapped IPv6 addresses", () => {
       const result = validateResolvedAddress("::ffff:127.0.0.1", "example.com");
-      expect(result.ok).toBe(true);
+      expect(result.ok).toBe(false);
     });
 
     it("blocks 192.168.x.x (private)", () => {
@@ -125,9 +124,9 @@ describe("Enhanced SSRF Validation", () => {
   });
 
   describe("IPv6 scope ID handling", () => {
-    it("validates plain IPv6 loopback", () => {
-      const result = validateBaseUrl("https://[::1]/api");
-      expect(result.ok).toBe(true);
+    it("requires an explicit opt-in for IPv6 loopback", () => {
+      expect(validateBaseUrl("https://[::1]/api").ok).toBe(false);
+      expect(validateBaseUrl("https://[::1]/api", { allowInsecure: true }).ok).toBe(true);
     });
 
     it("validates plain IPv6 link-local as private", () => {
@@ -135,9 +134,20 @@ describe("Enhanced SSRF Validation", () => {
       expect(result.ok).toBe(false); // fe80::1 is link-local, needs allowPrivateNetwork
     });
 
-    it("allows IPv6 link-local with allowPrivateNetwork", () => {
+    it("never allows IPv6 link-local, even with private-network opt-in", () => {
       const result = validateBaseUrl("https://[fe80::1]/api", { allowInsecure: true, allowPrivateNetwork: true });
-      expect(result.ok).toBe(true);
+      expect(result.ok).toBe(false);
+    });
+
+    it("requires explicit opt-in for localhost and .local hosts", () => {
+      expect(validateBaseUrl("https://localhost/api").ok).toBe(false);
+      expect(validateBaseUrl("https://foo.local/api").ok).toBe(false);
+      expect(validateBaseUrl("https://foo.local/api", { allowInsecure: true, allowPrivateNetwork: true }).ok).toBe(true);
+    });
+
+    it("blocks loopback addresses outside the exact local development targets", () => {
+      expect(validateBaseUrl("https://127.0.0.2/api", { allowInsecure: true }).ok).toBe(false);
+      expect(validateBaseUrl("https://[::ffff:169.254.169.254]/api").ok).toBe(false);
     });
   });
 });

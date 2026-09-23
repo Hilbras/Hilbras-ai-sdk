@@ -64,8 +64,6 @@ function printHelp() {
 
   Templates:
     basic     Simple streaming example
-    tools     Tool calling example
-    react     React + Next.js app
 
   Examples:
     npx create-hilbras-app my-app
@@ -135,7 +133,7 @@ async function main() {
   const templateDir = join(TEMPLATES_DIR, options.template);
   if (!existsSync(templateDir)) {
     console.error(`  Error: Template "${options.template}" not found`);
-    console.error(`  Available templates: basic, tools, react`);
+    console.error(`  Available templates: basic`);
     process.exit(1);
   }
 

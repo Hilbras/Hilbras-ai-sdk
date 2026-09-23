@@ -615,9 +615,10 @@ describe("Phase 22: API Review", () => {
 
   it("disable via policy.circuitBreaker.enabled=false works", async () => {
     const c = new HilbrasClient({
+      transport: failingTransport(),
       policy: { circuitBreaker: { enabled: false } },
     });
-    c.addProvider({ ...MINIMAL_PROVIDER, name: "NoCB", transport: failingTransport() });
+    c.addProvider({ ...MINIMAL_PROVIDER, name: "NoCB" });
 
     // Should not throw CircuitBreakerOpenError even with failures
     for (let i = 0; i < 100; i++) {

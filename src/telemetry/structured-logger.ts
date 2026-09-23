@@ -20,6 +20,17 @@
 import type { HookEvent, RequestCompletedEvent, RequestFailedEvent, RetryEvent, StreamFirstChunkEvent } from "../types/observability.js";
 import { redact } from "../logging/logger.js";
 
+function redactNested(value: unknown): unknown {
+  if (typeof value === "string") return redact(value);
+  if (Array.isArray(value)) return value.map((item) => redactNested(item));
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) result[key] = redactNested(item);
+    return result;
+  }
+  return value;
+}
+
 /** Log entry severity levels */
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -217,12 +228,12 @@ export class StructuredLogger {
   }
 
   private _redactEntry(entry: StructuredLogEntry): void {
-    if (entry.error) entry.error = redact(entry.error);
-    if (entry.meta) {
-      for (const [key, value] of Object.entries(entry.meta)) {
-        if (typeof value === "string") {
-          entry.meta[key] = redact(value);
-        }
+    const mutable = entry as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(mutable)) {
+      if (typeof value === "string") {
+        mutable[key] = redact(value);
+      } else if (key === "meta") {
+        mutable[key] = redactNested(value);
       }
     }
   }

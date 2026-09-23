@@ -11,10 +11,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "vitest run"
+    "build": "node ../../tools/clean-dist.mjs dist && tsc",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@hilbras/sdk": "^3.0.0"
+  },
   "devDependencies": {
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"

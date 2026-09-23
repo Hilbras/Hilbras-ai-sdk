@@ -1,17 +1,17 @@
 # Fine-tuning Helpers
 
-`@hilbras/fine-tune` provides training data export, formatting, validation, and splitting.
+`@hilbras/sdk` provides training data export, formatting, validation, and splitting.
 
 ## Installation
 
 ```bash
-npm install @hilbras/fine-tune
+npm install @hilbras/sdk
 ```
 
 ## Export Training Data
 
 ```typescript
-import { exportTrainingData } from "@hilbras/fine-tune";
+import { exportTrainingData } from "@hilbras/sdk/fine-tune";
 
 const examples = [
   { input: "What is 2+2?", output: "The answer is 4" },
@@ -50,7 +50,7 @@ const alpaca = exportTrainingData(examples, { format: "alpaca" });
 ## Data Splitting
 
 ```typescript
-import { splitData } from "@hilbras/fine-tune";
+import { splitData } from "@hilbras/sdk/fine-tune";
 
 const split = splitData(examples, {
   trainRatio: 0.8,
@@ -67,7 +67,7 @@ console.log(split.test.length);       // 10
 ## Quality Validation
 
 ```typescript
-import { validateTrainingData } from "@hilbras/fine-tune";
+import { validateTrainingData } from "@hilbras/sdk/fine-tune";
 
 const report = validateTrainingData(examples);
 console.log(report.passed); // true/false
@@ -84,7 +84,7 @@ console.log(report.checks); // Array of QualityCheck
 ## Data Cleaning
 
 ```typescript
-import { cleanTrainingData, deduplicateTrainingData } from "@hilbras/fine-tune";
+import { cleanTrainingData, deduplicateTrainingData } from "@hilbras/sdk/fine-tune";
 
 // Remove empty examples
 const cleaned = cleanTrainingData(examples);

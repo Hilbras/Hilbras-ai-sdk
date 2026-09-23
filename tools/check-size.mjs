@@ -5,9 +5,10 @@
  */
 
 import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const DIST = join(import.meta.dirname, "..", "dist");
+const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const MAX_KB = 1900; // max total dist size in KB (v3.0.0: added plugin, RBAC, SLA, cost alerts, AB test)
 
 function dirSize(dir) {

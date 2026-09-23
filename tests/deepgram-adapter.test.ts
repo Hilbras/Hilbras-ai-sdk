@@ -49,6 +49,8 @@ describe("DeepgramAdapter", () => {
 
     expect(capturedUrl).toContain("/v1/listen?");
     expect(capturedUrl).toContain("model=nova-2");
+    expect(capturedUrl).toContain("punctuate=true");
+    expect(capturedUrl).not.toContain("+punctuate");
     expect(capturedHeaders["Authorization"]).toBe("Token dg_test_key");
     expect(result.text).toBe("Hello world");
     expect(result.language).toBe("en");

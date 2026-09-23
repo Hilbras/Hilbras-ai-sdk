@@ -44,6 +44,9 @@ export type {
   TranscriptFormat,
 } from "./types/multi-modal.js";
 
+// ─── Logging ────────────────────────────────────────────────────────────────
+export { redact } from "./logging/logger.js";
+
 // ─── Errors ─────────────────────────────────────────────────────────────────
 export {
   HilbrasSdkError,
@@ -203,6 +206,7 @@ export { loadCatalog, listProviders, getProviderCatalog, searchModels, getModels
 export type { CatalogModel, CatalogProvider, ProviderCatalog } from "./catalog/index.js";
 
 // ─── Adapters (advanced — usually not imported directly) ────────────────────
+export { OpenAIAdapter } from "./adapters/openai.js";
 export { AnthropicAdapter } from "./adapters/anthropic.js";
 export { GoogleGenAIAdapter } from "./adapters/google-genai.js";
 export { AzureAdapter } from "./adapters/azure.js";

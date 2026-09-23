@@ -29,6 +29,7 @@ import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
 import { TextToolCallParser } from "./text-tool-call-parser.js";
 import { messageToDict } from "../types/messages.js";
+import { assertExtraFieldAllowed } from "./extra.js";
 
 export type OpenAIAdapterConfig = AdapterConfig;
 
@@ -36,7 +37,6 @@ export class OpenAIAdapter implements AIProvider {
   readonly id = "openai";
   private _provider: ProviderConfig;
   private _transport: Transport;
-  private _reasoningNormalizer = new ReasoningNormalizer();
 
   constructor(config: OpenAIAdapterConfig) {
     this._provider = config.provider;
@@ -100,6 +100,7 @@ export class OpenAIAdapter implements AIProvider {
 
     if (params.extra) {
       for (const [k, v] of Object.entries(params.extra)) {
+        assertExtraFieldAllowed(k);
         if (k === "enable_thinking" && v) {
           body.thinking = { type: "enabled" };
         } else {
@@ -121,6 +122,7 @@ export class OpenAIAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const url = `${this._provider.baseUrl}/chat/completions`;
     const doRequest = (maxTokens?: number) => {
       const body = this._buildBody({
@@ -248,7 +250,7 @@ export class OpenAIAdapter implements AIProvider {
           // Text content — check for reasoning tags
           const content = delta.content as string | undefined;
           if (content) {
-            const reasoning = this._reasoningNormalizer.feedText(content);
+            const reasoning = reasoningNormalizer.feedText(content);
             if (reasoning) {
               yield reasoning;
             } else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {

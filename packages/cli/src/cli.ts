@@ -18,6 +18,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import type { Model } from "@hilbras/sdk";
 
 const VERSION = "2.3.0";
 
@@ -42,7 +43,6 @@ Commands:
 Options:
   --help, -h                    Show this help message
   --version, -v                 Show version
-  --json                        Output as JSON
 `;
 
 const PROVIDER_TEMPLATES: Record<string, { baseUrl: string; adapter: string; envKey: string }> = {
@@ -64,6 +64,28 @@ const PROVIDER_TEMPLATES: Record<string, { baseUrl: string; adapter: string; env
   voyageai: { baseUrl: "https://api.voyageai.com", adapter: "voyageai", envKey: "VOYAGE_API_KEY" },
   "cohere-rerank": { baseUrl: "https://api.cohere.com", adapter: "cohere-rerank", envKey: "COHERE_API_KEY" },
 };
+
+function configuredModel(id: string): Model {
+  return {
+    id,
+    contextWindow: 128_000,
+    maxOutputTokens: 8_192,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      reasoning: false,
+      structuredOutput: false,
+      parallelTools: false,
+      systemPrompts: true,
+      embeddings: false,
+      imageGeneration: false,
+      speech: false,
+      transcription: false,
+      reranking: false,
+    },
+  };
+}
 
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "gpt-4o": { input: 2.50, output: 10.00 },
@@ -267,9 +289,8 @@ async function cmdChat(opts: { provider?: string; model?: string; temperature?: 
   }
 
   const providerName = opts.provider ?? providers[0]?.name as string;
-  const model = opts.model ?? (config as Record<string, unknown>).defaults
-    ? ((config as Record<string, unknown>).defaults as Record<string, unknown>)?.model as string ?? "gpt-4o"
-    : "gpt-4o";
+  const defaults = (config.defaults as Record<string, unknown> | undefined) ?? {};
+  const model = opts.model ?? (typeof defaults.model === "string" ? defaults.model : "gpt-4o");
   const temperature = opts.temperature ? parseFloat(opts.temperature) : 0.7;
   const maxTokens = opts.maxTokens ? parseInt(opts.maxTokens, 10) : 4096;
 
@@ -283,7 +304,7 @@ async function cmdChat(opts: { provider?: string; model?: string; temperature?: 
         baseUrl: p.baseUrl as string,
         adapter: template.adapter as "openai" | "anthropic" | "google-genai" | "groq" | "mistral" | "deepseek" | "xai" | "together" | "fireworks" | "ollama" | "bedrock" | "google-vertex" | "huggingface" | "deepgram" | "elevenlabs" | "voyageai" | "cohere-rerank" | "openai-compatible",
         authentication: envVal ? { type: "bearer", apiKey: envVal } : { type: "none" },
-        models: [{ id: model }],
+        models: [configuredModel(model)],
       });
     }
   }
@@ -369,7 +390,7 @@ async function cmdBench(opts: { prompt?: string; providers?: string; runs?: stri
         baseUrl: p.baseUrl as string,
         adapter: template.adapter as "openai" | "anthropic" | "google-genai" | "groq" | "mistral" | "deepseek" | "xai" | "together" | "fireworks" | "ollama" | "bedrock" | "google-vertex" | "huggingface" | "deepgram" | "elevenlabs" | "voyageai" | "cohere-rerank" | "openai-compatible",
         authentication: envVal ? { type: "bearer", apiKey: envVal } : { type: "none" },
-        models: [{ id: "gpt-4o" }],
+        models: [configuredModel("gpt-4o")],
       });
     }
   }

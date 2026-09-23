@@ -12,8 +12,9 @@
     "templates"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "vitest run"
+    "build": "node ../../tools/clean-dist.mjs dist && tsc",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

@@ -16,7 +16,7 @@
  * - Embeddings: POST /model/{modelId}/invoke (for embedding models)
  */
 
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type { Transport } from "../transport/transport.js";
 import type { ProviderConfig } from "../types/providers.js";
 import type { Message } from "../types/messages.js";
@@ -48,7 +48,7 @@ class AwsSigV4 {
   }
 
   private _sha256(data: string): string {
-    return createHmac("sha256", this._secretAccessKey).update(data).digest("hex");
+    return createHash("sha256").update(data).digest("hex");
   }
 
   private _hmacSha256(key: string | Buffer, data: string): Buffer {
@@ -125,7 +125,6 @@ export class BedrockAdapter implements AIProvider {
   private _transport: Transport;
   private _region: string;
   private _signer: AwsSigV4;
-  private _reasoningNormalizer = new ReasoningNormalizer();
 
   constructor(config: BedrockAdapterConfig) {
     this._provider = config.provider;
@@ -292,6 +291,7 @@ export class BedrockAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const modelId = this._modelId(params.model);
     const url = `${this._provider.baseUrl}/model/${modelId}/converse-stream`;
     const body = this._buildConverseBody({
@@ -372,7 +372,7 @@ export class BedrockAdapter implements AIProvider {
 
             if (delta.text) {
               const text = delta.text as string;
-              const reasoning = this._reasoningNormalizer.feedText(text);
+              const reasoning = reasoningNormalizer.feedText(text);
               if (reasoning) yield reasoning;
               else if (!ReasoningNormalizer.looksLikeReasoningTag(text)) {
                 yield { type: "text", text };

@@ -39,11 +39,10 @@ client.addProvider({
 });
 ```
 
-With `allowInsecure: true` the following are *always* allowed:
-- `http://localhost`
-- `http://127.0.0.1`
-- `http://[::1]`
-- `http://*.local`
+With `allowInsecure: true`, local loopback targets are allowed (`localhost`,
+`127.0.0.1`, and `[::1]`). Names under `.local` additionally require
+`allowPrivateNetwork: true`; link-local and metadata addresses remain blocked
+even when private-network access is enabled.
 
 ## Client-wide opt-in: `allowInsecureUrls`
 
@@ -87,6 +86,15 @@ if (result.ok) {
 }
 ```
 
+## Provider configuration exposure
+
+`client.getProvider()` and `client.listProviders()` currently return
+`ProviderConfig` objects for compatibility, including authentication and
+custom-header values. Do not serialize these objects into browser state,
+diagnostic endpoints, or logs. The SDK's defensive copies prevent later caller
+mutation of registered providers, but they do not change the legacy getter
+shape; a future release should add explicit redacted summary accessors.
+
 ## Error redaction in provider responses
 
 `@hilbras/sdk` automatically redacts sensitive substrings from provider
@@ -110,7 +118,7 @@ import { redact } from "@hilbras/sdk";
 const safe = redact(userProvidedText);
 ```
 
-## Role-Based Access Control (RBAC) — v3.0.0
+## Role-Based Access Control (RBAC) — v3.1.0
 
 Control which providers, models, and features each user can access
 with role-based access control.

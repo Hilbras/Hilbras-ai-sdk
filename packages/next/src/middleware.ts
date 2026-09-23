@@ -1,4 +1,3 @@
-import type { NextConfig } from "next";
 import { type NextRequest, NextResponse } from "next/server";
 
 export interface HilbrasMiddlewareOptions {
@@ -35,7 +34,6 @@ export function hilbrasMiddleware(options: HilbrasMiddlewareOptions = {}) {
     return (
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       request.headers.get("x-real-ip") ??
-      request.ip ??
       "unknown"
     );
   }

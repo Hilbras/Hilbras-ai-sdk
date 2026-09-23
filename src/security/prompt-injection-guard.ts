@@ -15,7 +15,7 @@
  *   const safeMessages = guard(messages);
  */
 
-import type { Message } from "../types/messages.js";
+import type { ContentPart, Message } from "../types/messages.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -242,12 +242,22 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
 
 // ─── Core Functions ──────────────────────────────────────────────────────────
 
+function toGlobalRegExp(pattern: RegExp): RegExp {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  return new RegExp(pattern.source, flags);
+}
+
 /**
- * Extract plain text from message content.
+ * Extract plain text from message content, including text parts in multimodal
+ * messages. Non-text parts are intentionally ignored by this heuristic guard.
  */
-function extractText(content: string | null): string {
+function extractText(content: Message["content"]): string {
   if (content == null) return "";
-  return content;
+  if (typeof content === "string") return content;
+  return content
+    .filter((part): part is Extract<ContentPart, { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("\\n");
 }
 
 /**
@@ -265,10 +275,14 @@ export function detectInjection(
 
   // Check built-in patterns
   for (const def of INJECTION_PATTERNS) {
-    const re = new RegExp(def.pattern.source, def.pattern.flags);
+    const re = toGlobalRegExp(def.pattern);
     let m: RegExpExecArray | null;
 
     while ((m = re.exec(text)) !== null) {
+      if (m[0].length === 0) {
+        re.lastIndex++;
+        continue;
+      }
       detections.push({
         pattern: def.name,
         category: def.category,
@@ -282,10 +296,14 @@ export function detectInjection(
   // Check custom patterns
   if (config?.customPatterns) {
     for (const cp of config.customPatterns) {
-      const re = new RegExp(cp.pattern.source, cp.pattern.flags);
+      const re = toGlobalRegExp(cp.pattern);
       let m: RegExpExecArray | null;
 
       while ((m = re.exec(text)) !== null) {
+        if (m[0].length === 0) {
+          re.lastIndex++;
+          continue;
+        }
         detections.push({
           pattern: cp.name,
           category: cp.category ?? "custom",
@@ -331,7 +349,7 @@ export function scanMessages(
   for (const msg of messages) {
     if (!roles.includes(msg.role)) continue;
 
-    const text = extractText(msg.content as string | null);
+    const text = extractText(msg.content);
     if (!text) continue;
 
     const result = detectInjection(text, config);
@@ -374,7 +392,7 @@ function stripInjections(
   return messages.map((msg) => {
     if (!roles.includes(msg.role)) return msg;
 
-    const text = extractText(msg.content as string | null);
+    const text = extractText(msg.content);
     if (!text) return msg;
 
     const detection = detectInjection(text, config);

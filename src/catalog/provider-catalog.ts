@@ -1,0 +1,1493 @@
+export default {
+  "version": "0.26.6",
+  "generated": "2026-09-19",
+  "providers": {
+    "openai": {
+      "name": "OpenAI",
+      "baseUrl": "https://api.openai.com/v1",
+      "adapters": [
+        "openai"
+      ],
+      "envKey": "OPENAI_API_KEY",
+      "models": [
+        {
+          "id": "gpt-6-astra",
+          "name": "GPT-6 Astra",
+          "contextWindow": 1050000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol",
+          "contextWindow": 1050000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "name": "GPT-5.6 Terra",
+          "contextWindow": 1050000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "name": "GPT-5.6 Luna",
+          "contextWindow": 1050000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-5.5",
+          "name": "GPT-5.5",
+          "contextWindow": 200000,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-5.4-pro",
+          "name": "GPT-5.4 Pro",
+          "contextWindow": 200000,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-4.5",
+          "name": "GPT-4.5",
+          "contextWindow": 128000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-4o",
+          "name": "GPT-4o",
+          "contextWindow": 128000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-4o-mini",
+          "name": "GPT-4o Mini",
+          "contextWindow": 128000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "structuredOutput"
+          ]
+        },
+        {
+          "id": "o1",
+          "name": "o1",
+          "contextWindow": 200000,
+          "maxOutput": 100000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "o1-mini",
+          "name": "o1 Mini",
+          "contextWindow": 200000,
+          "maxOutput": 100000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "reasoning",
+            "structuredOutput"
+          ]
+        },
+        {
+          "id": "o3",
+          "name": "o3",
+          "contextWindow": 200000,
+          "maxOutput": 100000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "o4-mini",
+          "name": "o4 Mini",
+          "contextWindow": 200000,
+          "maxOutput": 100000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "text-embedding-3-small",
+          "name": "Embedding 3 Small",
+          "contextWindow": 8191,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        },
+        {
+          "id": "text-embedding-3-large",
+          "name": "Embedding 3 Large",
+          "contextWindow": 8191,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        },
+        {
+          "id": "dall-e-3",
+          "name": "DALL-E 3",
+          "contextWindow": 4096,
+          "maxOutput": 0,
+          "capabilities": [
+            "imageGeneration"
+          ]
+        },
+        {
+          "id": "tts-1",
+          "name": "TTS-1",
+          "contextWindow": 4096,
+          "maxOutput": 0,
+          "capabilities": [
+            "speech"
+          ]
+        },
+        {
+          "id": "whisper-1",
+          "name": "Whisper v1",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "transcription"
+          ]
+        }
+      ]
+    },
+    "anthropic": {
+      "name": "Anthropic",
+      "baseUrl": "https://api.anthropic.com",
+      "adapters": [
+        "anthropic"
+      ],
+      "envKey": "ANTHROPIC_API_KEY",
+      "models": [
+        {
+          "id": "claude-fable-5-1",
+          "name": "Claude Fable 5.1",
+          "contextWindow": 1000000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "claude-opus-5",
+          "name": "Claude Opus 5",
+          "contextWindow": 1000000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "contextWindow": 1000000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "claude-haiku-4-5",
+          "name": "Claude Haiku 4.5",
+          "contextWindow": 200000,
+          "maxOutput": 64000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "structuredOutput"
+          ]
+        },
+        {
+          "id": "claude-3-5-sonnet-20241022",
+          "name": "Claude 3.5 Sonnet",
+          "contextWindow": 200000,
+          "maxOutput": 8192,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "claude-3-5-haiku-20241022",
+          "name": "Claude 3.5 Haiku",
+          "contextWindow": 200000,
+          "maxOutput": 8192,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision"
+          ]
+        }
+      ]
+    },
+    "google-genai": {
+      "name": "Google Gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com",
+      "adapters": [
+        "google-genai"
+      ],
+      "envKey": "GOOGLE_API_KEY",
+      "models": [
+        {
+          "id": "gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gemini-3.7-flash",
+          "name": "Gemini 3.7 Flash",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gemini-3.6-flash",
+          "name": "Gemini 3.6 Flash",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gemini-3.5-flash",
+          "name": "Gemini 3.5 Flash",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gemini-3.1-pro-preview",
+          "name": "Gemini 3.1 Pro",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gemini-3-flash-preview",
+          "name": "Gemini 3 Flash",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gemini-2.5-pro",
+          "name": "Gemini 2.5 Pro",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gemini-2.5-flash",
+          "name": "Gemini 2.5 Flash",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision"
+          ]
+        }
+      ]
+    },
+    "azure": {
+      "name": "Azure OpenAI",
+      "baseUrl": "https://your-resource.openai.azure.com",
+      "adapters": [
+        "azure"
+      ],
+      "envKey": "AZURE_OPENAI_API_KEY",
+      "models": [
+        {
+          "id": "gpt-6-astra",
+          "name": "GPT-6 Astra (Azure)",
+          "contextWindow": 1050000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol (Azure)",
+          "contextWindow": 1050000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "name": "GPT-5.6 Terra (Azure)",
+          "contextWindow": 1050000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "o3",
+          "name": "o3 (Azure)",
+          "contextWindow": 200000,
+          "maxOutput": 100000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "gpt-4o",
+          "name": "GPT-4o (Azure)",
+          "contextWindow": 128000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "groq": {
+      "name": "Groq",
+      "baseUrl": "https://api.groq.com/openai/v1",
+      "adapters": [
+        "groq"
+      ],
+      "envKey": "GROQ_API_KEY",
+      "models": [
+        {
+          "id": "llama-3.3-70b-versatile",
+          "name": "Llama 3.3 70B",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "llama-3.2-90b-vision",
+          "name": "Llama 3.2 90B Vision",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput"
+          ]
+        },
+        {
+          "id": "llama-3.2-11b-vision",
+          "name": "Llama 3.2 11B Vision",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision"
+          ]
+        },
+        {
+          "id": "llama-3.2-3b",
+          "name": "Llama 3.2 3B",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "qwen-2.5-coder-32b",
+          "name": "Qwen 2.5 Coder 32B",
+          "contextWindow": 32768,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "qwen-2.5-72b-instruct",
+          "name": "Qwen 2.5 72B",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "bedrock": {
+      "name": "AWS Bedrock",
+      "baseUrl": "https://bedrock-runtime.{region}.amazonaws.com",
+      "adapters": [
+        "bedrock"
+      ],
+      "envKey": "AWS_BEARER_TOKEN_BEDROCK",
+      "models": [
+        {
+          "id": "anthropic.claude-fable-5-1",
+          "name": "Claude Fable 5.1 (Bedrock)",
+          "contextWindow": 1000000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "anthropic.claude-opus-5",
+          "name": "Claude Opus 5 (Bedrock)",
+          "contextWindow": 1000000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "anthropic.claude-sonnet-5",
+          "name": "Claude Sonnet 5 (Bedrock)",
+          "contextWindow": 1000000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "anthropic.claude-haiku-4-5",
+          "name": "Claude Haiku 4.5 (Bedrock)",
+          "contextWindow": 200000,
+          "maxOutput": 64000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "structuredOutput"
+          ]
+        },
+        {
+          "id": "meta.llama3-3-70b-instruct",
+          "name": "Llama 3.3 70B (Bedrock)",
+          "contextWindow": 131072,
+          "maxOutput": 4096,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "meta.llama3-1-405b-instruct-v1:0",
+          "name": "Llama 3.1 405B (Bedrock)",
+          "contextWindow": 131072,
+          "maxOutput": 4096,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "mistral.mistral-large-2407-v1:0",
+          "name": "Mistral Large 2 (Bedrock)",
+          "contextWindow": 128000,
+          "maxOutput": 8192,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "amazon.nova-pro-v1:0",
+          "name": "Nova Pro (Bedrock)",
+          "contextWindow": 300000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput"
+          ]
+        },
+        {
+          "id": "amazon.nova-lite-v1:0",
+          "name": "Nova Lite (Bedrock)",
+          "contextWindow": 300000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision"
+          ]
+        }
+      ]
+    },
+    "google-vertex": {
+      "name": "Google Vertex AI",
+      "baseUrl": "https://{region}-aiplatform.googleapis.com",
+      "adapters": [
+        "google-vertex"
+      ],
+      "envKey": "GOOGLE_APPLICATION_CREDENTIALS",
+      "models": [
+        {
+          "id": "google/gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash (Vertex)",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "google/gemini-3.7-flash",
+          "name": "Gemini 3.7 Flash (Vertex)",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "google/gemini-3.1-pro-preview",
+          "name": "Gemini 3.1 Pro (Vertex)",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "google/gemini-2.5-pro",
+          "name": "Gemini 2.5 Pro (Vertex)",
+          "contextWindow": 1048576,
+          "maxOutput": 65536,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "anthropic/claude-fable-5-1@20260901",
+          "name": "Claude Fable 5.1 (Vertex)",
+          "contextWindow": 1000000,
+          "maxOutput": 128000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "meta/llama-4-maverick",
+          "name": "Llama 4 Maverick (Vertex)",
+          "contextWindow": 1000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "huggingface": {
+      "name": "Hugging Face Inference",
+      "baseUrl": "https://api-inference.huggingface.co/v1",
+      "adapters": [
+        "huggingface"
+      ],
+      "envKey": "HF_TOKEN",
+      "models": [
+        {
+          "id": "meta-llama/Llama-4-Maverick",
+          "name": "Llama 4 Maverick (HF)",
+          "contextWindow": 1000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "meta-llama/Llama-4-Scout",
+          "name": "Llama 4 Scout (HF)",
+          "contextWindow": 10000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "meta-llama/Llama-3.3-70B-Instruct",
+          "name": "Llama 3.3 70B (HF)",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "Qwen/Qwen3.8-Max",
+          "name": "Qwen 3.8 Max (HF)",
+          "contextWindow": 1000000,
+          "maxOutput": 131072,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "Qwen/Qwen2.5-72B-Instruct",
+          "name": "Qwen 2.5 72B (HF)",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Pro",
+          "name": "DeepSeek V4 Pro (HF)",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Flash",
+          "name": "DeepSeek V4 Flash (HF)",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "deepseek": {
+      "name": "DeepSeek",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "adapters": [
+        "deepseek"
+      ],
+      "envKey": "DEEPSEEK_API_KEY",
+      "models": [
+        {
+          "id": "deepseek-v4-pro",
+          "name": "DeepSeek V4 Pro",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-flash",
+          "name": "DeepSeek V4.1 Flash",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-chat",
+          "name": "DeepSeek Chat (legacy)",
+          "contextWindow": 1000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "xai": {
+      "name": "xAI (Grok)",
+      "baseUrl": "https://api.x.ai/v1",
+      "adapters": [
+        "xai"
+      ],
+      "envKey": "XAI_API_KEY",
+      "models": [
+        {
+          "id": "grok-4.6",
+          "name": "Grok 4.6",
+          "contextWindow": 500000,
+          "maxOutput": 32768,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "grok-4.5",
+          "name": "Grok 4.5",
+          "contextWindow": 500000,
+          "maxOutput": 32768,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "grok-4.3",
+          "name": "Grok 4.3",
+          "contextWindow": 1000000,
+          "maxOutput": 32768,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "grok-4.20-0309-reasoning",
+          "name": "Grok 4.20 Reasoning",
+          "contextWindow": 1000000,
+          "maxOutput": 32768,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "together": {
+      "name": "Together AI",
+      "baseUrl": "https://api.together.xyz/v1",
+      "adapters": [
+        "together"
+      ],
+      "envKey": "TOGETHER_API_KEY",
+      "models": [
+        {
+          "id": "meta-llama/Llama-4-Maverick-17B-128E-Instruct",
+          "name": "Llama 4 Maverick (Together)",
+          "contextWindow": 1000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+          "name": "Llama 4 Scout (Together)",
+          "contextWindow": 10000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
+          "name": "Llama 3.1 405B Turbo",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Pro",
+          "name": "DeepSeek V4 Pro",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Flash",
+          "name": "DeepSeek V4 Flash",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "fireworks": {
+      "name": "Fireworks",
+      "baseUrl": "https://api.fireworks.ai/inference/v1",
+      "adapters": [
+        "fireworks"
+      ],
+      "envKey": "FIREWORKS_API_KEY",
+      "models": [
+        {
+          "id": "accounts/fireworks/models/llama4-maverick-instruct-basic",
+          "name": "Llama 4 Maverick (Fireworks)",
+          "contextWindow": 1000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "accounts/fireworks/models/llama4-scout-instruct-basic",
+          "name": "Llama 4 Scout (Fireworks)",
+          "contextWindow": 10000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "accounts/fireworks/models/deepseek-v4-pro",
+          "name": "DeepSeek V4 Pro (Fireworks)",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "cohere": {
+      "name": "Cohere",
+      "baseUrl": "https://api.cohere.com/v2",
+      "adapters": [
+        "cohere"
+      ],
+      "envKey": "COHERE_API_KEY",
+      "models": [
+        {
+          "id": "command-a-plus-05-2026",
+          "name": "Command A+",
+          "contextWindow": 128000,
+          "maxOutput": 64000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "command-a-03-2025",
+          "name": "Command A",
+          "contextWindow": 256000,
+          "maxOutput": 8000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "command-r-plus",
+          "name": "Command R+",
+          "contextWindow": 128000,
+          "maxOutput": 4096,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "reasoning",
+            "structuredOutput"
+          ]
+        },
+        {
+          "id": "rerank-english-v3.0",
+          "name": "Rerank English v3",
+          "contextWindow": 512,
+          "maxOutput": 0,
+          "capabilities": [
+            "rerank"
+          ]
+        },
+        {
+          "id": "rerank-multilingual-v3.0",
+          "name": "Rerank Multilingual v3",
+          "contextWindow": 512,
+          "maxOutput": 0,
+          "capabilities": [
+            "rerank"
+          ]
+        },
+        {
+          "id": "embed-english-v3.0",
+          "name": "Embed English v3",
+          "contextWindow": 512,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        },
+        {
+          "id": "embed-multilingual-v3.0",
+          "name": "Embed Multilingual v3",
+          "contextWindow": 512,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        }
+      ]
+    },
+    "ollama": {
+      "name": "Ollama (Local)",
+      "baseUrl": "http://localhost:11434/v1",
+      "adapters": [
+        "ollama"
+      ],
+      "envKey": null,
+      "models": [
+        {
+          "id": "llama4:maverick",
+          "name": "Llama 4 Maverick",
+          "contextWindow": 1000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "llama4:scout",
+          "name": "Llama 4 Scout",
+          "contextWindow": 10000000,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "llama3.3:70b",
+          "name": "Llama 3.3 70B",
+          "contextWindow": 131072,
+          "maxOutput": 16384,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "qwen3.8-max:latest",
+          "name": "Qwen 3.8 Max",
+          "contextWindow": 1000000,
+          "maxOutput": 131072,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-v4-pro:latest",
+          "name": "DeepSeek V4 Pro",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        },
+        {
+          "id": "deepseek-v4-flash:latest",
+          "name": "DeepSeek V4 Flash",
+          "contextWindow": 1000000,
+          "maxOutput": 384000,
+          "capabilities": [
+            "streaming",
+            "tools",
+            "vision",
+            "reasoning",
+            "structuredOutput",
+            "parallelTools"
+          ]
+        }
+      ]
+    },
+    "voyageai": {
+      "name": "Voyage AI",
+      "baseUrl": "https://api.voyageai.com/v1",
+      "adapters": [
+        "voyageai"
+      ],
+      "envKey": "VOYAGE_API_KEY",
+      "models": [
+        {
+          "id": "voyage-3-large",
+          "name": "Voyage 3 Large",
+          "contextWindow": 32000,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        },
+        {
+          "id": "voyage-code-3",
+          "name": "Voyage Code 3",
+          "contextWindow": 32000,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        },
+        {
+          "id": "voyage-3",
+          "name": "Voyage 3",
+          "contextWindow": 32000,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        },
+        {
+          "id": "voyage-3-lite",
+          "name": "Voyage 3 Lite",
+          "contextWindow": 32000,
+          "maxOutput": 0,
+          "capabilities": [
+            "embeddings"
+          ]
+        }
+      ]
+    },
+    "deepgram": {
+      "name": "Deepgram",
+      "baseUrl": "https://api.deepgram.com/v1",
+      "adapters": [
+        "deepgram"
+      ],
+      "envKey": "DEEPGRAM_API_KEY",
+      "models": [
+        {
+          "id": "nova-2",
+          "name": "Nova 2",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "transcription"
+          ]
+        },
+        {
+          "id": "nova-2-medical",
+          "name": "Nova 2 Medical",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "transcription"
+          ]
+        },
+        {
+          "id": "whisper-large",
+          "name": "Whisper Large",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "transcription"
+          ]
+        }
+      ]
+    },
+    "elevenlabs": {
+      "name": "ElevenLabs",
+      "baseUrl": "https://api.elevenlabs.io/v1",
+      "adapters": [
+        "elevenlabs"
+      ],
+      "envKey": "ELEVENLABS_API_KEY",
+      "models": [
+        {
+          "id": "eleven_flash_v2_5",
+          "name": "Eleven Flash v2.5",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "speech"
+          ]
+        },
+        {
+          "id": "eleven_flash_v2",
+          "name": "Eleven Flash v2",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "speech"
+          ]
+        },
+        {
+          "id": "eleven_multilingual_v2",
+          "name": "Eleven Multilingual v2",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "speech"
+          ]
+        },
+        {
+          "id": "eleven_monolingual_v1",
+          "name": "Eleven Monolingual v1",
+          "contextWindow": 0,
+          "maxOutput": 0,
+          "capabilities": [
+            "speech"
+          ]
+        }
+      ]
+    }
+  }
+};

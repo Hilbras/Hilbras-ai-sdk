@@ -32,8 +32,8 @@ export class BudgetTracker {
   private _totalReserved = 0;
   private _totalEstimated = 0;
   private _reservations = new Map<string, Reservation>();
-  private _byProvider: Record<string, { estimated: number; actual: number; requests: number }> = {};
-  private _byPhase: Record<string, number> = {};
+  private _byProvider: Record<string, { estimated: number; actual: number; requests: number }> = Object.create(null);
+  private _byPhase: Record<string, number> = Object.create(null);
   private _budgetWarningFired = false;
   private _budgetExceededFired = false;
 
@@ -166,7 +166,7 @@ export class BudgetTracker {
    * combination. Kept for backward compatibility with pre-v0.9.0 callers.
    */
   record(event: CostEvent): void {
-    this._events.push(event);
+    this._events.push({ ...event });
     this._totalEstimated += event.estimatedCost;
     this._totalActual += event.actualCost;
 
@@ -198,7 +198,9 @@ export class BudgetTracker {
       committedCost: committed,
       requestCount: this._events.length,
       activeReservations: this._reservations.size,
-      byProvider: { ...this._byProvider },
+      byProvider: Object.fromEntries(
+        Object.entries(this._byProvider).map(([provider, metrics]) => [provider, { ...metrics }]),
+      ),
       byPhase: { ...this._byPhase },
       budgetExceeded: this.isBudgetExhausted(),
       remainingBudget: remaining,
@@ -209,14 +211,14 @@ export class BudgetTracker {
    * Get all cost events.
    */
   events(): readonly CostEvent[] {
-    return this._events;
+    return this._events.map((event) => ({ ...event }));
   }
 
   /**
    * Get all active reservations.
    */
   reservations(): readonly Reservation[] {
-    return [...this._reservations.values()];
+    return [...this._reservations.values()].map((reservation) => ({ ...reservation }));
   }
 
   /**
@@ -228,8 +230,8 @@ export class BudgetTracker {
     this._totalActual = 0;
     this._totalReserved = 0;
     this._reservations.clear();
-    this._byProvider = {};
-    this._byPhase = {};
+    this._byProvider = Object.create(null);
+    this._byPhase = Object.create(null);
     this._budgetWarningFired = false;
     this._budgetExceededFired = false;
   }

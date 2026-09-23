@@ -233,6 +233,35 @@ describe("Cost Report Audit", () => {
     r1.totalActual = 999;
     expect(r2.totalActual).toBe(0);
   });
+
+  it("does not expose mutable nested accounting state", () => {
+    const tracker = new BudgetTracker({ sessionBudget: 1.0 });
+    tracker.reserve("r1", 0.5);
+    tracker.settle("r1", 0.3, { provider: "p", model: "m", phase: "execute" });
+    const report = tracker.report();
+    report.byProvider.p!.actual = 999;
+    const event = tracker.events()[0];
+    event.actualCost = 999;
+    const reservation = tracker.reservations()[0];
+    if (reservation) reservation.amount = 999;
+
+    expect(tracker.report().byProvider.p!.actual).toBe(0.3);
+    expect(tracker.events()[0].actualCost).toBe(0.3);
+  });
+
+  it("does not mutate Object.prototype through provider names", () => {
+    const tracker = new BudgetTracker({ sessionBudget: 1.0 });
+    tracker.record({
+      requestId: "r1",
+      provider: "__proto__",
+      model: "m",
+      phase: "execute",
+      estimatedCost: 0.1,
+      actualCost: 0.1,
+      timestamp: 1,
+    });
+    expect(({} as Record<string, unknown>).actual).toBeUndefined();
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

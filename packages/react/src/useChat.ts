@@ -31,8 +31,6 @@ export interface UseChatOptions {
   onComplete?: (message: ChatMessage) => void;
   /** Called on error */
   onError?: (error: Error) => void;
-  /** Extra headers for the request */
-  headers?: Record<string, string>;
 }
 
 export interface UseChatReturn {
@@ -91,7 +89,7 @@ function nextId(): string {
  * ```
  */
 export function useChat(options: UseChatOptions): UseChatReturn {
-  const { provider, model, systemPrompt, initialMessages, maxContextMessages = 50, onChunk, onComplete, onError, headers } = options;
+  const { provider, model, systemPrompt, initialMessages, maxContextMessages = 50, onChunk, onComplete, onError } = options;
 
   const client = useHilbrasClient();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages ?? []);
@@ -173,10 +171,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       let inputTokens = 0;
       let outputTokens = 0;
 
-      for await (const chunk of client.stream(
-        { messages: apiMessages, model, provider, headers },
-        { signal: controller.signal }
-      )) {
+      for await (const chunk of client.stream({
+        messages: apiMessages,
+        model,
+        provider,
+        signal: controller.signal,
+      })) {
         if (chunk.type === "text") {
           assistantContent += chunk.text;
           setMessages((prev) => {
@@ -241,7 +241,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [client, messages, provider, model, systemPrompt, maxContextMessages, headers, isLoading, onChunk, onComplete, onError]);
+  }, [client, messages, provider, model, systemPrompt, maxContextMessages, isLoading, onChunk, onComplete, onError]);
 
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();

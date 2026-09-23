@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.1.0] - 2026-09-24
+
+### Added
+
+- Reproducible npm workspace metadata, package lifecycle hooks, clean-build tooling, and concrete export smoke checks.
+- Additional release-time coverage for companion package builds, package manifests, and Node ESM imports.
+
+### Changed
+
+- The root package is now versioned and published as `@hilbras/sdk@3.1.0`.
+- Provider extras can no longer override SDK-owned request fields or pollute object prototypes.
+- Local URL and tool-execution policies now fail closed unless the caller explicitly opts in.
+
+### Fixed
+
+- Fixed JSON catalog loading under Node ESM and added the missing `./catalog` and `./types` export paths.
+- Isolated transport coalescing, cache entries, cancellation signals, retries, reasoning state, provider configuration copies, and plugin setup.
+- Closed budget reservation/snapshot leak paths and corrected cost-alert threshold timing.
+- Corrected SSRF literal-address handling, Bedrock SHA-256 hashing, Deepgram query parameters, specialized model capabilities, RAG validation/retrieval, PII/prompt regex safety, audit retention/redaction, and telemetry redaction.
+- Updated current README, API examples, security guidance, and release documentation.
+
+### Security
+
+- Tool execution now rejects undeclared model-selected tools and malformed arguments before invoking user callbacks.
+- Provider credentials and nested log/audit data receive additional defensive-copy and redaction protections.
+
+---
+
 ## [3.0.0] - 2026-09-22
 
 ### Added

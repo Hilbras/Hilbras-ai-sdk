@@ -28,7 +28,6 @@ export class GoogleGenAIAdapter implements AIProvider {
   readonly id = "google-genai";
   private _provider: ProviderConfig;
   private _transport: Transport;
-  private _reasoningNormalizer = new ReasoningNormalizer();
 
   constructor(config: GoogleGenAIAdapterConfig) {
     this._provider = config.provider;
@@ -110,6 +109,7 @@ export class GoogleGenAIAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const url = `${this._provider.baseUrl}/models/${params.model}:streamGenerateContent?alt=sse`;
     const body = this._buildBody({
       model: params.model,
@@ -172,7 +172,7 @@ export class GoogleGenAIAdapter implements AIProvider {
           for (const p of parts) {
             // Text content
             if (typeof p.text === "string" && p.text) {
-              const reasoning = this._reasoningNormalizer.feedText(p.text);
+              const reasoning = reasoningNormalizer.feedText(p.text);
               if (reasoning) yield reasoning;
               else if (!ReasoningNormalizer.looksLikeReasoningTag(p.text)) {
                 yield { type: "text", text: p.text };

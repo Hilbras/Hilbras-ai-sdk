@@ -140,6 +140,46 @@ describe("Phase 3: Client Edge Cases", () => {
     expect(client.getProvider("Temp")).toBeUndefined();
   });
 
+  it("stores a defensive provider configuration copy", async () => {
+    let capturedUrl = "";
+    let capturedAuth = "";
+    const transport: Transport = {
+      async request(url, init) {
+        capturedUrl = url;
+        capturedAuth = (init.headers?.Authorization as string | undefined) ?? "";
+        return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 });
+      },
+      async stream() { throw new Error("unused"); },
+      abort() {},
+    };
+    const config: ProviderConfig = {
+      name: "Safe",
+      baseUrl: "https://safe.example.com/v1",
+      authentication: { type: "bearer", apiKey: "original-key" },
+      adapter: "openai",
+      models: [{
+        id: "safe-model",
+        contextWindow: 1000,
+        capabilities: {
+          streaming: true, tools: false, vision: false, reasoning: false,
+          structuredOutput: false, parallelTools: false, systemPrompts: true,
+          embeddings: false, imageGeneration: false, speech: false,
+          transcription: false, reranking: false,
+        },
+      }],
+    };
+    const client = new HilbrasClient({ transport });
+    client.addProvider(config);
+
+    config.baseUrl = "https://169.254.169.254/v1";
+    config.authentication.apiKey = "mutated-key";
+    config.models[0].id = "mutated-model";
+
+    await client.complete({ provider: "Safe", model: "safe-model", messages: [{ role: "user", content: "hi" }] });
+    expect(capturedUrl).toContain("safe.example.com");
+    expect(capturedAuth).toBe("Bearer original-key");
+  });
+
   it("dispose() clears all state", async () => {
     const client = new HilbrasClient();
     client.addProvider({

@@ -32,7 +32,6 @@ export class HuggingFaceAdapter implements AIProvider {
   private _provider: ProviderConfig;
   private _transport: Transport;
   private _useOpenAICompat: boolean;
-  private _reasoningNormalizer = new ReasoningNormalizer();
 
   constructor(config: HuggingFaceAdapterConfig) {
     this._provider = config.provider;
@@ -113,6 +112,7 @@ export class HuggingFaceAdapter implements AIProvider {
     extra?: Record<string, unknown>;
     signal?: AbortSignal;
   }): AsyncGenerator<StreamChunk> {
+    const reasoningNormalizer = new ReasoningNormalizer();
     const url = this._chatUrl(params.model);
     const body = this._buildBody({
       model: params.model,
@@ -188,7 +188,7 @@ export class HuggingFaceAdapter implements AIProvider {
 
           const content = delta.content as string | undefined;
           if (content) {
-            const reasoning = this._reasoningNormalizer.feedText(content);
+            const reasoning = reasoningNormalizer.feedText(content);
             if (reasoning) yield reasoning;
             else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {
               yield { type: "text", text: content };

@@ -78,7 +78,12 @@ export function useCost(options: UseCostOptions = {}): UseCostReturn {
   const refresh = useCallback(() => {
     try {
       const report = client.costReport();
-      const dashboard = client.costReport();
+      const byProvider = Object.fromEntries(
+        Object.entries(report.byProvider).map(([provider, metrics]) => [
+          provider,
+          { cost: metrics.actual, tokens: 0, requests: metrics.requests },
+        ]),
+      );
 
       setSnapshot({
         totalCost: report.totalActual,
@@ -86,7 +91,7 @@ export function useCost(options: UseCostOptions = {}): UseCostReturn {
         totalRequests: report.requestCount,
         avgCostPerRequest: report.requestCount > 0 ? report.totalActual / report.requestCount : 0,
         avgTokensPerRequest: 0,
-        byProvider: report.byProvider,
+        byProvider,
         byModel: {},
         remainingBudget: report.remainingBudget,
         budgetExceeded: report.budgetExceeded,

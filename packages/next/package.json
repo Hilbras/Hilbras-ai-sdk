@@ -6,25 +6,37 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc",
-    "test": "vitest run",
+    "build": "node ../../tools/clean-dist.mjs dist && tsc",
+    "test": "vitest run --config vitest.config.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@hilbras/sdk": "workspace:*"
+    "@hilbras/sdk": "^3.0.0"
   },
   "peerDependencies": {
     "next": ">=14.0.0"
   },
   "devDependencies": {
-    "next": "^15.0.0",
+    "next": "^16.3.6",
     "typescript": "^5.6.0",
     "vitest": "^4.1.0"
   },
   "license": "MIT",
-  "keywords": ["ai", "nextjs", "streaming", "edge", "openai", "anthropic"]
+  "keywords": [
+    "ai",
+    "nextjs",
+    "streaming",
+    "edge",
+    "openai",
+    "anthropic"
+  ]
 }

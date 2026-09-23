@@ -32,12 +32,12 @@ function Chat() {
 ## Vue
 
 ```bash
-npm install @hilbras/vue
+npm install @hilbras/sdk
 ```
 
 ```vue
 <script setup>
-import { useChat } from "@hilbras/vue";
+import { useChat } from "@hilbras/sdk";
 
 const { messages, input, handleSubmit, isLoading } = useChat();
 </script>
@@ -53,12 +53,12 @@ const { messages, input, handleSubmit, isLoading } = useChat();
 ## Svelte
 
 ```bash
-npm install @hilbras/svelte
+npm install @hilbras/sdk
 ```
 
 ```svelte
 <script>
-  import { useChat } from "@hilbras/svelte";
+  import { useChat } from "@hilbras/sdk";
 
   const { messages, input, handleSubmit, isLoading } = useChat();
 </script>
@@ -75,11 +75,11 @@ npm install @hilbras/svelte
 ## Solid
 
 ```bash
-npm install @hilbras/solid
+npm install @hilbras/sdk
 ```
 
 ```tsx
-import { useChat } from "@hilbras/solid";
+import { useChat } from "@hilbras/sdk";
 
 function Chat() {
   const { messages, append, clear } = useChat();
@@ -100,12 +100,12 @@ function Chat() {
 ## Angular
 
 ```bash
-npm install @hilbras/angular
+npm install @hilbras/sdk
 ```
 
 ```typescript
 import { Component } from "@angular/core";
-import { ChatService } from "@hilbras/angular";
+import { useChat } from "@hilbras/sdk";
 
 @Component({
   selector: "app-chat",
@@ -128,11 +128,11 @@ export class ChatComponent {
 ## Qwik
 
 ```bash
-npm install @hilbras/qwik
+npm install @hilbras/sdk
 ```
 
 ```tsx
-import { useChat } from "@hilbras/qwik";
+import { useChat } from "@hilbras/sdk";
 
 export const Chat = () => {
   const { messages, append, clear } = useChat();
@@ -153,37 +153,49 @@ export const Chat = () => {
 ## Next.js
 
 ```bash
-npm install @hilbras/nextjs
+npm install @hilbras/next @hilbras/react @hilbras/sdk
 ```
 
 ### Route Handler (Server)
 
 ```ts
 // app/api/chat/route.ts
-import { createChatHandler } from "@hilbras/nextjs";
+import { createStreamHandler } from "@hilbras/next";
 
-export const { POST } = createChatHandler({
-  provider: "OpenAI",
+export const { POST } = createStreamHandler({
+  provider: "openai",
   model: "gpt-4o",
+  apiKey: process.env.OPENAI_API_KEY,
 });
 ```
 
 ### Client Component
 
+Provider credentials stay on the server. Pass a server-created client to
+`@hilbras/react`; do not call `addProviderFromCatalog` in a browser component.
+
 ```tsx
 "use client";
-import { useChat } from "@hilbras/nextjs";
+import { HilbrasProvider, useChat } from "@hilbras/react";
 
-export function Chat() {
-  const { messages, input, handleInputChange, handleSubmit } = useChat();
+export function Chat({ client }: { client: import("@hilbras/sdk").HilbrasClient }) {
+  return (
+    <HilbrasProvider client={client}>
+      <ChatBody />
+    </HilbrasProvider>
+  );
+}
 
+function ChatBody() {
+  const { messages, input, setInput, handleSubmit } = useChat({
+    provider: "OpenAI",
+    model: "gpt-4o",
+  });
   return (
     <div>
-      {messages.map((m) => (
-        <div key={m.id}>{m.role}: {m.content}</div>
-      ))}
+      {messages.map((m) => <div key={m.id}>{m.role}: {m.content}</div>)}
       <form onSubmit={handleSubmit}>
-        <input value={input} onChange={handleInputChange} />
+        <input value={input} onChange={(event) => setInput(event.target.value)} />
       </form>
     </div>
   );

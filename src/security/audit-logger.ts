@@ -18,6 +18,8 @@
  *   audit.logConfigChange({ action: "add_provider", provider: "openai", userId: "admin" });
  */
 
+import { redactPii } from "./pii-guard.js";
+
 /** Audit event categories */
 export type AuditCategory = "auth" | "data_access" | "config_change" | "security" | "error";
 
@@ -113,6 +115,20 @@ function generateEventId(): string {
   const ts = Date.now().toString(36);
   const cnt = _eventCounter.toString(36).padStart(4, "0");
   return `audit_${ts}_${cnt}`;
+}
+
+function cloneValue<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((item) => cloneValue(item)) as T;
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) result[key] = cloneValue(item);
+    return result as T;
+  }
+  return value;
+}
+
+function cloneEntry(entry: AuditEntry): AuditEntry {
+  return cloneValue(entry);
 }
 
 /**
@@ -234,39 +250,38 @@ export class AuditLogger {
 
   /** Get all audit entries (immutable copy) */
   getEntries(limit?: number): readonly AuditEntry[] {
-    if (limit) return this._entries.slice(-limit);
-    return [...this._entries];
+    const entries = limit ? this._entries.slice(-limit) : this._entries;
+    return entries.map(cloneEntry);
   }
 
   /** Get entries filtered by category */
   getByCategory(category: AuditCategory, limit?: number): readonly AuditEntry[] {
     const filtered = this._entries.filter((e) => e.category === category);
-    if (limit) return filtered.slice(-limit);
-    return filtered;
+    return (limit ? filtered.slice(-limit) : filtered).map(cloneEntry);
   }
 
   /** Get entries filtered by severity */
   getBySeverity(severity: AuditSeverity, limit?: number): readonly AuditEntry[] {
     const filtered = this._entries.filter((e) => e.severity === severity);
-    if (limit) return filtered.slice(-limit);
-    return filtered;
+    return (limit ? filtered.slice(-limit) : filtered).map(cloneEntry);
   }
 
   /** Get entries for a specific user */
   getByUser(userId: string, limit?: number): readonly AuditEntry[] {
     const filtered = this._entries.filter((e) => e.userId === userId);
-    if (limit) return filtered.slice(-limit);
-    return filtered;
+    return (limit ? filtered.slice(-limit) : filtered).map(cloneEntry);
   }
 
   /** Get entries within a time range */
   getByTimeRange(start: Date, end: Date): readonly AuditEntry[] {
     const startTime = start.getTime();
     const endTime = end.getTime();
-    return this._entries.filter((e) => {
-      const t = new Date(e.timestamp).getTime();
-      return t >= startTime && t <= endTime;
-    });
+    return this._entries
+      .filter((e) => {
+        const t = new Date(e.timestamp).getTime();
+        return t >= startTime && t <= endTime;
+      })
+      .map(cloneEntry);
   }
 
   /** Count entries by category */
@@ -281,6 +296,14 @@ export class AuditLogger {
   /** Clear all entries (use with caution — audit logs should be immutable) */
   clear(): void {
     this._entries = [];
+  }
+
+  /** Remove entries older than the supplied timestamp and return the count. */
+  pruneBefore(cutoff: Date | number): number {
+    const cutoffTime = cutoff instanceof Date ? cutoff.getTime() : cutoff;
+    const before = this._entries.length;
+    this._entries = this._entries.filter((entry) => new Date(entry.timestamp).getTime() >= cutoffTime);
+    return before - this._entries.length;
   }
 
   /** Number of stored entries */
@@ -302,20 +325,23 @@ export class AuditLogger {
       service: this._config.serviceName,
       action,
       userId: event.userId,
-      sourceIp: event.sourceIp,
+      sourceIp: this._config.includeSourceIp ? event.sourceIp : undefined,
       requestId: event.requestId,
-      description: event.description,
+      description: this._config.redactPii && event.description
+        ? redactPii(event.description)
+        : event.description,
       meta: { ...this._config.defaultFields, ...event.meta },
     };
   }
 
   private _emit(entry: AuditEntry): void {
-    this._entries.push(entry);
+    const stored = cloneEntry(entry);
+    this._entries.push(stored);
     if (this._entries.length > this._maxEntries) {
       this._entries = this._entries.slice(-this._maxEntries);
     }
     try {
-      this._config.destination(entry);
+      this._config.destination(cloneEntry(stored));
     } catch {
       // Swallow destination errors — audit logging must never break the SDK
     }
@@ -333,11 +359,7 @@ export function createRetentionPolicy(
   return {
     purge: () => {
       const cutoff = Date.now() - maxAgeMs;
-      const before = logger.size;
-      const entries = logger.getEntries();
-      logger.clear();
-      const kept = entries.filter((e) => new Date(e.timestamp).getTime() >= cutoff);
-      return before - kept.length;
+      return logger.pruneBefore(cutoff);
     },
     schedule: (intervalMs: number) => {
       const timer = setInterval(() => {

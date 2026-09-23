@@ -85,6 +85,11 @@ const DEFAULT_REPLACEMENTS: Record<PiiType, string> = {
   custom: "[REDACTED]",
 };
 
+function toGlobalRegExp(pattern: RegExp): RegExp {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  return new RegExp(pattern.source, flags);
+}
+
 /**
  * Detect PII in text without redacting.
  */
@@ -96,11 +101,17 @@ export function detectPii(text: string, config?: PiiGuardConfig): PiiMatch[] {
     const pattern = PII_PATTERNS[type];
     if (!pattern) continue;
 
-    // Reset lastIndex for global regex
-    const re = new RegExp(pattern.source, pattern.flags);
+    // Always scan with a global expression and reject zero-width matches.
+    // User-supplied expressions are untrusted and must not be able to hang the
+    // detector by matching the empty string or omitting the global flag.
+    const re = toGlobalRegExp(pattern);
     let m: RegExpExecArray | null;
 
     while ((m = re.exec(text)) !== null) {
+      if (m[0].length === 0) {
+        re.lastIndex++;
+        continue;
+      }
       matches.push({
         type,
         value: m[0],
@@ -115,8 +126,12 @@ export function detectPii(text: string, config?: PiiGuardConfig): PiiMatch[] {
   if (config?.customPatterns) {
     for (const cp of config.customPatterns) {
       let m: RegExpExecArray | null;
-      const re = new RegExp(cp.pattern.source, cp.pattern.flags);
+      const re = toGlobalRegExp(cp.pattern);
       while ((m = re.exec(text)) !== null) {
+        if (m[0].length === 0) {
+          re.lastIndex++;
+          continue;
+        }
         matches.push({
           type: "custom",
           value: m[0],
@@ -142,7 +157,7 @@ export function redactPii(text: string, config?: PiiGuardConfig): string {
   if (matches.length === 0) return text;
 
   const mask = config?.mask ?? false;
-  const defaultReplacement = config?.defaultReplacement ?? "[REDACTED]";
+  const defaultReplacement = config?.defaultReplacement;
 
   let result = "";
   let lastEnd = 0;
@@ -158,7 +173,9 @@ export function redactPii(text: string, config?: PiiGuardConfig): string {
     } else if (mask) {
       result += maskValue(match.value);
     } else {
-      result += DEFAULT_REPLACEMENTS[match.type] ?? defaultReplacement;
+      result += defaultReplacement !== undefined
+        ? defaultReplacement
+        : (DEFAULT_REPLACEMENTS[match.type] ?? "[REDACTED]");
     }
 
     lastEnd = match.end;

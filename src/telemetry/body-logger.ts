@@ -84,10 +84,10 @@ export class BodyLogger {
     if (!this._config.enabled) return;
 
     let bodyStr = typeof body === "string" ? body : JSON.stringify(body, null, 2);
+    if (this._config.redact) bodyStr = redact(bodyStr);
     if (bodyStr.length > this._config.maxBodyLength) {
       bodyStr = bodyStr.slice(0, this._config.maxBodyLength) + "... [truncated]";
     }
-    if (this._config.redact) bodyStr = redact(bodyStr);
 
     const entry: BodyLogEntry = {
       timestamp: new Date().toISOString(),
@@ -112,10 +112,10 @@ export class BodyLogger {
     if (!this._config.enabled) return;
 
     let bodyStr = typeof body === "string" ? body : JSON.stringify(body, null, 2);
+    if (this._config.redact) bodyStr = redact(bodyStr);
     if (bodyStr.length > this._config.maxBodyLength) {
       bodyStr = bodyStr.slice(0, this._config.maxBodyLength) + "... [truncated]";
     }
-    if (this._config.redact) bodyStr = redact(bodyStr);
 
     const entry: BodyLogEntry = {
       timestamp: new Date().toISOString(),
@@ -147,8 +147,11 @@ export class BodyLogger {
 
   /** Get all captured log entries */
   getEntries(limit?: number): BodyLogEntry[] {
-    if (limit) return this._entries.slice(-limit);
-    return [...this._entries];
+    const entries = limit ? this._entries.slice(-limit) : this._entries;
+    return entries.map((entry) => ({
+      ...entry,
+      headers: entry.headers ? { ...entry.headers } : undefined,
+    }));
   }
 
   /** Clear all captured entries */
@@ -162,12 +165,19 @@ export class BodyLogger {
   }
 
   private _addEntry(entry: BodyLogEntry): void {
-    this._entries.push(entry);
+    const stored: BodyLogEntry = {
+      ...entry,
+      headers: entry.headers ? { ...entry.headers } : undefined,
+    };
+    this._entries.push(stored);
     if (this._entries.length > this._maxEntries) {
       this._entries = this._entries.slice(-this._maxEntries);
     }
     try {
-      this._config.destination(entry);
+      this._config.destination({
+        ...stored,
+        headers: stored.headers ? { ...stored.headers } : undefined,
+      });
     } catch {
       // Swallow destination errors
     }

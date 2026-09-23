@@ -57,8 +57,8 @@ describe("validateBaseUrl (v0.9.3 SSRF guard)", () => {
     it("accepts http to [::1] with allowInsecure", () => {
       expect(validateBaseUrl("http://[::1]:8080", { allowInsecure: true })).toEqual({ ok: true });
     });
-    it("accepts http to *.local with allowInsecure", () => {
-      expect(validateBaseUrl("http://myhost.local", { allowInsecure: true })).toEqual({ ok: true });
+    it("accepts http to *.local with explicit local-network opt-in", () => {
+      expect(validateBaseUrl("http://myhost.local", { allowInsecure: true, allowPrivateNetwork: true })).toEqual({ ok: true });
     });
   });
 
@@ -154,14 +154,17 @@ describe("validateBaseUrl (v0.9.3 SSRF guard)", () => {
     it("accepts https://localhost with allowInsecure", () => {
       expect(validateBaseUrl("https://localhost", { allowInsecure: true })).toEqual({ ok: true });
     });
-    it("accepts https://127.0.0.1 without allowInsecure", () => {
-      expect(validateBaseUrl("https://127.0.0.1")).toEqual({ ok: true });
+    it("requires opt-in for https://127.0.0.1", () => {
+      expect(validateBaseUrl("https://127.0.0.1").ok).toBe(false);
+      expect(validateBaseUrl("https://127.0.0.1", { allowInsecure: true })).toEqual({ ok: true });
     });
-    it("accepts https://[::1] without allowInsecure", () => {
-      expect(validateBaseUrl("https://[::1]")).toEqual({ ok: true });
+    it("requires opt-in for https://[::1]", () => {
+      expect(validateBaseUrl("https://[::1]").ok).toBe(false);
+      expect(validateBaseUrl("https://[::1]", { allowInsecure: true })).toEqual({ ok: true });
     });
-    it("accepts https://*.local without allowInsecure", () => {
-      expect(validateBaseUrl("https://myhost.local")).toEqual({ ok: true });
+    it("requires explicit local-network opt-in for https://*.local", () => {
+      expect(validateBaseUrl("https://myhost.local").ok).toBe(false);
+      expect(validateBaseUrl("https://myhost.local", { allowInsecure: true, allowPrivateNetwork: true })).toEqual({ ok: true });
     });
   });
 
@@ -204,7 +207,7 @@ describe("validateBaseUrl (v0.9.3 SSRF guard)", () => {
     it("rejects https://[fe80::1] (link-local)", () => {
       const r = validateBaseUrl("https://[fe80::1]");
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.reason).toMatch(/private network/);
+      if (!r.ok) expect(r.reason).toMatch(/link-local/);
     });
     it("rejects http://[fc00::1] with allowInsecure but no allowPrivateNetwork", () => {
       const r = validateBaseUrl("http://[fc00::1]", { allowInsecure: true });
@@ -213,8 +216,10 @@ describe("validateBaseUrl (v0.9.3 SSRF guard)", () => {
     it("accepts https://[fc00::1] with allowPrivateNetwork", () => {
       expect(validateBaseUrl("https://[fc00::1]", { allowPrivateNetwork: true })).toEqual({ ok: true });
     });
-    it("accepts https://[fe80::1] with allowPrivateNetwork", () => {
-      expect(validateBaseUrl("https://[fe80::1]", { allowPrivateNetwork: true })).toEqual({ ok: true });
+    it("never allows https://[fe80::1], even with allowPrivateNetwork", () => {
+      const r = validateBaseUrl("https://[fe80::1]", { allowPrivateNetwork: true });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toMatch(/link-local/);
     });
   });
 

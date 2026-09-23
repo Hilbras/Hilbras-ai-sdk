@@ -58,6 +58,7 @@ export function retryMiddleware(maxRetries = 3, baseDelay = 1000): Middleware {
       try {
         return await ctx.next();
       } catch (err) {
+        if (ctx.init.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
         lastError = err instanceof Error ? err : new Error(String(err));
         if (attempt < maxRetries) {
           await new Promise((r) => setTimeout(r, baseDelay * Math.pow(2, attempt) + Math.random() * 100));
@@ -78,16 +79,34 @@ export function rateLimitMiddleware(minDelayMs = 100): Middleware {
   };
 }
 
-export function cacheMiddleware(ttlMs = 60_000): Middleware {
+export function cacheMiddleware(ttlMs = 60_000, maxEntries = 1_000): Middleware {
   const cache = new Map<string, { response: Response; expiresAt: number }>();
   return async (ctx) => {
-    if (ctx.init.method === "GET" || !ctx.init.method) {
-      const cached = cache.get(ctx.url);
-      if (cached && cached.expiresAt > Date.now()) return cached.response.clone();
-      const res = await ctx.next();
-      if (res.ok) cache.set(ctx.url, { response: res.clone(), expiresAt: Date.now() + ttlMs });
-      return res;
+    if (ctx.init.method !== "GET" && ctx.init.method) return ctx.next();
+
+    const headers = Object.entries(ctx.init.headers ?? {})
+      .filter((entry): entry is [string, string] => entry[1] !== undefined)
+      .map(([key, value]) => [key.toLowerCase(), value] as const)
+      .sort(([a], [b]) => a.localeCompare(b));
+    const key = JSON.stringify([ctx.init.method || "GET", ctx.url, headers]);
+
+    const cached = cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      cache.delete(key);
+      cache.set(key, cached);
+      return cached.response.clone();
     }
-    return ctx.next();
+    if (cached) cache.delete(key);
+
+    const res = await ctx.next();
+    if (res.ok) {
+      cache.set(key, { response: res.clone(), expiresAt: Date.now() + ttlMs });
+      while (cache.size > maxEntries) {
+        const oldest = cache.keys().next().value as string | undefined;
+        if (oldest === undefined) break;
+        cache.delete(oldest);
+      }
+    }
+    return res;
   };
 }

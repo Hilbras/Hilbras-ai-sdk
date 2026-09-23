@@ -43,3 +43,16 @@ export interface ProviderConfig {
    */
   allowInsecure?: boolean;
 }
+
+/** Create a nested copy so caller mutation cannot alter registered state. */
+export function cloneProviderConfig(config: ProviderConfig): ProviderConfig {
+  return {
+    ...config,
+    authentication: { ...(config.authentication ?? { type: "none" }) },
+    models: (config.models ?? []).map((model) => ({
+      ...model,
+      capabilities: { ...model.capabilities },
+    })),
+    extraHeaders: config.extraHeaders ? { ...config.extraHeaders } : undefined,
+  };
+}

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { InMemoryVectorStore } from "../src/features/rag/in-memory-store.js";
 import { chunkText, chunkDocuments } from "../src/features/rag/chunker.js";
 import { Retriever } from "../src/features/rag/retriever.js";
@@ -62,6 +62,13 @@ describe("InMemoryVectorStore", () => {
     ).rejects.toThrow("dimension mismatch");
   });
 
+  it("returns zero similarity for zero vectors", async () => {
+    const store = new InMemoryVectorStore({ dimension: 2 });
+    await store.add([{ id: "1", content: "zero", embedding: [0, 0] }]);
+    const results = await store.search([0, 0], 1);
+    expect(results[0].score).toBe(0);
+  });
+
   it("supports dot product metric", async () => {
     const store = new InMemoryVectorStore({ dimension: 3, metric: "dot" });
     await store.add([
@@ -90,6 +97,13 @@ describe("chunkText", () => {
     const chunks = chunkText("Hello world", { maxChunkSize: 1000 });
     expect(chunks).toHaveLength(1);
     expect(chunks[0].content).toBe("Hello world");
+  });
+
+  it("rejects invalid chunk sizes and overlaps", () => {
+    expect(() => chunkText("abc", { maxChunkSize: 0 })).toThrow(/maxChunkSize/);
+    expect(() => chunkText("abc", { maxChunkSize: Number.POSITIVE_INFINITY })).toThrow(/maxChunkSize/);
+    expect(() => chunkText("abc", { maxChunkSize: 10, overlap: 10 })).toThrow(/overlap/);
+    expect(() => chunkText("abc", { maxChunkSize: 10, overlap: -1 })).toThrow(/overlap/);
   });
 
   it("chunks with fixed strategy", () => {
@@ -191,6 +205,18 @@ describe("RAGPipeline", () => {
     expect(result.documents.length).toBeGreaterThan(0);
     expect(result.messages.length).toBeGreaterThan(0);
     expect(result.messages[0].role).toBe("system");
+  });
+
+  it("embeds a query only once", async () => {
+    const store = new InMemoryVectorStore({ dimension: 1 });
+    const embedder = vi.fn(async () => [1]);
+    const pipeline = new RAGPipeline({ embedder, store, topK: 1 });
+    await pipeline.ingest([{ content: "Fact", id: "1" }]);
+    embedder.mockClear();
+
+    await pipeline.query("question");
+
+    expect(embedder).toHaveBeenCalledTimes(1);
   });
 
   it("clears pipeline", async () => {

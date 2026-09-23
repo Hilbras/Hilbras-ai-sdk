@@ -7,19 +7,21 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "node ../../tools/clean-dist.mjs dist && tsc",
     "test": "vitest run",
-    "lint": "eslint src/",
+    "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@hilbras/sdk": "workspace:*"
+    "@hilbras/sdk": "^3.0.0"
   },
   "peerDependencies": {
     "react": ">=18.0.0"
@@ -31,5 +33,14 @@
     "vitest": "^4.1.0"
   },
   "license": "MIT",
-  "keywords": ["ai", "llm", "react", "hooks", "chat", "openai", "anthropic", "streaming"]
+  "keywords": [
+    "ai",
+    "llm",
+    "react",
+    "hooks",
+    "chat",
+    "openai",
+    "anthropic",
+    "streaming"
+  ]
 }

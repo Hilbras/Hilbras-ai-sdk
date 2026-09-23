@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import React from "react";
 import { ChatBox, useChatBox } from "../src/ChatBox.js";
 import { MessageList } from "../src/MessageList.js";
@@ -10,9 +10,13 @@ import { ErrorBanner } from "../src/ErrorBanner.js";
 import { ThinkingIndicator } from "../src/ThinkingIndicator.js";
 import { ToolCallCard } from "../src/ToolCallCard.js";
 
+afterEach(() => {
+  cleanup();
+});
+
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
-    <ChatBox provider="openai" model="gpt-4o" providerConfig={{ providers: [] }}>
+    <ChatBox provider="openai" model="gpt-4o">
       {children}
     </ChatBox>
   );
@@ -78,7 +82,7 @@ describe("Input", () => {
 
   it("disables when loading", () => {
     render(<Wrapper><Input disabled /></Wrapper>);
-    expect(screen.getByRole("textbox")).toBeDisabled();
+    expect((screen.getByRole("textbox", { name: "Message input" }) as HTMLTextAreaElement).disabled).toBe(true);
   });
 });
 
@@ -127,7 +131,7 @@ describe("ToolCallCard", () => {
         <ToolCallCard toolCall={toolCall} />
       </Wrapper>
     );
-    expect(screen.getByText("search")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Tool: search/ })).toBeTruthy();
   });
 
   it("expands on click", () => {
@@ -137,7 +141,7 @@ describe("ToolCallCard", () => {
         <ToolCallCard toolCall={toolCall} />
       </Wrapper>
     );
-    fireEvent.click(screen.getByText("search"));
+    fireEvent.click(screen.getByRole("button", { name: /Tool: search/ }));
     expect(screen.getByText(/Arguments:/)).toBeTruthy();
   });
 });

@@ -29,15 +29,3 @@ export interface Tool {
   type: "function";
   function: ToolFunction;
 }
-
-/** Convert a Tool to provider-specific format. */
-export function toolToDict(tool: Tool): Record<string, unknown> {
-  return {
-    type: "function",
-    function: {
-      name: tool.function.name,
-      description: tool.function.description,
-      parameters: tool.function.parameters,
-    },
-  };
-}
