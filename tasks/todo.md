@@ -1,0 +1,49 @@
+# v3.2.0 Task List
+
+See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, dependencies, and verification commands.
+
+## Phase 0 — Characterization
+
+- [x] 0.1 Add execution lifecycle characterization tests
+- [x] 0.2 Add retry/fallback characterization matrix
+
+## Phase 1 — Internal contracts
+
+- [x] 1.1 Add `RequestContext` and `ExecutionResult`
+- [x] 1.2 Define injected execution ports
+
+## Phase 2 — One-attempt execution
+
+- [x] 2.1 Add disposable internal timeout primitive
+- [x] 2.2 Extract `RequestExecutor`
+
+## Phase 3 — Non-streaming pipeline
+
+- [x] 3.1 Extract `RequestPipeline` for plain `complete()`
+- [x] 3.2 Migrate structured `complete()`
+
+## Phase 4 — Reliability correctness
+
+- [x] 4.1 Make backoff cancellation-aware
+- [x] 4.2 Correct fallback activation and isolation
+- [x] 4.3 Decide and document timeout semantics
+
+## Phase 5 — Streaming
+
+- [x] 5.1 Add async-iterable pipeline support
+- [x] 5.2 Verify `streamText()` and `streamObject()` parity
+
+## Phase 6 — Convergence and release
+
+- [x] 6.1 Route multimodal calls through the executor or document deferral
+- [x] 6.2 Make the public/export decision
+- [ ] 6.3 Complete the v3.2.0 release gate
+
+## Checkpoints
+
+- [x] A — Characterization baseline
+- [x] B — Internal foundation
+- [x] C — Complete parity
+- [x] D — Reliability decisions
+- [x] E — Streaming parity
+- [ ] F — Release readiness

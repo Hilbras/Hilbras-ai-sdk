@@ -118,7 +118,7 @@ import { redact } from "@hilbras/sdk";
 const safe = redact(userProvidedText);
 ```
 
-## Role-Based Access Control (RBAC) — v3.1.0
+## Role-Based Access Control (RBAC) — v3.2.0
 
 Control which providers, models, and features each user can access
 with role-based access control.

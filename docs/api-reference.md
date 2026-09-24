@@ -143,6 +143,18 @@ interface ProviderConfig {
 }
 ```
 
+### Request timeout semantics
+
+`ExecutionPolicy.timeout.requestTimeoutMs` is a **logical-request deadline**.
+The deadline starts before the first provider attempt and is shared by the
+primary retry chain. Fallback candidates are also constrained by that same
+logical deadline; they cannot extend a request beyond the original timeout.
+Caller cancellation remains distinct from an internal timeout and is not
+recorded as a provider failure.
+
+A timeout of `0` disables the internal deadline. A provider-level timeout is
+used only when the resolved policy does not provide a positive request timeout.
+
 ### `AdapterName`
 
 ```typescript

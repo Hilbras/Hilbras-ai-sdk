@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -228,7 +228,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "node tools/clean-dist.mjs dist && tsc",
+    "build": "node tools/clean-dist.mjs dist && tsc -p tsconfig.build.json",
     "dev": "tsc --watch",
     "pretest": "npx tsc --noEmit",
     "test": "npm run test:root",

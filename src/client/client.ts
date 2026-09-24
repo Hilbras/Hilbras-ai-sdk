@@ -16,7 +16,12 @@ import type { Message } from "../types/messages.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { Transport } from "../transport/transport.js";
-import type { ExecutionPolicy } from "../types/policy.js";
+import type { ExecutionPolicy, ResolvedPolicy } from "../types/policy.js";
+import type { RetryConfig } from "../reliability/retry.js";
+import type { CircuitBreakerPort } from "../core/execution/ports.js";
+import { RequestExecutor } from "../core/execution/request-executor.js";
+import { RequestPipeline } from "../core/execution/request-pipeline.js";
+import type { RequestOperation } from "../core/execution/request-context.js";
 import type { TaskRequirement } from "../types/router.js";
 import type { StructuredOutputConfig, StreamObjectOptions, SchemaValidator } from "../types/schema.js";
 import type {
@@ -31,17 +36,16 @@ import { cloneProviderConfig } from "../config/provider-config.js";
 import { FetchTransport } from "../transport/fetch.js";
 import { MiddlewareTransport } from "../transport/middleware-transport.js";
 import { getCircuitBreakerRegistry } from "../reliability/circuit-breaker.js";
-import { createRetryConfig, shouldRetry, shouldRetryNetworkError } from "../reliability/retry.js";
+import { shouldRetry, shouldRetryNetworkError } from "../reliability/retry.js";
 import { calculateBackoff, sleep } from "../reliability/backoff.js";
-import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError, ValidationError, ConfigurationError } from "../errors/index.js";
-import { createTimeoutSignal } from "../reliability/timeout.js";
+import { ProviderNotFoundError, ModelNotFoundError, CircuitBreakerOpenError, ConfigurationError } from "../errors/index.js";
 
 import { AdapterRegistry, getDefaultAdapterRegistry } from "../providers/adapter-registry.js";
 import { dictToMessage } from "../types/messages.js";
 import { validateBaseUrl } from "../security/url-guard.js";
 import { resolvePolicy } from "../reliability/presets.js";
 import { ModelRouter } from "../router/model-router.js";
-import { buildJsonSystemInstruction, buildRepairPrompt, extractJson, buildJsonModeParams } from "../output/structured.js";
+import { buildJsonModeParams } from "../output/structured.js";
 import { ClientHooks } from "./hooks.js";
 import type { StructuredLogger } from "../telemetry/structured-logger.js";
 import type { OpenTelemetryExporter } from "../telemetry/opentelemetry.js";
@@ -145,6 +149,8 @@ export class HilbrasClient implements AsyncDisposable {
   private _allowPrivateNetwork: boolean;
   private _tokenizer: Tokenizer | null;
   private _plugins = new PluginRegistry();
+  private _requestExecutor: RequestExecutor;
+  private _requestPipeline: RequestPipeline;
 
   constructor(config?: HilbrasClientConfig) {
     this._transport = config?.transport ?? new FetchTransport();
@@ -164,6 +170,29 @@ export class HilbrasClient implements AsyncDisposable {
     this._defaultPolicy = config?.policy ?? (sdk ? this._policyFromSDK(sdk) : undefined);
     const sdkBudget = sdk ? this._budgetFromSDK(sdk) : undefined;
     this._budgetTracker = new BudgetTracker(config?.budget ?? sdkBudget);
+    this._requestExecutor = new RequestExecutor({
+      policy: {
+        resolve: (policy) => resolvePolicy(policy ?? this._defaultPolicy),
+      },
+      circuitBreakers: {
+        getOrCreate: (provider, circuitPolicy) => getCircuitBreakerRegistry().getOrCreate(provider, circuitPolicy),
+      },
+      adapters: {
+        get: (provider) => this._adapters.get(provider),
+      },
+    });
+
+    this._requestPipeline = new RequestPipeline({
+      executor: this._requestExecutor,
+      budget: this._budgetTracker,
+      plugins: this._plugins,
+      emit: (event) => this._emit(event),
+      now: () => performance.now(),
+      sleep: (ms, signal) => sleep(ms, signal),
+      onCircuitOpen: (requestId, provider) => {
+        this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider });
+      },
+    });
 
     // v1.1.0: Register providers from SDKConfig if provided
     if (sdk?.providers?.length) {
@@ -453,39 +482,37 @@ export class HilbrasClient implements AsyncDisposable {
     providerConfig: ProviderConfig,
     policy: ExecutionPolicy | undefined,
     userSignal: AbortSignal | undefined,
+    operation: RequestOperation = "complete",
   ): {
-    resolved: ReturnType<typeof resolvePolicy>;
-    circuitBreaker: ReturnType<typeof getCircuitBreakerRegistry>["getOrCreate"] extends (...a: never[]) => infer R ? R : never;
-    retryConfig: ReturnType<typeof createRetryConfig>;
+    resolved: ResolvedPolicy;
+    circuitBreaker: CircuitBreakerPort | undefined;
+    retryConfig: RetryConfig;
     signal: AbortSignal | undefined;
+    dispose: () => void;
   } {
-    const resolved = resolvePolicy(policy ?? this._defaultPolicy);
-    let circuitBreaker: ReturnType<typeof getCircuitBreakerRegistry>["getOrCreate"] extends (...a: never[]) => infer R ? R : never = undefined as never;
-    if (resolved.circuitBreaker.enabled) {
-      circuitBreaker = getCircuitBreakerRegistry().getOrCreate(providerName, {
-        failureThreshold: resolved.circuitBreaker.failureThreshold,
-        successThreshold: resolved.circuitBreaker.successThreshold,
-        timeoutMs: resolved.circuitBreaker.timeoutMs,
-        halfOpenMaxCalls: resolved.circuitBreaker.halfOpenMaxCalls,
+    try {
+      const prepared = this._requestExecutor.prepare({
+        requestId,
+        operation,
+        provider: providerName,
+        model: providerConfig.models[0]?.id ?? "",
+        policy,
+        providerTimeoutMs: providerConfig.timeout,
+        callerSignal: userSignal,
       });
-      if (!circuitBreaker.isAvailable()) {
+      return {
+        resolved: prepared.context.policy,
+        circuitBreaker: prepared.circuitBreaker,
+        retryConfig: prepared.retryConfig,
+        signal: prepared.signal,
+        dispose: prepared.dispose,
+      };
+    } catch (error) {
+      if (error instanceof CircuitBreakerOpenError) {
         this._emit({ type: "circuit_breaker.open", requestId, timestamp: performance.now(), provider: providerName });
-        throw new CircuitBreakerOpenError(providerName, {
-          failureCount: circuitBreaker.stats.failureCount,
-          retryAfterMs: resolved.circuitBreaker.timeoutMs,
-        });
       }
+      throw error;
     }
-    const retryConfig = createRetryConfig({
-      maxRetries: resolved.retry.maxRetries,
-      retryableStatuses: resolved.retry.retryableStatuses,
-      retryableNetworkErrors: resolved.retry.retryableNetworkErrors,
-    });
-    const timeoutMs = resolved.timeout.requestTimeoutMs || providerConfig.timeout;
-    const signal = timeoutMs
-      ? createTimeoutSignal({ requestTimeoutMs: timeoutMs }, userSignal)
-      : userSignal;
-    return { resolved, circuitBreaker, retryConfig, signal };
   }
 
   // ─── Provider/Model Resolution ──────────────────────────────────────────
@@ -572,15 +599,6 @@ export class HilbrasClient implements AsyncDisposable {
   }): AsyncGenerator<StreamChunk> {
     const requestId = this._nextRequestId();
     const startTime = performance.now();
-    let inputTokens: number | undefined;
-    let outputTokens: number | undefined;
-    let firstChunkEmitted = false;
-    let adapterStartTime = 0;
-    // Budget tracking for streaming. v0.9.3: stream() now reserves like complete().
-    let estimatedCost = 0;
-    let reservationActive = false;
-    let usageSettled = false;
-
     this._emit({ type: "request.start", requestId, timestamp: startTime, provider: params.provider, model: params.model, task: params.task });
 
     // Resolve provider + model — either explicit or via router
@@ -591,184 +609,40 @@ export class HilbrasClient implements AsyncDisposable {
 
     this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
-    const adapter = this._getAdapter(providerName);
-    // v0.10.0 PR-4: extract the duplicated policy/circuit-breaker/retry/signal
-    // setup into _prepareRequest so stream() and complete() share it.
-    const { resolved, circuitBreaker, retryConfig, signal } = this._prepareRequest(
-      requestId,
-      providerName,
-      providerConfig,
-      params.policy,
-      params.signal,
-    );
-
     const messages = this._normalizeMessages(params.messages);
-
-    // v3.0.0: Plugin onRequest hook
-    await this._plugins.fireRequest({
+    const estimatedCost = this._budgetTracker.estimate(
+      modelId,
+      providerName,
+      this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+      0,
+    );
+    yield* this._requestPipeline.runStream({
       requestId,
+      startTime,
       provider: providerName,
       model: modelId,
       messages,
-      extra: params.extra,
-      signal: params.signal,
-      timestamp: startTime,
+      params: {
+        model: modelId,
+        messages,
+        temperature: params.temperature,
+        maxTokens: params.maxTokens,
+        tools: params.tools,
+        extra: params.extra,
+      },
+      estimatedCost,
+      policy: params.policy,
+      providerTimeoutMs: providerConfig.timeout,
+      callerSignal: params.signal,
+      fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, params),
+      estimateFallbackCost: (candidate) => this._budgetTracker.estimate(
+        candidate.model,
+        candidate.provider,
+        this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+        0,
+      ),
+      getProviderTimeout: (provider) => this._registry.get(provider)?.timeout,
     });
-
-    // Atomic budget reservation before any provider call. Reserves the
-    // estimated cost for the entire retry+fallback chain; the reservation is
-    // converted to actual on the first usage chunk, or released on failure.
-    estimatedCost = this._budgetTracker.estimate(modelId, providerName, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-    const initialReservation = this._budgetTracker.reserve(requestId, estimatedCost);
-    if (!initialReservation) {
-      throw new ConfigurationError(
-        `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
-        `Remaining budget: $${this._budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
-      );
-    }
-    reservationActive = true;
-
-    try {
-      for (let attempt = 0; ; attempt++) {
-        try {
-          adapterStartTime = performance.now();
-          const gen = adapter.stream({
-            model: modelId,
-            messages,
-            temperature: params.temperature,
-            maxTokens: params.maxTokens,
-            tools: params.tools,
-            extra: params.extra,
-            signal,
-          });
-
-          for await (const chunk of gen) {
-            // Track first chunk latency
-            if (!firstChunkEmitted) {
-              firstChunkEmitted = true;
-              this._emit({ type: "stream.first_chunk", requestId, timestamp: performance.now(), latencyMs: performance.now() - adapterStartTime });
-            }
-            // Track usage tokens and convert reservation on first usage chunk
-            if (chunk.type === "usage") {
-              const inT = (chunk as { inputTokens?: number }).inputTokens;
-              const outT = (chunk as { outputTokens?: number }).outputTokens;
-              inputTokens = inT;
-              outputTokens = outT;
-              if (reservationActive && !usageSettled) {
-                const actualCost = this._budgetTracker.estimate(modelId, providerName, inT ?? 0, outT ?? 0);
-                this._budgetTracker.settle(requestId, actualCost, { provider: providerName, model: modelId, phase: "execute" });
-                reservationActive = false;
-                usageSettled = true;
-              }
-            }
-            yield chunk;
-          }
-
-          circuitBreaker?.recordSuccess();
-          // End-of-stream with no usage chunk: settle at the estimate
-          if (reservationActive) {
-            this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
-            reservationActive = false;
-          }
-          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, inputTokens, outputTokens, structuredOutput: false });
-          // v3.0.0: Plugin onResponse hook
-          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, inputTokens, outputTokens, streaming: true });
-          return;
-        } catch (err: unknown) {
-          // Once a chunk has escaped to the caller, retrying would duplicate
-          // output and potentially repeat tool side effects. Caller cancellation
-          // is terminal as well.
-          const callerAborted = params.signal?.aborted === true;
-          if (callerAborted || firstChunkEmitted) {
-            circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-            this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-            await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-            throw err;
-          }
-
-          // Check if we should retry
-          const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
-          const status = (err as { status?: number }).status;
-
-          if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-            const delay = calculateBackoff(attempt, resolved.backoff);
-            this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
-            await sleep(delay);
-            continue;
-          }
-          if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-            const delay = calculateBackoff(attempt, resolved.backoff);
-            this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
-            await sleep(delay);
-            continue;
-          }
-
-          // Try fallback if allowed and we have candidates
-          if (resolved.allowFallback && attempt >= retryConfig.maxRetries) {
-            const fallbacks = this._getFallbacks([modelId], params);
-            let fallbackSucceeded = false;
-            for (const fb of fallbacks) {
-              this._emit({ type: "fallback.started", requestId, timestamp: performance.now(), originalProvider: providerName, originalModel: modelId, fallbackProvider: fb.provider, fallbackModel: fb.model });
-              // Release original reservation, re-reserve under fallback id
-              if (reservationActive) {
-                this._budgetTracker.release(requestId);
-                reservationActive = false;
-              }
-              const fbReservationId = `${requestId}_fb_${fb.model}`;
-              const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-              const fbReservation = this._budgetTracker.reserve(fbReservationId, fbEstimatedCost);
-              if (!fbReservation) continue; // budget exceeded for this fallback
-              let fbReservationActive = true;
-              try {
-                const fbAdapter = this._getAdapter(fb.provider);
-                const gen = fbAdapter.stream({ model: fb.model, messages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: params.extra, signal });
-                for await (const chunk of gen) {
-                  if (chunk.type === "usage") {
-                    const inT = (chunk as { inputTokens?: number }).inputTokens;
-                    const outT = (chunk as { outputTokens?: number }).outputTokens;
-                    if (fbReservationActive) {
-                      const actualCost = this._budgetTracker.estimate(fb.model, fb.provider, inT ?? 0, outT ?? 0);
-                      this._budgetTracker.settle(fbReservationId, actualCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
-                      fbReservationActive = false;
-                    }
-                  }
-                  yield chunk;
-                }
-                // End-of-stream without usage chunk: settle at estimate
-                if (fbReservationActive) {
-                  this._budgetTracker.settle(fbReservationId, fbEstimatedCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
-                  fbReservationActive = false;
-                }
-                this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, inputTokens, outputTokens, structuredOutput: false });
-                fallbackSucceeded = true;
-                return;
-              } catch {
-                if (fbReservationActive) {
-                  this._budgetTracker.release(fbReservationId);
-                  fbReservationActive = false;
-                }
-                /* fallback also failed — continue to next */
-              }
-            }
-            if (fallbackSucceeded) return; // unreachable but for type safety
-          }
-
-          circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-          // v3.0.0: Plugin onError hook
-          await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-          throw err;
-        }
-      }
-    } finally {
-      // Guarantee release on any path that did not settle (consumer break,
-      // signal abort, unexpected throw). Idempotent: settle/release are no-ops
-      // on missing reservations.
-      if (reservationActive) {
-        this._budgetTracker.release(requestId);
-        reservationActive = false;
-      }
-    }
   }
 
   // ─── Non-Streaming Completion ───────────────────────────────────────────
@@ -814,195 +688,98 @@ export class HilbrasClient implements AsyncDisposable {
 
     this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
 
-    const adapter = this._getAdapter(providerName);
-    // v0.10.0 PR-4: extract the duplicated policy/circuit-breaker/retry/signal
-    // setup into _prepareRequest so stream() and complete() share it.
-    const { resolved, circuitBreaker, retryConfig, signal } = this._prepareRequest(
-      requestId,
-      providerName,
-      providerConfig,
-      params.policy,
-      params.signal,
-    );
-
-    const messages = this._normalizeMessages(params.messages);
-
-    // v3.0.0: Plugin onRequest hook
-    await this._plugins.fireRequest({
-      requestId,
-      provider: providerName,
-      model: modelId,
-      messages,
-      extra: params.extra,
-      signal: params.signal,
-      timestamp: startTime,
-    });
-
-    // Structured output setup
-    const outputConfig = params.output;
-    let structuredMessages = [...messages];
-    let structuredExtra = { ...params.extra };
-
-    if (outputConfig) {
-      // Add JSON mode params for the provider
-      const jsonModeParams = buildJsonModeParams(adapter.id);
-      structuredExtra = { ...structuredExtra, ...jsonModeParams };
-
-      // Add system instruction for JSON output
-      structuredMessages = [
-        { role: "system", content: buildJsonSystemInstruction(outputConfig.schema as never) },
-        ...messages,
-      ];
-    }
-
-    const maxRepairAttempts = outputConfig?.maxRepairAttempts ?? 2;
-
-    // Budget: atomic reserve before execution
-    const estimatedCost = this._budgetTracker.estimate(modelId, providerName, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-    const reservation = this._budgetTracker.reserve(requestId, estimatedCost);
-    if (!reservation) {
-      throw new ConfigurationError(
-        `Budget reservation rejected — estimated cost $${estimatedCost.toFixed(4)} would exceed budget`,
-        `Remaining budget: $${this._budgetTracker.report().remainingBudget?.toFixed(4) ?? "unknown"}. Options: (1) increase sessionBudget, (2) use a cheaper model, (3) reduce input token count`,
+    if (!params.output) {
+      const messages = this._normalizeMessages(params.messages);
+      const estimatedCost = this._budgetTracker.estimate(
+        modelId,
+        providerName,
+        this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+        0,
       );
-    }
-
-    try {
-      for (let attempt = 0; ; attempt++) {
-        try {
-        const result = await adapter.complete({
+      return this._requestPipeline.runComplete({
+        requestId,
+        startTime,
+        provider: providerName,
+        model: modelId,
+        messages,
+        params: {
           model: modelId,
-          messages: structuredMessages,
+          messages,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
           tools: params.tools,
-          extra: structuredExtra,
-          signal,
-        });
-        circuitBreaker?.recordSuccess();
-
-        // If no structured output, settle and return
-        if (!outputConfig) {
-          this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
-          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: false });
-          // v3.0.0: Plugin onResponse hook
-          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, streaming: false });
-          return result as T;
-        }
-
-        // Validate structured output
-        const json = extractJson(result);
-        const parsed = JSON.parse(json);
-        const validation = outputConfig.schema.safeParse(parsed);
-        if (validation.success) {
-          this._budgetTracker.settle(requestId, estimatedCost, { provider: providerName, model: modelId, phase: "execute" });
-          this._emit({ type: "structured.validate.pass", requestId, timestamp: performance.now() });
-          this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, structuredOutput: true });
-          // v3.0.0: Plugin onResponse hook
-          await this._plugins.fireResponse({ requestId, provider: providerName, model: modelId, durationMs: performance.now() - startTime, streaming: false });
-          return validation.data;
-        }
-
-        // Validation failed — attempt repair
-        this._emit({ type: "structured.validate.fail", requestId, timestamp: performance.now(), attempt, error: validation.error instanceof Error ? validation.error.message : String(validation.error) });
-        if (attempt < maxRepairAttempts) {
-          const repairPrompt = buildRepairPrompt(
-            validation.error,
-            result,
-            buildJsonSystemInstruction(outputConfig.schema as never),
-            outputConfig.repairInstructions,
-          );
-          // Replace last user message with repair prompt
-          const lastUserIdx = structuredMessages.map((m) => m.role).lastIndexOf("user");
-          if (lastUserIdx >= 0) {
-            structuredMessages = [
-              ...structuredMessages.slice(0, lastUserIdx),
-              { role: "user", content: repairPrompt },
-            ];
-          } else {
-            structuredMessages = [...structuredMessages, { role: "user", content: repairPrompt }];
-          }
-          continue;
-        }
-
-        // Exhausted repair attempts
-        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: "Validation failed after repair attempts" });
-        throw new ValidationError(maxRepairAttempts + 1, validation.error, result, { requestId, model: modelId });
-      } catch (err: unknown) {
-        // Don't retry validation errors through the retry loop
-        if (err instanceof ValidationError) {
-          throw err;
-        }
-
-        if (params.signal?.aborted) {
-          circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-          await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-          throw err;
-        }
-
-        const isNetworkError = err instanceof TypeError || (err instanceof Error && err.name === "AbortError");
-        const status = (err as { status?: number }).status;
-
-        if (isNetworkError && shouldRetryNetworkError(attempt, retryConfig)) {
-          const delay = calculateBackoff(attempt, resolved.backoff);
-          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: "network error" });
-          await sleep(delay);
-          continue;
-        }
-        if (typeof status === "number" && shouldRetry(status, attempt, retryConfig)) {
-          const delay = calculateBackoff(attempt, resolved.backoff);
-          this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: `HTTP ${status}` });
-          await sleep(delay);
-          continue;
-        }
-
-        // Try fallback if allowed and retries exhausted
-        if (resolved.allowFallback && attempt >= retryConfig.maxRetries && !(err instanceof ValidationError)) {
-          this._budgetTracker.release(requestId); // Release original reservation
-          const fallbacks = this._getFallbacks([modelId], params);
-          for (const fb of fallbacks) {
-            const fbEstimatedCost = this._budgetTracker.estimate(fb.model, fb.provider, this._estimateTokens(messages.map((m) => m.content ?? "").join("")), 0);
-            const fbReservation = this._budgetTracker.reserve(`${requestId}_fb_${fb.model}`, fbEstimatedCost);
-            if (!fbReservation) continue; // Budget exceeded — skip this fallback
-            try {
-              const fbAdapter = this._getAdapter(fb.provider);
-              const result = await fbAdapter.complete({ model: fb.model, messages: structuredMessages, temperature: params.temperature, maxTokens: params.maxTokens, tools: params.tools, extra: structuredExtra, signal });
-              this._budgetTracker.settle(`${requestId}_fb_${fb.model}`, fbEstimatedCost, { provider: fb.provider, model: fb.model, phase: "fallback" });
-              this._emit({ type: "request.completed", requestId, timestamp: performance.now(), provider: fb.provider, model: fb.model, durationMs: performance.now() - startTime, attempts: attempt + 2, structuredOutput: !!outputConfig });
-              if (!outputConfig) return result as T;
-              const json = extractJson(result);
-              const parsed = JSON.parse(json);
-              const validation = outputConfig.schema.safeParse(parsed);
-              if (validation.success) return validation.data;
-              throw new ValidationError(maxRepairAttempts + 1, validation.error, result, { requestId, model: fb.model });
-            } catch {
-              this._budgetTracker.release(`${requestId}_fb_${fb.model}`);
-            }
-          }
-        }
-
-        // Release reservation on final failure
-        this._budgetTracker.release(requestId);
-        circuitBreaker?.recordFailure(err instanceof Error ? err : undefined);
-        this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: err instanceof Error ? err.message : String(err) });
-        // v3.0.0: Plugin onError hook
-        await this._plugins.fireError({ requestId, provider: providerName, model: modelId, error: err instanceof Error ? err : new Error(String(err)), durationMs: performance.now() - startTime, attempts: attempt + 1 });
-        throw err;
-      }
-      }
-    } finally {
-      // Validation failures and every other terminal path must not strand an
-      // active reservation. Settled reservations are unaffected.
-      this._budgetTracker.release(requestId);
+          extra: params.extra,
+        },
+        estimatedCost,
+        policy: params.policy,
+        providerTimeoutMs: providerConfig.timeout,
+        callerSignal: params.signal,
+        fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, params),
+        estimateFallbackCost: (candidate) => this._budgetTracker.estimate(
+          candidate.model,
+          candidate.provider,
+          this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+          0,
+        ),
+        getProviderTimeout: (provider) => this._registry.get(provider)?.timeout,
+      }) as Promise<T>;
     }
+
+    if (params.output) {
+      const messages = this._normalizeMessages(params.messages);
+      const estimatedCost = this._budgetTracker.estimate(
+        modelId,
+        providerName,
+        this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+        0,
+      );
+      return this._requestPipeline.runStructuredComplete({
+        requestId,
+        startTime,
+        provider: providerName,
+        model: modelId,
+        messages,
+        params: {
+          model: modelId,
+          messages,
+          temperature: params.temperature,
+          maxTokens: params.maxTokens,
+          tools: params.tools,
+          extra: params.extra,
+        },
+        estimatedCost,
+        policy: params.policy,
+        providerTimeoutMs: providerConfig.timeout,
+        callerSignal: params.signal,
+        output: params.output,
+        jsonModeParams: (provider) => {
+          const adapter = this._adapters.get(provider);
+          return adapter ? buildJsonModeParams(adapter.id) : {};
+        },
+        fallbackCandidates: (excludeModels) => this._getFallbacks(excludeModels, { ...params, needsStructuredOutput: true }),
+        estimateFallbackCost: (candidate) => this._budgetTracker.estimate(
+          candidate.model,
+          candidate.provider,
+          this._estimateTokens(messages.map((m) => m.content ?? "").join("")),
+          0,
+        ),
+        getProviderTimeout: (provider) => this._registry.get(provider)?.timeout,
+      }) as Promise<T>;
+    }
+
+    throw new Error("Unreachable completion state");
   }
 
   // ─── Multi-Modal Reliability Pipeline ──────────────────────────────────
 
   /**
    * Run a multi-modal adapter method with retry, circuit breaker, timeout,
-   * and hook events — the same reliability guarantees as stream()/complete().
+   * and hook events.
+   *
+   * v3.2.0 intentionally keeps multimodal calls outside the logical budget
+   * pipeline until provider-specific pricing and reservation semantics are
+   * defined. They share the one-attempt reliability preparation, but do not
+   * silently reserve or settle new costs.
    */
   private async _runMultiModal<T>(
     requestId: string,

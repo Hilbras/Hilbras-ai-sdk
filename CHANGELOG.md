@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.0] - 2026-09-24
+
+### Added
+
+- Internal execution contracts in `src/core/execution/` for request context, execution results, one-attempt provider execution, and logical-request pipelines.
+- Focused execution, timeout, backoff, fallback, streaming, and structured-stream lifecycle tests.
+- An execution architecture guide documenting the internal boundary, timeout semantics, budget lifecycle, and deferred multimodal billing behavior.
+
+### Changed
+
+- `complete()` and `stream()` now delegate execution through the internal request pipeline while preserving the public `HilbrasClient` API.
+- `requestTimeoutMs` is documented as a logical-request deadline shared by the primary retry chain and constrained by the original deadline for fallback candidates.
+- Active README, API reference, CLI, observability, evaluation, and security documentation now identifies v3.2.0.
+- Production builds use `tsconfig.build.json` without source/declaration maps, keeping the measured release artifact under the 1,900 KB size gate without changing runtime code.
+- Package metadata and the root lockfile are synchronized to `@hilbras/sdk@3.2.0`; the root package remains at zero runtime dependencies and companion packages remain unpublished.
+
+### Fixed
+
+- Retry backoff now aborts promptly and does not invoke another attempt after caller cancellation.
+- Timeout scopes clear timers and parent listeners and distinguish internal timeout from caller cancellation.
+- Fallback is no longer skipped solely because the retry counter is nonzero, respects `maxFallbackCost`, avoids duplicate candidates, and stops on cancellation.
+- Streaming retries/fallback cannot continue after visible output; consumer cancellation releases active reservations.
+- Structured completion and `streamObject()` preserve validation errors and avoid reporting a successful terminal event before final validation succeeds.
+
+### Security and compatibility
+
+- Caller cancellation is treated as a neutral terminal outcome and is not recorded as a circuit-breaker provider failure.
+- Internal execution contracts remain unexported until API stability review; existing root exports and `ExecutionPlan` types are unchanged.
+- Multimodal budget/pricing semantics remain explicitly deferred rather than silently changing billing behavior.
+
+---
+
 ## [3.1.0] - 2026-09-24
 
 ### Added
