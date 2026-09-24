@@ -90,7 +90,7 @@ export class RequestExecutor {
   async *executeStream(
     prepared: PreparedRequest,
     params: Omit<GenerateParams, "signal">,
-    options: { dispose?: boolean } = {},
+    options: { dispose?: boolean; recordCircuitFailure?: boolean } = {},
   ): AsyncGenerator<StreamChunk> {
     const adapter = this.ports.adapters.get(prepared.context.provider);
     if (!adapter) {
@@ -106,7 +106,7 @@ export class RequestExecutor {
       }
       prepared.circuitBreaker?.recordSuccess();
     } catch (error) {
-      if (!prepared.context.callerSignal?.aborted) {
+      if (options.recordCircuitFailure !== false && !prepared.context.callerSignal?.aborted) {
         prepared.circuitBreaker?.recordFailure(error instanceof Error ? error : undefined);
       }
       throw error;
@@ -118,7 +118,7 @@ export class RequestExecutor {
   async executeComplete(
     prepared: PreparedRequest,
     params: Omit<GenerateParams, "signal">,
-    options: { dispose?: boolean } = {},
+    options: { dispose?: boolean; recordCircuitFailure?: boolean } = {},
   ): Promise<ExecutionResult<string>> {
     if (prepared.context.callerSignal?.aborted) {
       return executionFailure(new DOMException("The operation was aborted", "AbortError"), prepared.context);
@@ -137,7 +137,7 @@ export class RequestExecutor {
       prepared.circuitBreaker?.recordSuccess();
       return executionSuccess(value, prepared.context);
     } catch (error) {
-      if (!prepared.context.callerSignal?.aborted) {
+      if (options.recordCircuitFailure !== false && !prepared.context.callerSignal?.aborted) {
         prepared.circuitBreaker?.recordFailure(error instanceof Error ? error : undefined);
       }
       return executionFailure(error, prepared.context);

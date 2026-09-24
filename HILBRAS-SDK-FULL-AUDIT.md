@@ -245,3 +245,62 @@ All commands below were rerun after a clean `npm ci --ignore-scripts` unless not
 5. Complete agent runtime schemas/approval and framework route authentication/limits.
 6. Establish a coverage-improvement plan and a docs snippet compilation job.
 7. Unify the two catalogs only through a versioned migration plan; do not merge them as an unreviewed cleanup.
+
+---
+
+## v3.2.0 addendum — Core Execution Stabilization
+
+**Audit date:** 2026-09-24
+**Release branch:** `release/v3.2.0`
+**Package target:** `@hilbras/sdk@3.2.0`
+**Baseline:** v3.1.0 commit `8876e17`
+
+### Scope and result
+
+The v3.2 phase adds an internal execution boundary without adding public
+runtime exports:
+
+- `src/core/execution/request-context.ts` and `execution-result.ts` define
+  logical-request and attempt contracts.
+- `request-executor.ts` owns one provider attempt, policy preparation, circuit
+  state, and disposable timeout scopes.
+- `request-pipeline.ts` owns logical budget reservation, retries, fallback,
+  plugin lifecycle, terminal events, plain/structured completion, and streaming.
+- `ports.ts` prevents the execution layer from depending on `HilbrasClient` or
+  the root barrel.
+- `complete()`, structured `complete()`, `stream()`, `streamText()`, and
+  `streamObject()` were migrated incrementally with focused characterization
+  and regression tests.
+- Multimodal calls remain outside the v3.2 budget pipeline by explicit design;
+  pricing and reservation semantics are deferred rather than silently changed.
+- The release build uses `tsconfig.build.json` without source/declaration maps;
+  the measured artifact is 1,108.3 KB against the unchanged 1,900 KB gate.
+
+### v3.2 verification
+
+| Check | Result |
+|---|---|
+| `npm run pretest` / `npx tsc --noEmit` | Pass |
+| `npm run lint` | Pass with 0 errors and 18 existing warnings; no suppressions added |
+| `npm test` | Pass: 88 files, 1,645 root tests |
+| `npm run test:packages` | Pass: 44 companion tests; all five companion builds pass |
+| `npm run check:package` | Pass: 47 concrete export entrypoints imported |
+| `npx publint` | Pass: `All good!` |
+| `npm audit --omit=dev` | Pass: 0 vulnerabilities |
+| `npm run size` | Pass: 1,108.3 KB / 1,900 KB |
+| `npm run benchmark` | Pass; canonical benchmark suite completed |
+| `npm run test:coverage` | Tests pass, but existing global thresholds remain unmet: 61.86% statements, 56.64% branches, 65.31% functions, 64.23% lines versus 80/70/80/80. Thresholds were not lowered. |
+| `@arethetypeswrong/cli --pack .` | Node 18+ ESM and bundler resolution pass; legacy Node 10 subpath warnings remain baseline/tooling limitations, while `publint` and runtime export smoke tests pass. |
+
+### Deferred risks carried forward
+
+The v3.2 changes do not close the previously documented high-risk items:
+legacy body-bound request signing and replay protection; fail-open RBAC;
+credential-bearing browser accessors and browser usage; DNS/egress SSRF
+control; agent approval and runtime schema enforcement; multimodal and
+unpriced-model budget policy; incomplete Bedrock/realtime/MCP protocols;
+catalog/routing divergence; and framework route authorization/body limits.
+
+The full root suite and package gates pass, but the existing coverage gate is
+still below its declared thresholds and remains an explicit follow-up rather
+than a silently weakened requirement.

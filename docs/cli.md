@@ -52,7 +52,7 @@ Estimate request cost:
 hilbras cost estimate --model gpt-4o --tokens 10000
 ```
 
-### chat (v3.1.0)
+### chat (v3.2.0)
 
 Interactive chat REPL with streaming output:
 
@@ -65,7 +65,7 @@ hilbras chat --temperature 0.5 --max-tokens 2048
 Type your message and press Enter. The response streams in real-time.
 Type `exit` or `quit` to leave.
 
-### bench (v3.1.0)
+### bench (v3.2.0)
 
 Benchmark provider latency and throughput:
 
@@ -77,7 +77,7 @@ hilbras bench --providers openai,anthropic
 
 Output includes average latency, tokens/sec, and error count per provider.
 
-### costs (v3.1.0)
+### costs (v3.2.0)
 
 Display a cost report from a saved JSON file:
 
@@ -93,7 +93,7 @@ import { writeFileSync } from "fs";
 writeFileSync(".hilbras-costs.json", JSON.stringify(report, null, 2));
 ```
 
-### dashboard (v3.1.0)
+### dashboard (v3.2.0)
 
 Render the DevTools dashboard in the terminal:
 

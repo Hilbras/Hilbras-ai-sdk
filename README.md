@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.1.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-3.2.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1611%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1645%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -203,6 +203,22 @@ const transport = new MiddlewareTransport(
 
 ---
 
+## What's New in v3.2.0
+
+**Execution stabilization** — the client now delegates request preparation and provider attempts to an internal execution layer. `RequestContext`, `ExecutionResult`, `RequestExecutor`, and `RequestPipeline` establish explicit logical-request and attempt boundaries without adding public exports or changing the supported `complete()`/`stream()` APIs.
+
+**Reliability correctness** — retry backoff is cancellation-aware, scoped timeout resources are cleaned up, fallback can run after a non-retryable primary failure, fallback cost limits are enforced, and visible stream output cannot be duplicated by a later fallback.
+
+**Streaming and structured output** — streaming, tool loops, and `streamObject()` now share the same execution lifecycle and retain exactly-once budget cleanup, terminal events, and original provider error identity.
+
+**Compatibility boundary** — multimodal budget/pricing semantics remain explicitly deferred rather than silently introducing new billing behavior. See the [execution architecture guide](docs/architecture/execution.md) for the internal boundary and migration decisions.
+
+**Release hygiene** — README, API reference, active documentation, changelog, package metadata, and the lockfile now identify v3.2.0. The root package remains dependency-free and companion packages remain separate.
+
+See [`CHANGELOG.md`](CHANGELOG.md) and [`HILBRAS-SDK-FULL-AUDIT.md`](HILBRAS-SDK-FULL-AUDIT.md) for the complete release and audit details.
+
+---
+
 ## What's New in v3.1.0
 
 **Release hardening and correctness** — v3.1.0 is the first post-audit release. It makes the root package reproducibly buildable and publishable, fixes Node ESM catalog loading and export-map gaps, and closes several transport, budget, stream-state, SSRF, redaction, and tool-execution boundaries.
@@ -210,8 +226,6 @@ const transport = new MiddlewareTransport(
 **Package release reliability** — workspace metadata, lockfile state, companion dependency ranges, clean builds, package smoke checks, and npm publication hooks are now consistent. The root package still has zero runtime dependencies.
 
 **Documentation and security guidance** — current examples now use the published subpaths, keep provider credentials on the server, describe the stricter local-network policy, and avoid executing model-selected expressions.
-
-See [`CHANGELOG.md`](CHANGELOG.md) and [`HILBRAS-SDK-FULL-AUDIT.md`](HILBRAS-SDK-FULL-AUDIT.md) for the complete release and audit details.
 
 ---
 

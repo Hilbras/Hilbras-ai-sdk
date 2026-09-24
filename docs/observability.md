@@ -70,7 +70,7 @@ async overhead and no per-event allocation when no one is listening.
 
 ---
 
-## SLA Monitoring — v3.1.0
+## SLA Monitoring — v3.2.0
 
 Track latency, error rate, and availability against defined SLA
 thresholds. The monitor subscribes to client lifecycle events
@@ -149,7 +149,7 @@ monitor.dispose(); // unsubscribes from client events
 
 ---
 
-## Cost Alerts — v3.1.0
+## Cost Alerts — v3.2.0
 
 Get notified when spending crosses configurable thresholds.
 

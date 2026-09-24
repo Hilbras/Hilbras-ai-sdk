@@ -104,7 +104,7 @@ const result = await evaluate({
 
 ---
 
-## A/B Prompt Testing — v3.1.0
+## A/B Prompt Testing — v3.2.0
 
 Compare multiple prompt variants against a shared dataset to find the
 best-performing system prompt.

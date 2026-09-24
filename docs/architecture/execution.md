@@ -78,6 +78,12 @@ cancellation releases any active reservation.
 Existing public event names and payload fields remain compatible. New internal
 attempt metadata is not yet a public API.
 
+## Release build
+
+The production build uses `tsconfig.build.json`, which omits source and
+declaration maps to keep the measured npm artifact below the repository's
+1,900 KB size gate. Type checking still uses the full `tsconfig.json` contract.
+
 ## Migration boundary
 
 No new root exports are required for the v3.2 refactor. Applications should

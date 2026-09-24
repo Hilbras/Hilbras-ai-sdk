@@ -75,12 +75,7 @@ export class RequestPipeline {
   constructor(private readonly ports: RequestPipelinePorts) {}
 
   async runComplete(input: CompletePipelineInput): Promise<string> {
-    let prepared: ReturnType<RequestExecutor["prepare"]>;
-    try {
-      prepared = this.prepare(input);
-    } catch (error) {
-      throw error;
-    }
+    const prepared = this.prepare(input);
 
     try {
       await this.ports.plugins.fireRequest({
@@ -109,7 +104,7 @@ export class RequestPipeline {
         const result = await this.ports.executor.executeComplete(
           prepared,
           input.params,
-          { dispose: false },
+          { dispose: false, recordCircuitFailure: false },
         );
 
         if (result.ok) {
@@ -187,6 +182,7 @@ export class RequestPipeline {
               const fallbackResult = await this.ports.executor.executeComplete(
                 fallbackPrepared,
                 { ...input.params, model: fallback.model },
+                { recordCircuitFailure: false },
               );
               if (!fallbackResult.ok && input.callerSignal?.aborted) {
                 primaryError = fallbackResult.error;
@@ -219,6 +215,7 @@ export class RequestPipeline {
         break;
       }
 
+      this.recordTerminalFailure(prepared, primaryError);
       this.ports.budget.release(input.requestId);
       const error = primaryError instanceof Error ? primaryError : new Error(String(primaryError));
       this.ports.emit({
@@ -280,7 +277,7 @@ export class RequestPipeline {
           for await (const chunk of this.ports.executor.executeStream(
             prepared,
             input.params,
-            { dispose: false },
+            { dispose: false, recordCircuitFailure: false },
           )) {
             if (!firstChunkEmitted) {
               firstChunkEmitted = true;
@@ -352,6 +349,7 @@ export class RequestPipeline {
               reservationActive = false;
             }
             const terminalError = error instanceof Error ? error : new Error(String(error));
+            this.recordTerminalFailure(prepared, terminalError);
             this.ports.emit({
               type: "request.failed",
               requestId: input.requestId,
@@ -418,6 +416,7 @@ export class RequestPipeline {
                   for await (const chunk of this.ports.executor.executeStream(
                     fallbackPrepared,
                     { ...input.params, model: fallback.model },
+                    { recordCircuitFailure: false },
                   )) {
                     fallbackVisible = true;
                     if (chunk.type === "usage") {
@@ -489,7 +488,8 @@ export class RequestPipeline {
               this.ports.budget.release(input.requestId);
               reservationActive = false;
             }
-            const terminalError = error instanceof Error ? error : new Error(String(error));
+            const terminalError = primaryError instanceof Error ? primaryError : new Error(String(primaryError));
+            this.recordTerminalFailure(prepared, terminalError);
             this.ports.emit({
               type: "request.failed",
               requestId: input.requestId,
@@ -508,7 +508,7 @@ export class RequestPipeline {
               durationMs: this.ports.now() - input.startTime,
               attempts: attempt + 1,
             });
-            throw error;
+            throw primaryError;
           }
 
           const delay = calculateBackoff(attempt, prepared.context.policy.backoff);
@@ -529,6 +529,7 @@ export class RequestPipeline {
               reservationActive = false;
             }
             const terminalError = sleepError instanceof Error ? sleepError : new Error(String(sleepError));
+            this.recordTerminalFailure(prepared, terminalError);
             this.ports.emit({
               type: "request.failed",
               requestId: input.requestId,
@@ -596,7 +597,7 @@ export class RequestPipeline {
         const result = await this.ports.executor.executeComplete(
           prepared,
           { ...input.params, messages: structuredMessages, extra: structuredExtra },
-          { dispose: false },
+          { dispose: false, recordCircuitFailure: false },
         );
 
         if (result.ok) {
@@ -739,7 +740,7 @@ export class RequestPipeline {
                 model: fallback.model,
                 messages: structuredMessages,
                 extra: { ...structuredExtra, ...(input.jsonModeParams?.(fallback.provider) ?? {}) },
-              });
+              }, { recordCircuitFailure: false });
               if (!fallbackResult.ok && input.callerSignal?.aborted) {
                 primaryError = fallbackResult.error;
               }
@@ -775,6 +776,7 @@ export class RequestPipeline {
         break;
       }
 
+      this.recordTerminalFailure(prepared, primaryError);
       this.ports.budget.release(input.requestId);
       const error = primaryError instanceof Error ? primaryError : new Error(String(primaryError));
       this.ports.emit({
@@ -798,6 +800,15 @@ export class RequestPipeline {
       throw primaryError;
     } finally {
       prepared.dispose();
+    }
+  }
+
+  private recordTerminalFailure(
+    prepared: ReturnType<RequestExecutor["prepare"]>,
+    error: unknown,
+  ): void {
+    if (!prepared.context.callerSignal?.aborted) {
+      prepared.circuitBreaker?.recordFailure(error instanceof Error ? error : undefined);
     }
   }
 
