@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "3.4.4",
+  "version": "3.5.0",
   "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -191,6 +191,14 @@
       "types": "./dist/frameworks/nextjs/index.d.ts",
       "import": "./dist/frameworks/nextjs/index.js"
     },
+    "./nextjs/api": {
+      "types": "./dist/frameworks/nextjs/api/index.d.ts",
+      "import": "./dist/frameworks/nextjs/api/index.js"
+    },
+    "./nextjs/edge": {
+      "types": "./dist/frameworks/nextjs/edge/index.d.ts",
+      "import": "./dist/frameworks/nextjs/edge/index.js"
+    },
     "./astro": {
       "types": "./dist/frameworks/astro/index.d.ts",
       "import": "./dist/frameworks/astro/index.js"
@@ -242,7 +250,7 @@
     "check:package": "npm run build && node tools/check-package.mjs",
     "test:root": "vitest run",
     "build:packages": "npm run build --workspaces --if-present",
-    "test:packages": "npm run build:packages && npm run test --workspace hilbras --workspace create-hilbras-app --workspace @hilbras/next --workspace @hilbras/react --workspace @hilbras/ui"
+    "test:packages": "npm run build:packages && npm run test --workspace hilbras --workspace create-hilbras-app --workspace @hilbras/react --workspace @hilbras/ui"
   },
   "engines": {
     "node": ">=18"

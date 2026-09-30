@@ -1,5 +1,5 @@
 /**
- * @hilbras/next — createStreamHandler / createStreamCompletionHandler
+ * @hilbras/sdk — @hilbras/sdk/nextjs/api: createStreamHandler / createStreamCompletionHandler
  *
  * `stream.ts` shipped with no tests at all: 199 lines on a public route helper.
  * The suite added in 2.3.0 covers the NDJSON protocol, the `onRequest` /
@@ -10,18 +10,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("next/server", () => ({
-  NextResponse: {
-    json: (data: any, init?: any) => ({
-      status: init?.status ?? 200,
-      headers: new Map(Object.entries(init?.headers ?? {})),
-      body: JSON.stringify(data),
-    }),
-    next: () => ({ status: 200, headers: new Map() }),
-  },
-}));
 
-import { createStreamHandler, createStreamCompletionHandler } from "../src/stream";
+import { createStreamHandler, createStreamCompletionHandler } from "../../src/frameworks/nextjs/api/stream.js";
 
 const originalEnv = { ...process.env };
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -95,7 +85,7 @@ describe("createStreamHandler — validation", () => {
     const res = await POST(makeRequest({}));
 
     expect(res.status).toBe(400);
-    expect(JSON.parse(res.body).error).toBe("Request failed");
+    expect(JSON.parse(await res.text()).error).toBe("Request failed");
   });
 
   it("rejects a message with an unknown role", async () => {
@@ -161,13 +151,13 @@ describe("createStreamHandler — validation", () => {
       client: clientWith([]),
       provider: "openai",
       model: "gpt-4o",
-      onError: () => ({ status: 418, body: "custom" }) as any,
+      onError: () => new Response("custom", { status: 418 }),
     });
 
     const res = await POST(makeRequest({}));
 
     expect(res.status).toBe(418);
-    expect(res.body).toBe("custom");
+    expect(await res.text()).toBe("custom");
   });
 });
 

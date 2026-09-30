@@ -5,8 +5,8 @@
 # red. The first mutation restores the exact v2.2.0 keying (`split(",")[0]`).
 set -uo pipefail
 
-cd /home/gin/work/Hilbras/SDK/packages/next
-SRC=src/middleware.ts
+cd /home/gin/work/Hilbras/SDK
+SRC=src/frameworks/nextjs/edge/middleware.ts
 SNAP=$(mktemp -d)/middleware.ts
 cp "$SRC" "$SNAP"
 restore() { cp "$SNAP" "$SRC"; }
@@ -22,7 +22,7 @@ mutate() { # name  sed-expr  test-substring
     return 2
   fi
   local out
-  out=$(npx vitest run tests/middleware.test.ts --testNamePattern "$want" 2>&1)
+  out=$(npx vitest run tests/frameworks/next-middleware.test.ts --testNamePattern "$want" 2>&1)
   if echo "$out" | grep -qE "Tests +[0-9]+ failed"; then
     echo "KILLED   $name  (expects: $want)"
   else
@@ -31,7 +31,7 @@ mutate() { # name  sed-expr  test-substring
 }
 
 echo "== baseline =="
-npx vitest run tests/middleware.test.ts 2>&1 | grep -E "Tests +[0-9]+ (passed|failed)" || true
+npx vitest run tests/frameworks/next-middleware.test.ts 2>&1 | grep -E "Tests +[0-9]+ (passed|failed)" || true
 echo
 
 echo "== mutations =="

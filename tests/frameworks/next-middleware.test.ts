@@ -1,5 +1,5 @@
 /**
- * @hilbras/next — middleware rate-limit keying
+ * @hilbras/sdk — @hilbras/sdk/nextjs/edge: middleware rate-limit keying
  *
  * Before 2.3.0 the bucket key was `x-forwarded-for.split(",")[0]`, the
  * leftmost entry. Every common proxy (nginx `proxy_add_x_forwarded_for`,
@@ -13,30 +13,9 @@
  * both the old and new code produced identical keys. Every test below uses a
  * multi-entry header, which is what a real proxied request carries.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
-vi.mock("next/server", () => {
-  class MockHeaders extends Map {
-    constructor(init?: Record<string, string>) {
-      super();
-      if (init) Object.entries(init).forEach(([k, v]) => this.set(k, v));
-    }
-  }
-  return {
-    NextResponse: {
-      json: (data: any, init?: any) => ({
-        status: init?.status ?? 200,
-        headers: new MockHeaders(init?.headers),
-        body: JSON.stringify(data),
-      }),
-      next: () => ({ status: 200, headers: new MockHeaders() }),
-    },
-  };
-});
-
-vi.mock("next", () => ({}));
-
-import { hilbrasMiddleware, forwardedClientIp } from "../src/middleware";
+import { hilbrasMiddleware, forwardedClientIp } from "../../src/frameworks/nextjs/edge/middleware.js";
 
 /** Build a request whose x-forwarded-for is `entries.join(", ")`. */
 function createRequest(path = "/api/chat", entries: string[] = ["1.1.1.1"], extra: Record<string, string> = {}) {
@@ -314,7 +293,7 @@ describe("hilbrasMiddleware — existing behaviour", () => {
       maxRequests: 1,
       windowSeconds: 60,
       trustProxy: 1,
-      onError: (msg) => ({ status: 503, body: msg } as any),
+      onError: (msg) => new Response(msg, { status: 503 }),
     });
     const req = createRequest("/api/chat", ["1.1.1.1"]);
 
@@ -322,7 +301,7 @@ describe("hilbrasMiddleware — existing behaviour", () => {
     const res = await mw(req);
 
     expect(res.status).toBe(503);
-    expect(res.body).toBe("Rate limit exceeded");
+    expect(await res.text()).toBe("Rate limit exceeded");
   });
 });
 

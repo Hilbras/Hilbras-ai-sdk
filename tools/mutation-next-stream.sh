@@ -6,8 +6,8 @@
 # coverage it cannot observe.
 set -uo pipefail
 
-cd /home/gin/work/Hilbras/SDK/packages/next
-SRC=src/stream.ts
+cd /home/gin/work/Hilbras/SDK
+SRC=src/frameworks/nextjs/api/stream.ts
 SNAP=$(mktemp -d)/stream.ts
 cp "$SRC" "$SNAP"
 restore() { cp "$SNAP" "$SRC"; }
@@ -23,7 +23,7 @@ mutate() { # name  sed-expr  test-substring
     return 2
   fi
   local out
-  out=$(npx vitest run tests/stream.test.ts --testNamePattern "$want" 2>&1)
+  out=$(npx vitest run tests/frameworks/next-stream.test.ts --testNamePattern "$want" 2>&1)
   if echo "$out" | grep -qE "Tests +[0-9]+ failed"; then
     echo "KILLED   $name  (expects: $want)"
   else
@@ -32,7 +32,7 @@ mutate() { # name  sed-expr  test-substring
 }
 
 echo "== baseline =="
-npx vitest run tests/stream.test.ts 2>&1 | grep -E "Tests +[0-9]+ (passed|failed)" || true
+npx vitest run tests/frameworks/next-stream.test.ts 2>&1 | grep -E "Tests +[0-9]+ (passed|failed)" || true
 echo
 echo "== mutations =="
 

@@ -1,4 +1,9 @@
-import { type NextRequest, NextResponse } from "next/server";
+import {
+  createNextResponseShim,
+  type NextRequestLike,
+} from "../next-runtime.js";
+
+const NextResponse = createNextResponseShim();
 
 export interface HilbrasMiddlewareOptions {
   /** Rate limit: max requests per window (default: 60) */
@@ -32,7 +37,7 @@ export interface HilbrasMiddlewareOptions {
    * Key derivation for the rate-limit bucket, used when no trustworthy forwarded
    * address is available.
    */
-  fallbackKey?: (request: NextRequest) => string;
+  fallbackKey?: (request: NextRequestLike) => string;
   /**
    * Counter backend. The default is in-process `Map` state, which is correct
    * for a single instance or a dev server. Behind more than one instance each
@@ -122,7 +127,7 @@ export function forwardedClientIp(
  * @example
  * ```ts
  * // middleware.ts
- * import { hilbrasMiddleware } from "@hilbras/next";
+ * import { hilbrasMiddleware } from "@hilbras/sdk/nextjs/edge";
  *
  * export const config = { matcher: ["/api/:path*"] };
  * export default hilbrasMiddleware({ maxRequests: 30, trustProxy: 1 });
@@ -139,7 +144,7 @@ export function hilbrasMiddleware(options: HilbrasMiddlewareOptions = {}) {
     store = createMemoryStore(),
   } = options;
 
-  function getClientKey(request: NextRequest): string {
+  function getClientKey(request: NextRequestLike): string {
     const fromHeader = forwardedClientIp(
       request.headers.get("x-forwarded-for"),
       trustProxy,
@@ -167,7 +172,7 @@ export function hilbrasMiddleware(options: HilbrasMiddlewareOptions = {}) {
     return "unidentified";
   }
 
-  return async function middleware(request: NextRequest) {
+  return async function middleware(request: NextRequestLike) {
     const path = request.nextUrl.pathname;
 
     if (excludePaths.some((p) => path.startsWith(p))) {

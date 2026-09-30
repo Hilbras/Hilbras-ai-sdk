@@ -152,15 +152,28 @@ export const Chat = () => {
 
 ## Next.js
 
+Everything ships inside `@hilbras/sdk`; there are no separate framework
+packages to install.
+
 ```bash
-npm install @hilbras/next @hilbras/react @hilbras/sdk
+npm install @hilbras/sdk
 ```
+
+| Subpath | Provides |
+|---------|----------|
+| `@hilbras/sdk/nextjs` | `createChatHandler`, `createCompletionHandler`, `useChat`, `useCompletion` |
+| `@hilbras/sdk/nextjs/api` | `createStreamHandler`, `createStreamCompletionHandler` |
+| `@hilbras/sdk/nextjs/edge` | `hilbrasMiddleware` |
+
+None of these require `next` to be installed. They are written against the Web
+`Request`/`Response` types, so importing them resolves with no Next present —
+Next is only needed where you wire them into a real app.
 
 ### Route Handler (Server)
 
 ```ts
 // app/api/chat/route.ts
-import { createStreamHandler } from "@hilbras/next";
+import { createStreamHandler } from "@hilbras/sdk/nextjs/api";
 
 export const { POST } = createStreamHandler({
   provider: "openai",
@@ -290,14 +303,16 @@ export const { POST } = createChatHandler({
 });
 ```
 
-### Rate limiting in `@hilbras/next`
+### Rate limiting in Next.js
 
-`hilbrasMiddleware` keys its bucket on the client address. Set `trustProxy` to
-the number of reverse proxies in front of your app, because `x-forwarded-for` is
-client-controllable at its left edge:
+`hilbrasMiddleware` (from `@hilbras/sdk/nextjs/edge`) keys its bucket on the
+client address. Set `trustProxy` to the number of reverse proxies in front of
+your app, because `x-forwarded-for` is client-controllable at its left edge:
 
 ```ts
 // middleware.ts — one proxy (nginx, Vercel, Cloudflare)
+import { hilbrasMiddleware } from "@hilbras/sdk/nextjs/edge";
+
 export default hilbrasMiddleware({ maxRequests: 30, trustProxy: 1 });
 ```
 
