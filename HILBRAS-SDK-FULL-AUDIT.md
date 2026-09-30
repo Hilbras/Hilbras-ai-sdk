@@ -350,6 +350,10 @@ the v3.2 configuration API compatible:
 | `npm run size` | Pass: 1,126.4 KB / 1,900 KB |
 | `npm run benchmark` | Pass; canonical benchmark suite completed |
 | `npm run test:coverage` | Tests pass; thresholds remain unmet at 62.56% statements, 57.69% branches, 66.39% functions, 64.89% lines versus 80/70/80/80. Thresholds were not lowered. |
+| GitHub PR CI | Pass on Node 22 and Node 24: lint, all four test shards, companion build and tests |
+| `npm view @hilbras/sdk@3.3.0` | Pass: version published, `latest` tag is `3.3.0` |
+| Clean-install runtime smoke | Pass: root and `@hilbras/sdk/config` imports, resolver precedence, injected file and environment sources, redacted snapshot, `complete()`, `stream()`, and error propagation |
+| Clean-install type smoke | Pass: `tsc --strict` over the new resolver, source, client, and legacy configuration surfaces |
 
 ### Security and compatibility findings
 
