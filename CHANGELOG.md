@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.2] - 2026-09-30
+
+### Fixed
+
+- `ToolPolicy.narrow()` no longer treats an empty intersection as unrestricted.
+  Narrowing a policy whose allow-list is `["a"]` by an allow-list of `["b"]`
+  produced an empty intersection, which the constructor collapsed to "no
+  restriction" — so the narrowed policy permitted **everything**. Narrowing is
+  now strictly narrowing in all cases, including the empty intersection.
+  Found by the published-package smoke test for v3.4.1.
+
+### Added
+
+- Three tests covering the empty-intersection regression, narrowing an already
+  empty intersection, and the unchanged configuration semantics where
+  `allowedTools: []` still means "no restriction".
+
+### Compatibility
+
+Bug fix. `ToolPolicy` construction from configuration is unchanged:
+`allowedTools: []` still means "no restriction". Only the result of an explicit
+`narrow()` call changes, and it changes from over-permissive to correct.
+
+---
+
 ## [3.4.1] - 2026-09-30
 
 ### Fixed
