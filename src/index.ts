@@ -169,7 +169,9 @@ export type { CredentialSource, CredentialProvider } from "./credentials/provide
 export { validateBaseUrl } from "./security/url-guard.js";
 export type { UrlGuardOptions, UrlGuardResult } from "./security/url-guard.js";
 export { RequestSigner, signingMiddleware } from "./security/request-signer.js";
-export type { RequestSignerConfig, SignedRequest } from "./security/request-signer.js";
+export type { RequestSignerConfig, SignedRequest, SignatureProfile, SignableBody } from "./security/request-signer.js";
+export { ReplayGuard, createReplayGuard } from "./security/replay-guard.js";
+export type { ReplayGuardOptions, ReplayVerdict } from "./security/replay-guard.js";
 export { redactPii, detectPii, createPiiRedactor } from "./security/pii-guard.js";
 export type { PiiType, PiiMatch, PiiGuardConfig } from "./security/pii-guard.js";
 export { AuditLogger, createRetentionPolicy } from "./security/audit-logger.js";
@@ -284,6 +286,28 @@ export { PluginRegistry } from "./plugin/registry.js";
 // ─── RBAC (v3.0.0) ─────────────────────────────────────────────────────────
 export { createRBACMiddleware, checkPermission } from "./security/rbac.js";
 export type { RBACRole, RBACConfig, PermissionCheck } from "./security/rbac.js";
+
+// ─── Authorization enforcement (v3.4.0) ───────────────────────────────────
+export {
+  evaluateAuthorization,
+  evaluateRoleRequest,
+  resolveRequestFromContext,
+  validateRbacConfig,
+  isStringArray,
+} from "./security/authorization.js";
+export type {
+  AuthorizationBudgetView,
+  AuthorizationDiagnostic,
+  AuthorizationDiagnosticSeverity,
+  AuthorizationEnforcement,
+  AuthorizationOptions,
+  AuthorizationVerdict,
+  ResolveAuthorizationBudget,
+  ResolveProviderByUrl,
+  RBACRequestContext,
+} from "./security/authorization.js";
+export { ToolPolicy, createToolPolicy } from "./security/tool-policy.js";
+export type { ToolPolicyInput, ToolPolicyCheck } from "./security/tool-policy.js";
 
 // ─── Cost Alerts (v3.0.0) ──────────────────────────────────────────────────
 export { CostAlertMonitor, createCostAlertBudget } from "./cost/alerts.js";

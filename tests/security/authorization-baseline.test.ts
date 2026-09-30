@@ -234,29 +234,37 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
 });
 
 describe("B. request signing and transport defects (red on v3.3.0, fixed in v3.4.0)", () => {
-  it.fails("S1: two different bodies produce different signatures", () => {
-    const signer = new RequestSigner({ secret: "s", profile: "v2" } as never);
+  it("S1: two different bodies produce different signatures", () => {
+    const signer = new RequestSigner({ secret: "s", profile: "v2" });
     const timestamp = new Date().toUTCString();
     const a = signer.sign(OPENAI_URL, { method: "POST", body: '{"model":"gpt-4o"}', timestamp });
     const b = signer.sign(OPENAI_URL, { method: "POST", body: '{"model":"claude-3"}', timestamp });
     expect(a.signature).not.toBe(b.signature);
   });
 
-  it.fails("S2: verify recomputes the body digest from the received bytes", () => {
-    const signer = new RequestSigner({ secret: "s", profile: "v2" } as never);
+  it("S2: verify recomputes the body digest from the received bytes", () => {
+    const signer = new RequestSigner({ secret: "s", profile: "v2" });
     const timestamp = new Date().toUTCString();
     const signed = signer.sign(OPENAI_URL, { method: "POST", body: '{"model":"gpt-4o"}', timestamp });
-    // Attacker swaps the body AND the digest header to match.
+    // The attacker swaps the body and rewrites the digest header to match. Only
+    // recomputing the digest from the received bytes catches this.
     const tamperedHeaders = {
       ...signed.headers,
-      "x-hilbras-content-digest": signed.headers["x-content-sha256"],
+      "x-hilbras-content-digest": signed.headers["x-hilbras-content-digest"],
     };
-    const valid = signer.verify(
+    const withTamperedBody = signer.verify(
       OPENAI_URL,
       { method: "POST", body: '{"model":"claude-3"}', headers: tamperedHeaders },
       signed.signature,
     );
-    expect(valid).toBe(false);
+    expect(withTamperedBody).toBe(false);
+
+    // The untampered request still verifies.
+    expect(signer.verify(
+      OPENAI_URL,
+      { method: "POST", body: '{"model":"gpt-4o"}', headers: signed.headers },
+      signed.signature,
+    )).toBe(true);
   });
 
   it.fails("S4: a stage after a retry stage re-runs on every attempt", async () => {
@@ -278,31 +286,32 @@ describe("B. request signing and transport defects (red on v3.3.0, fixed in v3.4
     expect(downstreamCalls).toBe(3);
   });
 
-  it.fails("S5: a FormData body does not emit a constant content digest", async () => {
-    const signer = new RequestSigner({ secret: "s", profile: "v2" } as never);
-    const mw = signingMiddleware(signer);
-
-    const first = new FormData();
-    first.set("file", "alpha", "a.txt");
-    const second = new FormData();
-    second.set("file", "omega", "b.txt");
-
-    const collect = async (body: FormData): Promise<Record<string, string | undefined>> => {
+  it("S5: a FormData body emits no content digest instead of a constant one", async () => {
+    const collect = async (mw: Middleware, body: FormData): Promise<Record<string, string | undefined>> => {
       const ctx = makeCtx({ headers: {}, bodyRaw: body });
       await mw(ctx);
       return ctx.init.headers ?? {};
     };
+    const formData = (value: string): FormData => {
+      const form = new FormData();
+      form.set("file", new Blob([value]), "upload.txt");
+      return form;
+    };
 
-    const a = await collect(first);
-    const b = await collect(second);
-    const digestOf = (h: Record<string, string | undefined>): string | undefined =>
-      h["x-hilbras-content-digest"] ?? h["x-content-sha256"];
-    // Either a real content-bound digest, or no digest at all. Never a constant
-    // that claims to authenticate the upload.
-    expect(digestOf(a)).not.toBe(digestOf(b));
+    const v2 = signingMiddleware(new RequestSigner({ secret: "s", profile: "v2" }));
+    const underV2 = await collect(v2, formData("alpha"));
+    expect(underV2["x-hilbras-content-digest"]).toBeUndefined();
+    expect(underV2["x-content-sha256"]).toBeUndefined();
+
+    // Frozen v1 keeps emitting its constant placeholder digest; documented, not
+    // silently changed.
+    const v1 = signingMiddleware(new RequestSigner({ secret: "s" }));
+    const a = await collect(v1, formData("alpha"));
+    const b = await collect(v1, formData("omega"));
+    expect(a["x-content-sha256"]).toBe(b["x-content-sha256"]);
   });
 
-  it.fails("S6: signing emits one header key per name", async () => {
+  it("S6: signing emits one header key per name", async () => {
     const signer = new RequestSigner({ secret: "s" });
     const mw = signingMiddleware(signer);
     const ctx = makeCtx({
@@ -312,22 +321,42 @@ describe("B. request signing and transport defects (red on v3.3.0, fixed in v3.4
     await mw(ctx);
     const keys = Object.keys(ctx.init.headers ?? {}).map((k) => k.toLowerCase());
     expect(new Set(keys).size).toBe(keys.length);
+    // The credential survives, under a single normalized name.
+    expect(ctx.init.headers?.authorization).toBe("Bearer secret-token");
+    expect(ctx.init.headers?.["content-type"]).toBe("application/json");
   });
 
-  it.fails("S7: the key id is covered by the signature", () => {
-    const signer = new RequestSigner({ secret: "s", keyId: "key-a", profile: "v2" } as never);
+  it("S7: the key id is covered by the signature", () => {
     const timestamp = new Date().toUTCString();
-    const a = signer.sign(OPENAI_URL, { method: "GET", headers: {}, timestamp });
-    const b = signer.sign(OPENAI_URL, { method: "GET", headers: { "x-hilbras-key-id": "key-b" }, timestamp });
+    const keyA = new RequestSigner({ secret: "s", keyId: "key-a", profile: "v2" });
+    const keyB = new RequestSigner({ secret: "s", keyId: "key-b", profile: "v2" });
+
+    const a = keyA.sign(OPENAI_URL, { method: "GET", headers: {}, timestamp });
+    const b = keyB.sign(OPENAI_URL, { method: "GET", headers: {}, timestamp });
     expect(a.signature).not.toBe(b.signature);
+
+    // Rewriting the key-id header on the wire is a key-confusion attempt and
+    // must not verify.
+    const tampered = { ...a.headers, "x-hilbras-key-id": "key-b" };
+    expect(keyA.verify(OPENAI_URL, { method: "GET", headers: tampered }, a.signature)).toBe(false);
   });
 
-  it.fails("S8: two signatures in the same second differ", () => {
-    const signer = new RequestSigner({ secret: "s", profile: "v2" } as never);
+  it("S8: two signatures in the same second differ", () => {
+    const signer = new RequestSigner({ secret: "s", profile: "v2" });
     const timestamp = new Date().toUTCString();
     const a = signer.sign(OPENAI_URL, { method: "POST", body: '{"model":"gpt-4o"}', timestamp });
     const b = signer.sign(OPENAI_URL, { method: "POST", body: '{"model":"gpt-4o"}', timestamp });
     expect(a.signature).not.toBe(b.signature);
+    expect(a.headers["x-hilbras-nonce"]).not.toBe(b.headers["x-hilbras-nonce"]);
+  });
+
+  it("S9: a non-sha256 algorithm uses a correctly named digest header", () => {
+    const sha512 = new RequestSigner({ secret: "s", algorithm: "sha512", profile: "v2" });
+    const signed = sha512.sign(OPENAI_URL, { method: "POST", body: '{"model":"gpt-4o"}' });
+    expect(signed.signature).toHaveLength(128);
+    // The digest header is a content digest, not a mislabeled SHA-256.
+    expect(signed.headers["x-hilbras-content-digest"]).toMatch(/^[a-f0-9]{128}$/);
+    expect(signed.headers["x-content-sha256"]).toBeUndefined();
   });
 });
 
