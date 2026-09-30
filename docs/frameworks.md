@@ -8,11 +8,31 @@ Signal-based hooks for React, Vue, Svelte, Solid, Qwik, Angular, and Next.js.
 npm install @hilbras/sdk
 ```
 
+There are two React subpaths. They export the same hook names with different
+transports, so pick by transport:
+
+| Subpath | `useChat` calls | Credentials | Use when |
+|---------|-----------------|-------------|----------|
+| `@hilbras/sdk/react` | `fetch(api)` — your route | Stay on your server | **Default.** |
+| `@hilbras/sdk/react-client` | `client.stream()` — the provider | Reach the browser | Trusted/internal apps only. |
+
+### Route-based (recommended)
+
 ```tsx
-import { useChat } from "@hilbras/sdk/react-client";
+// app/api/chat/route.ts — server
+import { createChatHandler } from "@hilbras/sdk/nextjs";
+
+export const { POST } = createChatHandler({ provider: "openai", model: "gpt-4o" });
+```
+
+```tsx
+"use client";
+import { useChat } from "@hilbras/sdk/react";
 
 function Chat() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  // `messages` is an array, `handleSubmit` takes no argument, and the input is
+  // driven by `input` / `setInput` — there is no `handleInputChange`.
+  const { messages, input, setInput, handleSubmit, isLoading } = useChat({
     api: "/api/chat",
   });
 
@@ -21,8 +41,54 @@ function Chat() {
       {messages.map((m) => (
         <div key={m.id}>{m.role}: {m.content}</div>
       ))}
-      <form onSubmit={handleSubmit}>
-        <input value={input} onChange={handleInputChange} />
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSubmit();
+        }}
+      >
+        <input value={input} onChange={(e) => setInput(e.target.value)} />
+      </form>
+    </div>
+  );
+}
+```
+
+### Client-mode
+
+`@hilbras/sdk/react-client` holds a `HilbrasClient` and calls the provider from
+the browser. A key given to it — directly or through `HilbrasProvider`'s
+`config` — is bundled into your client-side JavaScript, where anyone can read
+it. Use it only where that is acceptable: an internal tool behind SSO, an
+Electron app, or code running outside a browser bundle.
+
+```tsx
+"use client";
+import { HilbrasProvider, useChat } from "@hilbras/sdk/react-client";
+
+function Chat({ client }: { client: import("@hilbras/sdk").HilbrasClient }) {
+  return (
+    <HilbrasProvider client={client}>
+      <Body />
+    </HilbrasProvider>
+  );
+}
+
+function Body() {
+  const { messages, input, setInput, handleSubmit } = useChat({
+    provider: "OpenAI",
+    model: "gpt-4o",
+  });
+  return (
+    <div>
+      {messages.map((m) => <div key={m.id}>{m.role}: {m.content}</div>)}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSubmit();
+        }}
+      >
+        <input value={input} onChange={(e) => setInput(e.target.value)} />
       </form>
     </div>
   );
@@ -37,9 +103,11 @@ npm install @hilbras/sdk
 
 ```vue
 <script setup>
-import { useChat } from "@hilbras/sdk";
+import { useChat } from "@hilbras/sdk/vue";
 
-const { messages, input, handleSubmit, isLoading } = useChat();
+const { messages, input, handleSubmit, isLoading } = useChat({
+  api: "/api/chat",
+});
 </script>
 
 <template>
@@ -58,9 +126,11 @@ npm install @hilbras/sdk
 
 ```svelte
 <script>
-  import { useChat } from "@hilbras/sdk";
+  import { useChat } from "@hilbras/sdk/svelte";
 
-  const { messages, input, handleSubmit, isLoading } = useChat();
+  const { messages, input, handleSubmit, isLoading } = useChat({
+  api: "/api/chat",
+});
 </script>
 
 {#each $messages as m}
@@ -79,7 +149,7 @@ npm install @hilbras/sdk
 ```
 
 ```tsx
-import { useChat } from "@hilbras/sdk";
+import { useChat } from "@hilbras/sdk/solid";
 
 function Chat() {
   const { messages, append, clear } = useChat();
@@ -103,27 +173,35 @@ function Chat() {
 npm install @hilbras/sdk
 ```
 
+Angular gets a service rather than a hook. State is exposed as signals, so read
+`messages()` in a template and call `setInput()` / `submit()` imperatively.
+
 ```typescript
-import { Component } from "@angular/core";
-import { useChat } from "@hilbras/sdk";
+import { Component, inject } from "@angular/core";
+import { HilbrasChatService } from "@hilbras/sdk/angular";
 
 @Component({
   selector: "app-chat",
   template: `
-    @for (m of chatService.messages(); track m.id) {
+    @for (m of chat.messages(); track m.id) {
       <div>{{ m.role }}: {{ m.content }}</div>
     }
-    <button (click)="send()">Send</button>
+    <button (click)="send()" [disabled]="chat.isLoading()">Send</button>
   `,
 })
 export class ChatComponent {
-  constructor(public chatService: ChatService) {}
+  protected readonly chat = inject(HilbrasChatService);
 
   send() {
-    this.chatService.append({ role: "user", content: "Hello" });
+    this.chat.setInput("Hello");
+    void this.chat.submit({ api: "/api/chat" });
   }
 }
 ```
+
+`ChatOptions` takes `api` (your route) plus optional `provider`, `model`,
+`maxSteps`, `headers` and `body`.
+
 
 ## Qwik
 
@@ -132,7 +210,7 @@ npm install @hilbras/sdk
 ```
 
 ```tsx
-import { useChat } from "@hilbras/sdk";
+import { useChat } from "@hilbras/sdk/qwik";
 
 export const Chat = () => {
   const { messages, append, clear } = useChat();
@@ -182,38 +260,16 @@ export const { POST } = createStreamHandler({
 });
 ```
 
+_(illustrative — `process` needs `@types/node` in your tsconfig)_
+
 ### Client Component
 
-Provider credentials stay on the server. Pass a server-created client to
-`@hilbras/sdk/react-client`; do not call `addProviderFromCatalog` in a browser component.
+Provider credentials stay on the server. For the recommended pattern, use the
+route-based hook from `@hilbras/sdk/react` — see [React](#react) above. To use
+the client-mode hooks instead, pass a server-created client to
+`@hilbras/sdk/react-client`; never call `addProviderFromCatalog` in a browser
+component, because the key would be bundled into the client JavaScript.
 
-```tsx
-"use client";
-import { HilbrasProvider, useChat } from "@hilbras/sdk/react-client";
-
-export function Chat({ client }: { client: import("@hilbras/sdk").HilbrasClient }) {
-  return (
-    <HilbrasProvider client={client}>
-      <ChatBody />
-    </HilbrasProvider>
-  );
-}
-
-function ChatBody() {
-  const { messages, input, setInput, handleSubmit } = useChat({
-    provider: "OpenAI",
-    model: "gpt-4o",
-  });
-  return (
-    <div>
-      {messages.map((m) => <div key={m.id}>{m.role}: {m.content}</div>)}
-      <form onSubmit={handleSubmit}>
-        <input value={input} onChange={(event) => setInput(event.target.value)} />
-      </form>
-    </div>
-  );
-}
-```
 
 ## Route security
 
@@ -233,6 +289,8 @@ error is mapped by the same rules as a validation error.
 import { createChatHandler } from "@hilbras/sdk/nextjs";
 import { RequestValidationError } from "@hilbras/sdk";
 
+const ALLOWED_MODELS = new Set(["gpt-4o", "gpt-4o-mini"]);
+
 export const { POST } = createChatHandler({
   provider: "openai",
   model: "gpt-4o",
@@ -249,7 +307,7 @@ export const { POST } = createChatHandler({
   onError: (error, { phase }) => {
     // `errorResponse` withholds detail from the response body, so the
     // server-side log belongs here. `phase` is "request" or "provider".
-    logger.error({ err: error, phase }, "chat route failed");
+    console.error("chat route failed", { error, phase });
   },
 });
 ```
@@ -273,6 +331,8 @@ hardening release must not widen what a caller can influence. **The Next.js
 default flips to `false` in 4.0.0.**
 
 ```ts
+import { createChatHandler } from "@hilbras/sdk/nextjs";
+
 // Only the configured model is reachable; body.model, body.tools etc. are ignored.
 export const { POST } = createChatHandler({
   provider: "openai",
@@ -296,6 +356,8 @@ The defaults are far above any realistic request, so leaving `limits` unset
 bounds the worst case without changing what a normal call does.
 
 ```ts
+import { createChatHandler } from "@hilbras/sdk/nextjs";
+
 export const { POST } = createChatHandler({
   provider: "openai",
   model: "gpt-4o",
@@ -325,7 +387,22 @@ The counter is in-process by default, so behind more than one instance the
 effective limit is `maxRequests × instances`. Pass a `store` to share it:
 
 ```ts
-hilbrasMiddleware({ maxRequests: 30, trustProxy: 1, store: myRedisStore });
+import { hilbrasMiddleware, type RateLimitStore } from "@hilbras/sdk/nextjs/edge";
+
+// A store must increment the key and return the running count plus the instant
+// the window resets. Back it with whatever you already run — Redis, a KV store,
+// or a database. `increment` stands in for whatever your client exposes.
+declare function increment(key: string, windowMs: number): Promise<{ count: number; ttlMs: number }>;
+
+const store: RateLimitStore = {
+  async hit(key, windowMs) {
+    const { count, ttlMs } = await increment(key, windowMs);
+    // A fresh key reports -1 for its TTL; fall back to the requested window.
+    return { count, resetAt: Date.now() + (ttlMs >= 0 ? ttlMs : windowMs) };
+  },
+};
+
+export default hilbrasMiddleware({ maxRequests: 30, trustProxy: 1, store });
 ```
 
 ### Deprecated: `createServerClient`

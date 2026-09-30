@@ -113,7 +113,7 @@ error response.
 
 If you need to apply redaction to other text, `redact()` is also exported:
 
-```typescript
+```typescript fragment
 import { redact } from "@hilbras/sdk";
 const safe = redact(userProvidedText);
 ```
@@ -128,7 +128,7 @@ actually execute; see [Tool policy](#tool-policy).
 
 ### Defining roles
 
-```typescript
+```typescript fragment
 import { HilbrasClient, createRBACMiddleware } from "@hilbras/sdk";
 
 const rbac = createRBACMiddleware(
@@ -242,7 +242,7 @@ tracker. That tracker is session-scoped rather than per-role, so with several
 budgeted roles the same session total is compared against each role's ceiling.
 For per-role attribution, supply `resolveBudget`:
 
-```typescript
+```typescript fragment
 createRBACMiddleware(config, getUserId, {
   resolveBudget: ({ roleName, userId }) => ({
     spent: myLedger.spentFor(roleName, userId),
@@ -325,7 +325,7 @@ loop must apply the policy itself via `ToolLoopAgent`'s `toolPolicy`.
 Access-denied and rate-limit events are logged to the `AuditLogger` when one is
 configured, attributed with the caller's user id and the role that was applied:
 
-```typescript
+```typescript fragment
 import { AuditLogger, createRBACMiddleware } from "@hilbras/sdk";
 
 const auditLogger = new AuditLogger({ serviceName: "my-app" });
@@ -353,7 +353,7 @@ body, so a `v1` signature cannot detect a modified request body. Use `v2` for
 any new integration.
 
 ```typescript
-import { RequestSigner, signingMiddleware } from "@hilbras/sdk";
+import { HilbrasClient, RequestSigner, signingMiddleware } from "@hilbras/sdk";
 
 const signer = new RequestSigner({
   secret: process.env.GATEWAY_SECRET!,
@@ -373,7 +373,7 @@ never mistaken for content binding.
 A signature proves authorship, not freshness. Neither profile provides replay
 protection on its own; pair it with `ReplayGuard` or use `verifyFresh()`:
 
-```typescript
+```typescript fragment
 import { ReplayGuard } from "@hilbras/sdk";
 
 const guard = new ReplayGuard({ maxAgeMs: 5 * 60_000, maxSkewMs: 30_000 });
@@ -393,11 +393,86 @@ signing stage placed after a retry stage signs each attempt with a fresh
 timestamp and nonce:
 
 ```typescript
+import {
+  HilbrasClient,
+  RequestSigner,
+  composeMiddlewares,
+  retryMiddleware,
+  signingMiddleware,
+} from "@hilbras/sdk";
+
+const signer = new RequestSigner({
+  secret: process.env.GATEWAY_SECRET!,
+  keyId: "key-2026-09",
+  profile: "v2",
+});
+
 const client = new HilbrasClient({
   middleware: composeMiddlewares(retryMiddleware(2), signingMiddleware(signer)),
 });
 ```
 
+## Route security — v3.5.0
+
+The controls above protect the SDK core. The framework handler factories are a
+separate trust boundary: they sit on a public HTTP route and turn a request body
+into a provider call. v3.5.0 adds three controls for that boundary, all optional
+and defaulting to the pre-3.5.0 behaviour.
+
+| Control | Default | Protects |
+|---------|---------|----------|
+| `onRequest` | not set | Authentication and authorization. Runs after validation, before the provider call. |
+| `trustClientFields` | `true` (Next.js) / `false` (Astro, Remix) | Stops a caller overriding the model, tools, steps or sampling you configured. |
+| `limits` | generous defaults | Bounds body size, message and tool count, and `maxSteps` / `maxTokens` / `temperature`. |
+
+```ts
+import { createChatHandler } from "@hilbras/sdk/nextjs";
+import { RequestValidationError } from "@hilbras/sdk";
+
+export const { POST } = createChatHandler({
+  provider: "openai",
+  model: "gpt-4o",
+  // Only the configured model and tools are reachable.
+  trustClientFields: false,
+  limits: { maxBodyBytes: 64 * 1024, maxMessages: 40, maxStepsClamp: 5 },
+  onRequest: async ({ request }) => {
+    if (request.headers.get("authorization") !== `Bearer ${process.env.SESSION}`) {
+      throw new RequestValidationError("Unauthorized", undefined, 401);
+    }
+  },
+  onError: (error, { phase }) => {
+    // errorResponse withholds detail from the response body, so the log belongs here.
+    console.error("chat route failed", { error, phase });
+  },
+});
+```
+
+A request rejected by `onRequest` never reaches a provider, so it costs nothing
+upstream. `errorResponse` deliberately returns a generic 500 for anything that
+is not a `RequestValidationError`, so an internal message, provider response
+body, or key cannot leak through a public route — which is why `onError` exists.
+
+### Browser-side inference
+
+`@hilbras/sdk/react-client` holds a `HilbrasClient` and calls the provider from
+the browser. An API key given to it, directly or through `HilbrasProvider`'s
+`config`, is bundled into client-side JavaScript where anyone can read it.
+
+For a public app use the route-based `@hilbras/sdk/react` `useChat` with
+`createChatHandler` instead: the key stays on your server. The client-mode hooks
+are appropriate for a trusted environment — an internal tool behind SSO, an
+Electron app, or code that does not actually run in a browser.
+
+### Rate limiting
+
+`hilbrasMiddleware` (from `@hilbras/sdk/nextjs/edge`) keys its bucket on the
+client address. Set `trustProxy` to the number of proxies in front of your app:
+`x-forwarded-for` is client-controllable at its left edge, and the default of `0`
+trusts no entry and falls back to a single shared bucket. That under-serves
+anonymous callers but cannot be defeated by omitting a header.
+
+The counter is in-process by default, so behind multiple instances the effective
+limit is `maxRequests × instances`. Pass a `store` to share it.
 
 ## Reporting security issues
 

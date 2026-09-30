@@ -1,7 +1,7 @@
 {
   "name": "@hilbras/sdk",
   "version": "3.5.0",
-  "description": "Provider-agnostic LLM client SDK — streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
+  "description": "Provider-agnostic LLM client SDK \u2014 streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -254,7 +254,8 @@
     "check:package": "npm run build && node tools/check-package.mjs",
     "test:root": "vitest run",
     "build:packages": "npm run build --workspaces --if-present",
-    "test:packages": "npm run build:packages && npm run test --workspace hilbras --workspace create-hilbras-app --workspace @hilbras/ui"
+    "test:packages": "npm run build:packages && npm run test --workspace hilbras --workspace create-hilbras-app --workspace @hilbras/ui",
+    "check:docs": "bash tools/check-doc-examples.sh"
   },
   "engines": {
     "node": ">=18"

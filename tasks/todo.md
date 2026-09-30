@@ -1,5 +1,9 @@
 # v3.2.0 Task List
 
+> **Historical.** This is the v3.2.0 ledger; v3.2.0 shipped long ago. Two
+> items were left unticked and never will be: the release gate completed.
+> The active ledger is `tasks/v3.5.0-todo.md`.
+
 See [`tasks/plan.md`](plan.md) for architecture decisions, acceptance criteria, dependencies, and verification commands.
 
 ## Phase 0 — Characterization
