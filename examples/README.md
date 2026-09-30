@@ -9,6 +9,7 @@ Example apps demonstrating `@hilbras/sdk` with popular frameworks.
 | **Next.js** | [nextjs/](./nextjs/) | App Router, streaming, structured output, cost tracking |
 | **SvelteKit** | [sveltekit/](./sveltekit/) | Streaming, structured output, reactive UI |
 | **Hono** | [hono/](./hono/) | Edge runtime, lightweight API server |
+| **Configuration** | [configuration/](./configuration/) | Layered resolver, runtime sources, injected file reader |
 
 ## Quick Start
 

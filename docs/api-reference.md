@@ -155,6 +155,31 @@ recorded as a provider failure.
 A timeout of `0` disables the internal deadline. A provider-level timeout is
 used only when the resolved policy does not provide a positive request timeout.
 
+### Configuration resolver
+
+```typescript
+interface ConfigDiagnostic {
+  code: string;
+  message: string;
+  path: string;
+  severity: "info" | "warning" | "error";
+  source: "defaults" | "file" | "environment" | "runtime";
+}
+
+interface ResolvedSDKConfig {
+  values: SDKConfig;
+  sources: ConfigSourceKind[];
+  diagnostics: ConfigDiagnostic[];
+  fieldSources: Partial<Record<keyof SDKConfig, ConfigSourceKind>>;
+  safeSnapshot(): SafeSDKConfig;
+}
+```
+
+`resolveConfig()` applies defaults, file sources, environment sources, and
+runtime values in that order. Client configuration is resolved once during
+construction. `getConfigSnapshot()` returns a redacted projection; raw
+credentials are never included.
+
 ### `AdapterName`
 
 ```typescript

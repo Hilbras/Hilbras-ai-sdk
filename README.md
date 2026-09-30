@@ -166,6 +166,27 @@ const transport = new MiddlewareTransport(
 
 ---
 
+## Configuration
+
+v3.3 adds a typed configuration resolver with explicit precedence and
+secret-safe diagnostics:
+
+```typescript
+import { HilbrasClient, createRuntimeSource } from "@hilbras/sdk";
+
+const client = new HilbrasClient({
+  configSources: [
+    createRuntimeSource({ temperature: 0.3, maxRetries: 2 }),
+  ],
+});
+
+console.log(client.getConfigDiagnostics());
+```
+
+See [Configuration](docs/configuration.md) and the [v3.2 migration guide](docs/migration-from-v3.2.md).
+
+---
+
 ## Features at a glance
 
 | Feature | Summary | Docs |
@@ -188,6 +209,7 @@ const transport = new MiddlewareTransport(
 | **Error redaction** | API keys auto-redacted from provider error bodies | [Security](docs/security.md#error-redaction-in-provider-responses) |
 | **Reasoning normalization** | Detect & normalize `<thinking>` / `<reasoning>` tags and native fields | [API Reference](docs/api-reference.md) |
 | **Per-client tokenizer** | Scoped BPE tokenizer per client instance — no global singletons | [API Reference](docs/api-reference.md) |
+| **Configuration resolver** | Typed layered configuration with strict validation and redacted diagnostics | [Configuration](docs/configuration.md) |
 | **Middleware pipeline** | Transport-level middleware: auth headers, logging, custom request/response transforms | [API Reference](docs/api-reference.md) |
 | **Agent framework** | ToolLoopAgent, ReActAgent, PlanAndExecuteAgent with approval, budget, cost tracking | [Agent](docs/agent.md) |
 | **Evaluation** | LLM output evaluation with built-in metrics (exact_match, similarity, toxicity) | [Eval](docs/eval.md) |
