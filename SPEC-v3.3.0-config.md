@@ -279,12 +279,13 @@ npm audit --omit=dev
 8. Typecheck, lint, tests, build, package smoke tests, and size gate pass.
 9. Coverage thresholds are not lowered.
 
-## Open questions for implementation review
+## Implementation decisions
 
-1. Should the new client field be named `config`, `resolvedConfig`, or
-   `configurationSources`? Recommendation: `config` for the canonical input and
-   `resolvedConfig` only for an already-resolved internal value.
-2. Should strict unknown-key rejection be the default for the new resolver, or
-   warning-first? Recommendation: warning-first by default, strict opt-in.
-3. Should automatic `hilbras.config.json` discovery be added in v3.3.0?
-   Recommendation: no; keep discovery explicit to avoid unexpected file reads.
+1. The new client field is `config`; `configSources` accepts explicit sources,
+   and `resolvedConfig` accepts an already-resolved value.
+2. Unknown keys are warning-first by default; `rejectUnknownKeys: true` enables
+   strict rejection.
+3. Automatic `hilbras.config.json` discovery is not added; file paths remain
+   explicit to avoid unexpected filesystem reads.
+4. The canonical resolver is strict by default, while the legacy `loadConfig()`
+   facade keeps permissive file behavior for compatibility.
