@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.0] - 2026-09-30
+
+### Added
+
+- Canonical `resolveConfig()` API with typed defaults, file, environment, and runtime sources.
+- `ResolvedSDKConfig`, `ConfigDiagnostic`, source factories, and redacted `safeSnapshot()` output.
+- `HilbrasClient` support for `config`, `configSources`, and pre-resolved `resolvedConfig` inputs.
+- `getConfigSnapshot()` and `getConfigDiagnostics()` client inspection APIs.
+- Configuration guide, v3.2 migration guide, API reference, and runtime/file examples.
+
+### Changed
+
+- `HilbrasClient` resolves configuration once during construction and maps policy, budget, and providers through one shared adapter.
+- Configuration precedence is explicit: defaults < file < environment < runtime/client config < explicit policy/budget.
+- Configuration arrays and provider collections use replacement semantics.
+- `loadConfig()`, `createConfig()`, `validateConfig()`, and `sdkConfig` remain supported for compatibility.
+- Active README, package metadata, and lockfile now identify v3.3.0.
+
+### Fixed
+
+- Malformed environment numbers, booleans, and enum values no longer silently become invalid runtime values in the canonical resolver.
+- File, environment, and runtime provider URLs are validated through the existing SSRF policy.
+- Configuration sources use defensive copies, safe merges, and explicit diagnostics.
+- Configuration snapshots and diagnostics redact authentication values and sensitive headers.
+
+### Security and compatibility
+
+- The universal resolver and injected file source do not require direct filesystem access.
+- Unknown keys warn by default and can be rejected with `rejectUnknownKeys: true`.
+- No provider adapters, catalogs, or public execution contracts were removed.
+
+---
+
 ## [3.2.0] - 2026-09-24
 
 ### Added

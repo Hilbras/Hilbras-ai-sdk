@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.2.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-3.3.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1645%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1662%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -222,6 +222,22 @@ See [Configuration](docs/configuration.md) and the [v3.2 migration guide](docs/m
 | **Fine-tuning** | Export training data in 6 formats, data splitting, quality validation | [Fine-tune](docs/fine-tune.md) |
 | **Scaffolding** | `npx create-hilbras-app` project scaffolding | [CLI](docs/cli.md) |
 | **Zero runtime deps** | Pure TypeScript, no transitive dependencies | — |
+
+---
+
+## What's New in v3.3.0
+
+**Canonical configuration** — `resolveConfig()` now provides deterministic layered configuration with defaults, file sources, environment sources, and runtime/client values. The client resolves configuration once during construction.
+
+**Validation and diagnostics** — configuration values receive strict numeric, boolean, enum, provider, authentication, and SSRF validation. `getConfigDiagnostics()` reports safe, actionable diagnostics without exposing credentials.
+
+**Secret-safe snapshots** — `getConfigSnapshot()` returns a redacted configuration projection suitable for tooling and logs. The usable resolved configuration is kept separate from the safe view.
+
+**Compatibility** — `loadConfig()`, `createConfig()`, `validateConfig()`, and `sdkConfig` remain supported. See the [v3.2 migration guide](docs/migration-from-v3.2.md) for incremental adoption.
+
+**Documentation and examples** — added a configuration guide, migration guide, API reference section, and runtime/file configuration examples.
+
+See [`CHANGELOG.md`](CHANGELOG.md) and [`HILBRAS-SDK-FULL-AUDIT.md`](HILBRAS-SDK-FULL-AUDIT.md) for the complete release and audit details.
 
 ---
 
