@@ -5,11 +5,11 @@ Signal-based hooks for React, Vue, Svelte, Solid, Qwik, Angular, and Next.js.
 ## React
 
 ```bash
-npm install @hilbras/react
+npm install @hilbras/sdk
 ```
 
 ```tsx
-import { useChat } from "@hilbras/react";
+import { useChat } from "@hilbras/sdk/react-client";
 
 function Chat() {
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
@@ -185,11 +185,11 @@ export const { POST } = createStreamHandler({
 ### Client Component
 
 Provider credentials stay on the server. Pass a server-created client to
-`@hilbras/react`; do not call `addProviderFromCatalog` in a browser component.
+`@hilbras/sdk/react-client`; do not call `addProviderFromCatalog` in a browser component.
 
 ```tsx
 "use client";
-import { HilbrasProvider, useChat } from "@hilbras/react";
+import { HilbrasProvider, useChat } from "@hilbras/sdk/react-client";
 
 export function Chat({ client }: { client: import("@hilbras/sdk").HilbrasClient }) {
   return (

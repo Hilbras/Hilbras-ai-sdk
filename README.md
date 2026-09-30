@@ -62,7 +62,7 @@ npm install @hilbras/sdk
 ### React (optional)
 
 ```bash
-npm install @hilbras/react
+npm install @hilbras/sdk
 ```
 
 ## Quick start
@@ -372,10 +372,17 @@ console.log(`Winner: ${result.winner.name}`);
 
 ## React Hooks
 
-First-class React integration via `@hilbras/react`. Zero runtime dependencies beyond React itself.
+First-class React integration. Zero runtime dependencies beyond React itself.
+
+Two React subpaths, because they are different designs:
+
+| Subpath | Transport | Use when |
+|---------|-----------|----------|
+| `@hilbras/sdk/react` | `fetch(api)` against your route | **Default.** Credentials stay on your server. |
+| `@hilbras/sdk/react-client` | `client.stream()` in the browser | Trusted/internal apps only. A key passed here is bundled into client JS. |
 
 ```bash
-npm install @hilbras/react
+npm install @hilbras/sdk
 ```
 
 ### useChat — Streaming chat
@@ -387,7 +394,7 @@ an API key in browser props or a client component.
 ```tsx
 // app/page.tsx (server component)
 import { HilbrasClient } from "@hilbras/sdk";
-import { HilbrasProvider } from "@hilbras/react";
+import { HilbrasProvider } from "@hilbras/sdk/react-client";
 import { Chat } from "./chat";
 
 export default function Page() {
@@ -399,7 +406,7 @@ export default function Page() {
 
 ```tsx
 // app/chat.tsx (client component)
-import { useChat } from "@hilbras/react";
+import { useChat } from "@hilbras/sdk/react-client";
 
 export function Chat() {
   const { messages, input, setInput, handleSubmit, isLoading, stop } = useChat({
@@ -424,7 +431,7 @@ export function Chat() {
 ### useCompletion — Text completion
 
 ```tsx
-import { useCompletion } from "@hilbras/react";
+import { useCompletion } from "@hilbras/sdk/react-client";
 
 function AutoComplete() {
   const { completion, prompt, setPrompt, complete, isLoading } = useCompletion({
@@ -446,7 +453,7 @@ function AutoComplete() {
 ### useCost — Real-time cost tracking
 
 ```tsx
-import { useCost } from "@hilbras/react";
+import { useCost } from "@hilbras/sdk/react-client";
 
 function CostDisplay() {
   const { snapshot, isBudgetLow } = useCost();
@@ -500,7 +507,7 @@ import { CostAlertMonitor } from "@hilbras/sdk";                // Cost alerts
 import { runABTest } from "@hilbras/sdk";                       // A/B testing
 
 // React package
-import { useChat, useCompletion, useCost, HilbrasProvider } from "@hilbras/react";
+import { useChat, useCompletion, useCost, HilbrasProvider } from "@hilbras/sdk/react-client";
 
 // Framework subpaths from the root package
 import { useChat } from "@hilbras/sdk/vue";

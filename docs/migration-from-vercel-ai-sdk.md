@@ -440,7 +440,7 @@ function Chat() {
 
 **Hilbras SDK:**
 ```typescript
-import { useChat } from "@hilbras/react";
+import { useChat } from "@hilbras/sdk/react-client";
 
 function Chat() {
   const { messages, input, handleInputChange, handleSubmit } = useChat({
@@ -482,7 +482,7 @@ function Completion() {
 
 **Hilbras SDK:**
 ```typescript
-import { useCompletion } from "@hilbras/react";
+import { useCompletion } from "@hilbras/sdk/react-client";
 
 function Completion() {
   const { completion, input, handleInputChange, handleSubmit } = useCompletion({
@@ -523,7 +523,7 @@ function RecipeForm() {
 
 **Hilbras SDK:**
 ```typescript
-import { useObject } from "@hilbras/react";
+import { useObject } from "@hilbras/sdk/react-client";
 
 function RecipeForm() {
   const { object, submit } = useObject({
@@ -730,7 +730,7 @@ API keys are automatically redacted in error messages and logs.
 - [ ] Replace `generateText()` with `client.complete()`
 - [ ] Replace `generateObject()` with `client.object()`
 - [ ] Update tool definitions from Zod to JSON Schema
-- [ ] Update React hooks imports from `@ai-sdk/react` to `@hilbras/react`
+- [ ] Update React hooks imports from `@ai-sdk/react` to `@hilbras/sdk/react-client`
 - [ ] Test streaming chunks (Hilbras uses typed chunks, not raw strings)
 - [ ] Review error handling (Hilbras has more specific error types)
 - [ ] Consider enabling cost budgets and circuit breaker for production
