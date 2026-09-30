@@ -114,6 +114,21 @@ export class RateLimiter {
   }
 
   /**
+   * Check availability and consume tokens in one step.
+   *
+   * Unlike {@link acquire}, this decrements the bucket when the request is
+   * allowed, so repeated calls are eventually throttled. Use this when the
+   * decision to allow must itself count against the limit.
+   */
+  tryConsume(cost?: number): { allowed: boolean; retryAfterMs: number } {
+    const result = this.acquire(cost);
+    if (result.allowed) {
+      this._tokens -= this._computeCost(cost);
+    }
+    return result;
+  }
+
+  /**
    * Consume tokens for a request. Throws if not enough tokens are available.
    * @throws {Error} when rate limit is exceeded
    */

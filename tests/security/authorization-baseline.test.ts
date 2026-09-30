@@ -123,7 +123,7 @@ describe("A. authorization compatibility surface (must not change in v3.4.0)", (
 // ─── Part B: audited defects (it.fails — turns green when fixed) ─────────────
 
 describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
-  it.fails("R1: the request identity selects the role", async () => {
+  it("R1: the request identity selects the role", async () => {
     const mw = createRBACMiddleware(
       {
         roles: {
@@ -133,25 +133,30 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
         defaultRole: "alice",
       },
       () => "bob",
+      { resolveRole: (ctx) => (ctx.init.headers?.["x-user"] as string | undefined) ?? "alice" },
     );
-    // "bob" has no restrictions, so this must be allowed even though the
-    // default role "alice" would deny it. v3.3.0 always applies defaultRole.
-    const res = await mw(makeCtx({ body: { provider: "anthropic", model: "claude-3" } }));
-    expect(res.status).toBe(200);
+    // "bob" resolves to the unrestricted role and is allowed; the default role
+    // "alice" would have denied this. Before v3.4.0 the default role always won.
+    const allowed = await mw(makeCtx({ body: { provider: "anthropic", model: "claude-3" }, headers: { "x-user": "bob" } }));
+    expect(allowed.status).toBe(200);
+
+    const denied = await mw(makeCtx({ body: { provider: "anthropic", model: "claude-3" }, headers: { "x-user": "alice" } }));
+    expect(denied.status).toBe(403);
   });
 
-  it.fails("R2: the permission check runs for a realistic adapter body", async () => {
+  it("R2: the permission check runs for a realistic adapter body", async () => {
     const mw = createRBACMiddleware(
       { roles: { viewer: { name: "viewer", allowedProviders: ["anthropic"] } }, defaultRole: "viewer" },
       () => "user-1",
+      { resolveProviderByUrl: (url) => (url.includes("openai.com") ? "openai" : null) },
     );
     // No `provider` in the body (adapters never send one); the provider is
-    // implied by the request URL. v3.3.0 skips the check entirely.
+    // implied by the request URL. Before v3.4.0 the check was skipped entirely.
     const res = await mw(makeCtx({ url: OPENAI_URL, body: { model: "gpt-4o", max_tokens: 16 } }));
     expect(res.status).toBe(403);
   });
 
-  it.fails("R3: a per-role rate limit actually consumes tokens", async () => {
+  it("R3: a per-role rate limit actually consumes tokens", async () => {
     const mw = createRBACMiddleware(
       {
         roles: {
@@ -173,7 +178,7 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
     expect(statuses[2]).toBe(429);
   });
 
-  it.fails("R4: strict enforcement denies when defaultRole names a missing role", async () => {
+  it("R4: strict enforcement denies when defaultRole names a missing role", async () => {
     const mw = createRBACMiddleware(
       { roles: { viewer: { name: "viewer" } }, defaultRole: "viewr", enforcement: "strict" } as never,
       () => "user-1",
@@ -182,7 +187,7 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
     expect(res.status).toBe(403);
   });
 
-  it.fails("R5: a malformed rbac block is rejected as configuration", () => {
+  it("R5: a malformed rbac block is rejected as configuration", () => {
     expect(() =>
       resolveConfig({
         sources: [createRuntimeSource({
@@ -193,7 +198,7 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
     ).toThrow();
   });
 
-  it.fails("R7: a malformed allowedModels string denies instead of throwing", () => {
+  it("R7: a malformed allowedModels string denies instead of throwing", () => {
     const result = checkPermission(
       { name: "viewer", allowedModels: "gpt-4o" } as never,
       "openai",
@@ -202,7 +207,7 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
     expect(result.allowed).toBe(false);
   });
 
-  it.fails("R8: a declared maxBudgetPerSession is enforced or reported", async () => {
+  it("R8: a declared maxBudgetPerSession is enforced or reported", async () => {
     const diagnostics: string[] = [];
     const mw = createRBACMiddleware(
       {
@@ -216,7 +221,7 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
     expect(diagnostics.length).toBeGreaterThan(0);
   });
 
-  it.fails("R9: a denial audit event is attributed to the requesting user", async () => {
+  it("R9: a denial audit event is attributed to the requesting user", async () => {
     const auditLogger = new AuditLogger();
     const mw = createRBACMiddleware(
       { roles: { viewer: { name: "viewer", allowedProviders: ["openai"] } }, defaultRole: "viewer" },
