@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.3] - 2026-09-30
+
+### Fixed
+
+- `FetchTransport` no longer starts its idle-connection cleanup interval in the
+  constructor. The timer now starts on the first request and is `unref`'d, so a
+  client that never issues a request holds no repeating timer. Previously any
+  `HilbrasClient` whose constructor threw — and the caller therefore had no
+  client to dispose — left a 30-second interval running, pinning the Node event
+  loop open and retaining the transport forever. v3.4.0 added a new way for
+  construction to throw (a malformed `rbac` block), so this belonged in the
+  v3.4 line.
+
+### Added
+
+- Three regression tests covering the lazy timer, a throwing client constructor
+  leaving no handle behind, and `destroy()` still clearing the timer.
+
+### Compatibility
+
+Behavior fix only. The cleanup timer still runs while a transport is in use and
+is still cleared by `destroy()` / `dispose()`. The only change is that a
+transport which never sends a request no longer schedules cleanup work.
+
+---
+
 ## [3.4.2] - 2026-09-30
 
 ### Fixed

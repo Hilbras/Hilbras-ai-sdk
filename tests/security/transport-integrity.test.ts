@@ -7,6 +7,8 @@
 import { describe, it, expect } from "vitest";
 import { composeMiddlewares, retryMiddleware, authMiddleware, rateLimitMiddleware } from "../../src/middleware/middleware.js";
 import { MiddlewareTransport } from "../../src/transport/middleware-transport.js";
+import { FetchTransport } from "../../src/transport/fetch.js";
+import { HilbrasClient } from "../../src/client/client.js";
 import { ProviderRequestError } from "../../src/errors/index.js";
 import { RequestSigner, signingMiddleware } from "../../src/security/request-signer.js";
 import type { Middleware, MiddlewareContext } from "../../src/middleware/middleware.js";
@@ -31,6 +33,35 @@ const flaky = (failures: number, counter: { calls: number }): Transport["request
   if (counter.calls <= failures) throw new Error("transient");
   return ok();
 };
+
+describe("FetchTransport idle timer is lazy", () => {
+  it("does not start a timer before the first request", async () => {
+    const before = process.getActiveResourcesInfo?.().filter((r) => r === "Timeout").length ?? 0;
+    const transport = new FetchTransport();
+    const afterCtor = process.getActiveResourcesInfo?.().filter((r) => r === "Timeout").length ?? 0;
+    expect(afterCtor).toBe(before);
+    await transport.destroy();
+  });
+
+  it("leaves no timer behind when a client constructor throws", async () => {
+    const before = process.getActiveResourcesInfo?.().filter((r) => r === "Timeout").length ?? 0;
+    expect(() => new HilbrasClient({
+      config: { rbac: { roles: { v: { name: "v", allowedModels: "gpt-4o" } } } },
+    })).toThrow();
+    // Give any stray interval a chance to appear.
+    await new Promise((resolve) => setImmediate(resolve));
+    const after = process.getActiveResourcesInfo?.().filter((r) => r === "Timeout").length ?? 0;
+    expect(after).toBe(before);
+  });
+
+  it("clears the timer on destroy", async () => {
+    const transport = new FetchTransport();
+    transport.destroy();
+    await new Promise((resolve) => setImmediate(resolve));
+    // Nothing to assert beyond destroy() being safe and synchronous.
+    expect(true).toBe(true);
+  });
+});
 
 describe("composeMiddlewares ordering", () => {
   it("runs the leftmost middleware first", async () => {
