@@ -5,4 +5,9 @@
  */
 
 export { createChatEndpoint, createCompletionEndpoint, type EndpointOptions, type ChatMessage } from "./endpoints.js";
+export type {
+  FrameworkErrorContext,
+  FrameworkHandlerLimits,
+  FrameworkRequestContext,
+} from "../shared/handler-core.js";
 export { createChatState, type UseChatOptions, type UseChatReturn, type Message } from "./hooks.js";

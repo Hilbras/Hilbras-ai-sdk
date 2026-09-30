@@ -10,9 +10,11 @@ import type { Tool } from "../../types/tools.js";
 import {
   createFrameworkClientPool,
   errorResponse,
+  isRequestPhaseError,
   readJsonBody,
-  requireArray,
-  requireString,
+  resolveChatFields,
+  resolveCompletionFields,
+  resolveLimits,
   type FrameworkHandlerBaseOptions,
 } from "../shared/handler-core.js";
 
@@ -71,32 +73,41 @@ export function createChatHandler(options: ChatHandlerOptions) {
     apiKey: options.apiKey,
   });
 
+  const limits = resolveLimits(options.limits);
+  const trustClientFields = options.trustClientFields ?? true;
+
   async function POST(req: Request): Promise<Response> {
     try {
-      const body = await readJsonBody(req);
-      const messages = requireArray(body, "messages") as ChatMessage[];
-      const model = typeof body.model === "string" && body.model.length > 0
-        ? body.model
-        : options.model;
+      const body = await readJsonBody(req, limits);
+      const fields = resolveChatFields(body, {
+        model: options.model,
+        tools: options.tools,
+        maxSteps: options.maxSteps,
+        trustClientFields,
+        limits,
+      });
 
       // Resolving the client before responding means a bad provider or model
       // produces a real error status instead of an HTTP 200 whose body carries
       // the failure.
-      const client = pool.get(model);
+      const client = pool.get(fields.model);
       const providerName = pool.providerName;
+
+      const effective = { ...fields, provider: providerName };
+      await options.onRequest?.({ request: req, body, effective });
 
       const allMessages = [
         ...(options.systemPrompt ? [{ role: "system" as const, content: options.systemPrompt }] : []),
-        ...messages,
+        ...(fields.messages as ChatMessage[]),
       ];
 
-      if (body.stream === false) {
+      if (!effective.stream) {
         const result = await client.complete({
           provider: providerName,
-          model,
+          model: fields.model,
           messages: allMessages,
-          temperature: typeof body.temperature === "number" ? body.temperature : undefined,
-          maxTokens: typeof body.maxTokens === "number" ? body.maxTokens : undefined,
+          temperature: fields.temperature,
+          maxTokens: fields.maxTokens,
           signal: req.signal,
         });
         return Response.json({
@@ -107,17 +118,23 @@ export function createChatHandler(options: ChatHandlerOptions) {
 
       const chunks = client.streamText({
         provider: providerName,
-        model,
+        model: fields.model,
         messages: allMessages,
-        temperature: typeof body.temperature === "number" ? body.temperature : undefined,
-        maxTokens: typeof body.maxTokens === "number" ? body.maxTokens : undefined,
-        tools: (body.tools as Tool[] | undefined) ?? options.tools,
-        maxSteps: typeof body.maxSteps === "number" ? body.maxSteps : options.maxSteps,
+        temperature: fields.temperature,
+        maxTokens: fields.maxTokens,
+        tools: fields.tools,
+        maxSteps: fields.maxSteps,
         signal: req.signal,
       });
 
       return createSSEResponse(chunks);
     } catch (error) {
+      if (options.onError) {
+        await options.onError(error, {
+          request: req,
+          phase: isRequestPhaseError(error) ? "request" : "provider",
+        });
+      }
       return errorResponse(error);
     }
   }
@@ -150,21 +167,28 @@ export function createCompletionHandler(options: CompletionHandlerOptions) {
     apiKey: options.apiKey,
   });
 
+  const limits = resolveLimits(options.limits);
+  const trustClientFields = options.trustClientFields ?? true;
+
   async function POST(req: Request): Promise<Response> {
     try {
-      const body = await readJsonBody(req);
-      const prompt = requireString(body, "prompt");
-      const model = typeof body.model === "string" && body.model.length > 0
-        ? body.model
-        : options.model;
+      const body = await readJsonBody(req, limits);
+      const fields = resolveCompletionFields(body, {
+        model: options.model,
+        trustClientFields,
+        limits,
+      });
 
-      const client = pool.get(model);
+      const client = pool.get(fields.model);
+      const effective = { ...fields, provider: pool.providerName };
+      await options.onRequest?.({ request: req, body, effective });
+
       const result = await client.complete({
         provider: pool.providerName,
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: typeof body.temperature === "number" ? body.temperature : undefined,
-        maxTokens: typeof body.maxTokens === "number" ? body.maxTokens : undefined,
+        model: fields.model,
+        messages: [{ role: "user", content: fields.prompt as string }],
+        temperature: fields.temperature,
+        maxTokens: fields.maxTokens,
         signal: req.signal,
       });
 
@@ -173,6 +197,12 @@ export function createCompletionHandler(options: CompletionHandlerOptions) {
         choices: [{ message: { role: "assistant", content: result }, finishReason: "stop" }],
       });
     } catch (error) {
+      if (options.onError) {
+        await options.onError(error, {
+          request: req,
+          phase: isRequestPhaseError(error) ? "request" : "provider",
+        });
+      }
       return errorResponse(error);
     }
   }

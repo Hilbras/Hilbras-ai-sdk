@@ -15,6 +15,11 @@
  */
 
 export { createServerClient, ServerHilbrasClient, type ServerClientOptions } from "./server.js";
+export type {
+  FrameworkErrorContext,
+  FrameworkHandlerLimits,
+  FrameworkRequestContext,
+} from "../shared/handler-core.js";
 export { createChatHandler, createCompletionHandler, type ChatRequest, type ChatResponse } from "./route-handlers.js";
 export { useChat, type UseChatOptions, type UseChatReturn } from "./use-chat.js";
 export { useCompletion, type UseCompletionOptions, type UseCompletionReturn } from "./use-completion.js";
