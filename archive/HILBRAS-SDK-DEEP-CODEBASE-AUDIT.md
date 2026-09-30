@@ -1,5 +1,10 @@
 # HILBRAS SDK — DEEP CODEBASE AUDIT
 
+> **Historical.** Pre-v1.1 audit against `@hilbras/sdk` v0.26.6, retained for
+> the record. Its package layout is long obsolete — `@hilbras/next` and
+> `@hilbras/react` were folded into `@hilbras/sdk` in 3.5.0. Current
+> documentation is in `docs/`; see `archive/README.md`.
+
 **Repository:** `/run/media/gin/01DD24D06510A4D0/Hilbras.product/SDK`
 **Package:** `@hilbras/sdk` v0.26.6
 **Audit type:** Repository-wide static analysis and architectural audit

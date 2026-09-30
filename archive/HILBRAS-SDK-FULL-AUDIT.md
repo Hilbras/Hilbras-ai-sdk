@@ -1,5 +1,9 @@
 # Hilbras SDK Full Repository Audit
 
+> **Historical.** The v3.3.0 / v3.4.0 audit. Superseded by
+> `SPEC-v3.4.0-security.md` and `tasks/v3.5.0-todo.md`. Its companion-package
+> list predates the 3.5.0 consolidation. See `archive/README.md`.
+
 **Audit date:** 2026-09-24
 **Repository:** `/home/gin/work/Hilbras/SDK`
 **Release branch:** `release/v3.1.0`

@@ -1,5 +1,9 @@
 # Implementation Plan: v3.2.0 Core Execution Stabilization
 
+> **Historical.** The v3.2.0 implementation plan. Retained with its ledger
+> (`tasks/todo.md`). The active plan and ledger are `SPEC-v3.5.0-route-security.md`
+> and `tasks/v3.5.0-todo.md`.
+
 ## Overview
 
 Evolve the v3.1.0 execution paths incrementally into a dedicated internal execution subsystem without unnecessarily changing public APIs or observable behavior. The first release slice will characterize the existing lifecycle, then introduce typed request context/results and one-attempt execution, followed by a narrow `complete()` migration. Streaming, fallback correctness, multimodal convergence, and public exports remain independently gated slices.

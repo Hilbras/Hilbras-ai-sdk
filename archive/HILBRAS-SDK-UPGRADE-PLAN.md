@@ -1,5 +1,10 @@
 # Hilbras SDK — Upgrade Plan: Surpassing the Vercel AI SDK
 
+> **Historical.** The v2.x competitive upgrade strategy. Several proposals were
+> never taken up, and the peer-package architecture it proposes was reversed
+> in 3.5.0: those packages were folded into `@hilbras/sdk` instead.
+> See `archive/README.md`.
+
 **Target:** `@hilbras/sdk` v1.1.1 (154 source files, 68 test files, zero runtime deps)
 **Benchmark:** Vercel AI SDK `ai@7.x` — pnpm/Turborepo monorepo, ~80 published packages, Apache-2.0
 **Basis:** Deep codebase audit (`HILBRAS-SDK-DEEP-CODEBASE-AUDIT.md`, §1–26) + live Vercel docs recon

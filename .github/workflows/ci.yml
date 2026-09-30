@@ -25,6 +25,7 @@ jobs:
       - run: npm run build
       - run: npm run check:package
       - run: npm run size
+      - run: bash tools/check-doc-examples.sh
       - run: npm audit --omit=dev
 
   package-tests:

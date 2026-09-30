@@ -42,6 +42,7 @@ is removed. Nothing to migrate for an installed user; the source moves.
 | N3 | Pluggable `store` so the limit is shared across instances | additive |
 | N4 | `stream.ts` gains its first tests (199 lines, previously zero) | test-only |
 | N5 | `@hilbras/sdk/nextjs/api` and `@hilbras/sdk/nextjs/edge` subpaths | additive |
+| N6 | `@hilbras/react` folded in as `@hilbras/sdk/react-client`, kept separate from `@hilbras/sdk/react` because both export `useChat` with different transports | additive |
 
 **Why the subpath split.** Both modules were typed against `next/server`. The
 SDK cannot import that: `next` is an optional peer, and the package must build
@@ -60,11 +61,17 @@ with no Next dependency.
 
 ### Explicitly out of scope
 
-- **`@hilbras/react` browser inference.** `useChat` / `useCompletion` call
-  `client.stream()` directly and have no route-based mode, so a browser-side
-  client holding an API key is the designed usage. Making it safe means making
-  `client` conditionally optional in the public hook types — a breaking change
-  that cannot ride in a minor release. Deferred to v4.0.0 with a design note.
+- **Browser inference.** The `@hilbras/react` hooks call `client.stream()`
+  directly and have no route-based mode, so a browser-side client holding an API
+  key is their designed usage. That package was folded into the SDK as
+  `@hilbras/sdk/react-client` (see N6), still unchanged in substance. Making
+  these hooks safe means making `client` conditionally optional in the public
+  hook types — a breaking change that cannot ride in a minor release.
+
+  **Not scheduled work.** The route-based alternative already exists and is
+  already the documented default: `@hilbras/sdk/react`'s `useChat` calls
+  `fetch(api)`, paired with `createChatHandler`. Revisit only if browser
+  inference is genuinely needed for a trusted internal tool.
 - The `trustClientFields` default flip for Next.js (`true` → `false`). Deferred
   to 4.0.0.
 - The signature-profile default flip to `v2`. Deferred to 4.0.0 (v3.4.0 decision).
@@ -115,6 +122,12 @@ Guards are proven load-bearing by mutation, not by passing:
   module moved into the SDK.
 - `tools/mutation-next-stream.sh` — 15 mutations over `stream.ts`. All 15
   killed, before and after the move.
+- `tools/mutation-react-client.sh` — 4 mutations. All 4 killed.
+
+The harnesses initially detected only `Tests N failed`, missing `Tests no tests`
+— what a module that cannot be *collected* prints. A stray JSX return under a
+tsconfig with no `--jsx` produced exactly that, and a real kill was reported as
+a hole. Fixed in all four harnesses; **37 mutations killed in total**.
 
 Every suite must be green at baseline before any mutation is applied, and the
 source is restored from a pre-run snapshot on exit.
