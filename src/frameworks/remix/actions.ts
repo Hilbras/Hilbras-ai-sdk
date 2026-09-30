@@ -10,9 +10,11 @@ import type { Tool } from "../../types/tools.js";
 import {
   createFrameworkClientPool,
   errorResponse,
+  isRequestPhaseError,
   readJsonBody,
-  requireArray,
-  requireString,
+  resolveChatFields,
+  resolveCompletionFields,
+  resolveLimits,
   type FrameworkHandlerBaseOptions,
 } from "../shared/handler-core.js";
 
@@ -47,23 +49,39 @@ export function createChatAction(options: ActionOptions) {
     apiKey: options.apiKey,
   });
 
+  const limits = resolveLimits(options.limits);
+  // This adapter never read `model`/`tools`/`maxSteps` from the body in v3.4, so
+  // its default is `false`. Defaulting to `true` would have widened the
+  // caller's influence over a route that did not previously have any.
+  const trustClientFields = options.trustClientFields ?? false;
+
   const action = async ({ request }: { request: Request }): Promise<Response> => {
     try {
-      const body = await readJsonBody(request);
-      const messages = requireArray(body, "messages") as ChatMessage[];
+      const body = await readJsonBody(request, limits);
+      const fields = resolveChatFields(body, {
+        model: options.model,
+        tools: options.tools,
+        maxSteps: options.maxSteps,
+        trustClientFields,
+        limits,
+      });
 
-      const client = pool.get(options.model);
+      const client = pool.get(fields.model);
       const providerName = pool.providerName;
+      const effective = { ...fields, provider: providerName };
+      await options.onRequest?.({ request, body, effective });
 
       const allMessages = options.systemPrompt
-        ? [{ role: "system" as const, content: options.systemPrompt }, ...messages]
-        : messages;
+        ? [{ role: "system" as const, content: options.systemPrompt }, ...(fields.messages as ChatMessage[])]
+        : (fields.messages as ChatMessage[]);
 
-      if (body.stream === false) {
+      if (!effective.stream) {
         const result = await client.complete({
           provider: providerName,
-          model: options.model,
+          model: fields.model,
           messages: allMessages,
+          temperature: fields.temperature,
+          maxTokens: fields.maxTokens,
           signal: request.signal,
         });
         return new Response(JSON.stringify({
@@ -76,15 +94,23 @@ export function createChatAction(options: ActionOptions) {
 
       const chunks = client.streamText({
         provider: providerName,
-        model: options.model,
+        model: fields.model,
         messages: allMessages,
-        tools: options.tools,
-        maxSteps: options.maxSteps,
+        temperature: fields.temperature,
+        maxTokens: fields.maxTokens,
+        tools: fields.tools,
+        maxSteps: fields.maxSteps,
         signal: request.signal,
       });
 
       return createSSEResponse(chunks);
     } catch (error) {
+      if (options.onError) {
+        await options.onError(error, {
+          request,
+          phase: isRequestPhaseError(error) ? "request" : "provider",
+        });
+      }
       return errorResponse(error);
     }
   };
@@ -106,16 +132,31 @@ export function createCompletionAction(options: ActionOptions) {
     apiKey: options.apiKey,
   });
 
+  const limits = resolveLimits(options.limits);
+  // This adapter never read `model`/`tools`/`maxSteps` from the body in v3.4, so
+  // its default is `false`. Defaulting to `true` would have widened the
+  // caller's influence over a route that did not previously have any.
+  const trustClientFields = options.trustClientFields ?? false;
+
   const action = async ({ request }: { request: Request }): Promise<Response> => {
     try {
-      const body = await readJsonBody(request);
-      const prompt = requireString(body, "prompt");
+      const body = await readJsonBody(request, limits);
+      const fields = resolveCompletionFields(body, {
+        model: options.model,
+        trustClientFields,
+        limits,
+      });
 
-      const client = pool.get(options.model);
+      const client = pool.get(fields.model);
+      const effective = { ...fields, provider: pool.providerName };
+      await options.onRequest?.({ request, body, effective });
+
       const result = await client.complete({
         provider: pool.providerName,
-        model: options.model,
-        messages: [{ role: "user", content: prompt }],
+        model: fields.model,
+        messages: [{ role: "user", content: fields.prompt as string }],
+        temperature: fields.temperature,
+        maxTokens: fields.maxTokens,
         signal: request.signal,
       });
 
@@ -126,6 +167,12 @@ export function createCompletionAction(options: ActionOptions) {
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
+      if (options.onError) {
+        await options.onError(error, {
+          request,
+          phase: isRequestPhaseError(error) ? "request" : "provider",
+        });
+      }
       return errorResponse(error);
     }
   };

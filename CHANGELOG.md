@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.5.0] - 2026-09-30
+
+### Added
+
+- **Route authentication on every framework handler factory.** `onRequest` runs
+  once per request after the body is validated and before any provider call, so
+  a rejected request costs nothing upstream. Throwing a
+  `RequestValidationError` with a 401 or 403 status returns that status;
+  anything else becomes a generic 500. Available on `createChatHandler`,
+  `createCompletionHandler`, `createChatEndpoint`, `createCompletionEndpoint`,
+  `createChatAction` and `createCompletionAction`.
+- **`onError` on every factory**, with `phase: "request" | "provider"`. This is
+  where the server-side log belongs: `errorResponse` deliberately withholds
+  detail from the response body, so without it a provider error is invisible to
+  the operator.
+- **`trustClientFields`** — an explicit allowlist for the fields a request body
+  may contribute (`model`, `tools`, `maxSteps`, `temperature`, `maxTokens`).
+- **`limits`** on every factory: `maxBodyBytes`, `maxMessages`, `maxTools`, and
+  clamps on `maxSteps`, `maxTokens` and `temperature`. Defaults sit above any
+  realistic request, so leaving them unset bounds the worst case without
+  changing a normal call.
+- `@hilbras/sdk/nextjs/api` and `@hilbras/sdk/nextjs/edge` subpaths, carrying
+  `createStreamHandler` / `createStreamCompletionHandler` and
+  `hilbrasMiddleware` into the SDK. Neither requires `next` to be installed:
+  both are typed structurally against the Next request surface rather than
+  importing `next/server`.
+
+### Fixed
+
+- **`hilbrasMiddleware` rate-limit bypass.** The bucket was keyed on
+  `x-forwarded-for.split(",")[0]` — the leftmost entry, which is the
+  client-supplied value behind every common proxy (nginx
+  `proxy_add_x_forwarded_for`, Vercel, Cloudflare all prepend the real client to
+  whatever the client sent). Rotating the header produced a fresh bucket per
+  request, defeating the limiter entirely. The key now comes from
+  `forwardedClientIp(header, trustProxy)`, reading `entries.length - trustProxy`
+  entries from the right. `trustProxy` defaults to `0`, which trusts no entry and
+  falls back to a single shared `unidentified` bucket: that under-serves
+  anonymous callers but cannot be defeated by omitting a header, which the
+  previous `"unknown"` key allowed. `request.ip` is deliberately not trusted —
+  Next derives it from the forwarded headers, which is the spoof being corrected.
+  The old suite missed the defect because it set a single-entry header, where
+  the leftmost and rightmost entries coincide.
+- A body over `maxBodyBytes` is now rejected with 413 instead of being buffered
+  and parsed. The size is measured in encoded bytes, so a body of multi-byte
+  characters cannot slip under the limit by character count. A `content-length`
+  header is used as an early hint but never trusted on its own — a request that
+  understates it is still measured by reading.
+
+### Changed
+
+- **Rate-limit counting can be shared across instances.** `hilbrasMiddleware`
+  takes a `store`. The default remains in-process, so behind multiple instances
+  the effective limit is `maxRequests × instances`; pass a shared store to make
+  it global. Deployments that relied on the old keying will see different
+  limiting — both the header-rotation and shared-bucket changes move toward
+  *more* limiting, never less. Migration is one line: set `trustProxy` to your
+  proxy count.
+- `@hilbras/next` is folded into `@hilbras/sdk` and removed. It had never been
+  published to npm; its code now lives in the two subpaths above.
+- `ServerHilbrasClient` / `createServerClient` are deprecated and removed in
+  4.0.0. `streamResponse` never called a provider — it echoed each user message
+  back character by character and ignored `apiKey`, `baseUrl`, `adapter`,
+  `provider` and `model`.
+
+### Compatibility
+
+Every new option defaults to the pre-3.5.0 behaviour, so a route that sets none
+of them is byte-identical. `trustClientFields` defaults to `true` for the Next.js
+factories, which have always read those body fields, and `false` for the Astro
+and Remix factories, which never have — defaulting them to `true` would have
+widened caller influence in a hardening release. The Next.js default flips to
+`false` in 4.0.0.
+
 ## [3.4.4] - 2026-09-30
 
 ### Fixed

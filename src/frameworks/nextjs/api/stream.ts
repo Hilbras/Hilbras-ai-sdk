@@ -1,9 +1,14 @@
 import {
   HilbrasClient,
   type HilbrasClientConfig,
-  type Message,
-} from "@hilbras/sdk";
-import { type NextRequest, NextResponse } from "next/server";
+} from "../../../client/client.js";
+import type { Message } from "../../../types/messages.js";
+import {
+  createNextResponseShim,
+  type NextRequestLike,
+} from "../next-runtime.js";
+
+const NextResponse = createNextResponseShim();
 
 export type ChatMessage = Message;
 
@@ -69,7 +74,7 @@ export function createStreamHandler(options: StreamChatOptions) {
   const { config, client: existingClient, provider, model, systemPrompt, apiKey, onError, onRequest, onComplete } = options;
   const route = createRouteClient({ config, client: existingClient, apiKey, provider, model });
 
-  async function POST(request: NextRequest) {
+  async function POST(request: NextRequestLike) {
     try {
       const body = await request.json() as unknown;
       const record = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
@@ -149,7 +154,7 @@ export function createStreamCompletionHandler(options: StreamCompletionOptions) 
   const { config, client: existingClient, provider, model, systemPrompt, apiKey, onError } = options;
   const route = createRouteClient({ config, client: existingClient, apiKey, provider, model });
 
-  async function POST(request: NextRequest) {
+  async function POST(request: NextRequestLike) {
     try {
       const body = await request.json() as unknown;
       const record = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};

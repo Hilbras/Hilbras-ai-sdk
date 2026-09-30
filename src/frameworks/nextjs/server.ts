@@ -1,7 +1,27 @@
 /**
  * @hilbras/nextjs — Server Client
  *
- * Create a HilbrasClient for Server Components and Server Actions.
+ * @deprecated This module is a non-functional stub and will be removed in
+ * 4.0.0. `ServerHilbrasClient.streamResponse` never calls a provider: it
+ * echoes each user message back character by character, and ignores `apiKey`,
+ * `baseUrl`, `adapter`, `provider` and `model` entirely. It is kept only so an
+ * existing import resolves.
+ *
+ * Use `new HilbrasClient()` directly:
+ *
+ * ```ts
+ * import { HilbrasClient } from "@hilbras/sdk";
+ *
+ * const client = new HilbrasClient();
+ * client.addProviderFromCatalog("openai", "gpt-4o", process.env.OPENAI_API_KEY!);
+ *
+ * export async function POST(req: Request) {
+ *   const { messages } = await req.json();
+ *   return client.streamText({ provider: "OpenAI", model: "gpt-4o", messages });
+ * }
+ * ```
+ *
+ * Or, for a route handler with no client plumbing, use `createChatHandler`.
  */
 
 export interface ServerClientOptions {
@@ -58,6 +78,9 @@ export class ServerHilbrasClient {
 
   /**
    * Create a streaming response for Next.js App Router.
+   *
+   * @deprecated Returns a simulated echo of the request, not a provider
+   * response. Removed in 4.0.0 — see the module deprecation notice.
    */
   async streamResponse(params: {
     messages: Array<{ role: string; content: string }>;
