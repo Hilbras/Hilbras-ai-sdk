@@ -428,6 +428,23 @@ gated behind an opt-in (`enforcement: "strict"`, `profile: "v2"`,
 signature `v1` wire format is frozen and unchanged, verified by the 64
 pre-existing hardening tests passing without modification.
 
+### v3.4 verification
+
+| Check | Result |
+|---|---|
+| `npm test` | Pass: 96 files, 1,797 root tests |
+| `npm run test:packages` | Pass: 44 companion tests and all companion builds |
+| `npm run pretest` / `npx tsc --noEmit` | Pass |
+| `npm run typecheck:examples` | Pass: new gate added in v3.4.0, wired into CI |
+| `npm run lint` | Pass with 0 errors and 17 warnings; no suppression added |
+| `npm run build` | Pass |
+| `npm run check:package` | Pass: 47 export entrypoints imported |
+| `npx publint` | Pass: `All good!` |
+| `npm audit --omit=dev` | Pass: 0 vulnerabilities |
+| `npm run size` | Pass: 1,183.6 KB / 1,900 KB |
+| `npm run benchmark` | Pass; canonical benchmark suite completed |
+| `npm run test:coverage` | Tests pass; thresholds remain unmet at 64.04% statements, 60.16% branches, 67.72% functions, 66.35% lines versus 80/70/80/80. Up from 62.56/57.69/66.39/64.89 in v3.3.0. Thresholds were not lowered. |
+
 ### Still deferred
 
 - **Framework route authorization.** `createChatHandler` and its Astro and Remix
