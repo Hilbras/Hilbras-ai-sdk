@@ -1,5 +1,8 @@
 import { AuditLogger, HilbrasClient, createRBACMiddleware } from "@hilbras/sdk";
 
+/** Application-supplied identity, e.g. from a session or AsyncLocalStorage. */
+declare function currentUserId(): string | null;
+
 /**
  * Authorization runs at the transport layer, so a denied request never reaches
  * a provider. The client resolves provider identity from its own registry, so
@@ -36,6 +39,27 @@ const rbac = createRBACMiddleware(
     auditLogger,
   },
 );
+
+/**
+ * The same policy wired through client configuration. Note the
+ * `authorization` block: without an identity resolver the client cannot select
+ * a per-user role or key a per-role rate limit, and reports
+ * `RBAC_RATE_LIMIT_UNKEYED` instead of applying one.
+ */
+const configured = new HilbrasClient({
+  config: {
+    rbac: {
+      roles: { viewer: { name: "viewer", allowedProviders: ["openai"] } },
+      defaultRole: "viewer",
+    },
+  },
+  authorization: {
+    resolveUserId: () => currentUserId(),
+    resolveRole: (userId) => (userId === "root" ? "admin" : "viewer"),
+  },
+});
+
+console.log(configured.getAuthorizationDiagnostics());
 
 const client = new HilbrasClient({ middleware: rbac });
 

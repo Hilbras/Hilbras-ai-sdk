@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.1] - 2026-09-30
+
+### Fixed
+
+- `config.rbac` wired through `HilbrasClient` now accepts an `authorization`
+  block with `resolveUserId`, `resolveRole`, and `resolveBudget`. Previously the
+  client installed the RBAC middleware with a permanently anonymous identity, so
+  a per-user role could not be selected and a per-role `rateLimit` could not be
+  keyed. The SDK reported `RBAC_RATE_LIMIT_UNKEYED` on every request rather than
+  claiming a limit it could not apply, but the control still did nothing.
+- The caller's identity is resolved once per request and shared between the user
+  id and role resolvers, so an expensive auth lookup is not repeated.
+
+### Added
+
+- Six tests covering keyed rate limits, per-identity buckets, per-user role
+  selection, single identity resolution, unkeyed-limit reporting, and a supplied
+  `resolveBudget`.
+
+### Compatibility
+
+Additive only. A client that does not supply `authorization` behaves exactly as
+in v3.4.0. No export removed; no behavior change for existing callers.
+
+---
+
 ## [3.4.0] - 2026-09-30
 
 ### Added

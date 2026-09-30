@@ -36,7 +36,10 @@ import type { ConfigDiagnostic, ConfigSource, SafeSDKConfig } from "../config/co
 import { budgetFromConfig, policyFromConfig, type ResolvedSDKConfig } from "../config/resolved-config.js";
 import type { SDKConfig } from "../config/schema.js";
 import { createRBACMiddleware } from "../security/rbac.js";
-import type { AuthorizationDiagnostic } from "../security/authorization.js";
+import type {
+  AuthorizationDiagnostic,
+  ResolveAuthorizationBudget,
+} from "../security/authorization.js";
 import { ToolPolicy } from "../security/tool-policy.js";
 import { composeMiddlewares, type Middleware } from "../middleware/middleware.js";
 import { ProviderRegistry } from "../providers/registry.js";
@@ -126,6 +129,34 @@ export interface HilbrasClientConfig {
   /** An already-resolved configuration, primarily for framework adapters. */
   resolvedConfig?: ResolvedSDKConfig;
   /**
+   * Identity resolution for the authorization middleware installed by
+   * `config.rbac`.
+   *
+   * Without `resolveUserId` the client has no notion of a caller, so a
+   * per-user role cannot be selected and a per-role `rateLimit` cannot be
+   * keyed. The SDK then reports `RBAC_RATE_LIMIT_UNKEYED` rather than
+   * claiming to enforce a limit it cannot apply.
+   *
+   * @example
+   * ```ts
+   * new HilbrasClient({
+   *   config: { rbac: { roles, defaultRole: "viewer" } },
+   *   authorization: {
+   *     resolveUserId: () => currentUserId(),
+   *     resolveRole: (userId) => roleForUser(userId),
+   *   },
+   * });
+   * ```
+   */
+  authorization?: {
+    /** Resolve the calling identity, or `null` when anonymous. */
+    resolveUserId?: () => string | null | undefined;
+    /** Map a resolved identity onto a role name. */
+    resolveRole?: (userId: string | null) => string | null | undefined;
+    /** Supply a per-role budget view for `maxBudgetPerSession`. */
+    resolveBudget?: ResolveAuthorizationBudget;
+  };
+  /**
    * v1.1.0: Optional telemetry sinks. When provided, the client automatically
    * forwards lifecycle events to the configured sinks.
    */
@@ -212,12 +243,27 @@ export class HilbrasClient implements AsyncDisposable {
     // covered by the same policy.
     const middlewareChain: Middleware[] = [];
     if (resolvedSdk.rbac) {
+      // The identity is resolved once per request and shared between the user
+      // id and role resolvers, so an expensive auth lookup happens only once.
+      const identityCache = new WeakMap<object, string | null>();
+      const resolveIdentity = (key: object): string | null => {
+        const cached = identityCache.get(key);
+        if (cached !== undefined) return cached;
+        const resolved = config?.authorization?.resolveUserId?.() ?? null;
+        identityCache.set(key, resolved);
+        return resolved;
+      };
+      const authorization = config?.authorization;
       middlewareChain.push(createRBACMiddleware(
         resolvedSdk.rbac,
-        () => null,
+        (ctx) => resolveIdentity(ctx),
         {
           resolveProviderByUrl: (url) => this._registry.findByUrl(url),
-          resolveBudget: () => ({ spent: this._budgetTracker.report().totalActual }),
+          resolveRole: authorization?.resolveRole
+            ? (ctx) => authorization.resolveRole!(resolveIdentity(ctx))
+            : undefined,
+          resolveBudget: authorization?.resolveBudget
+            ?? (() => ({ spent: this._budgetTracker.report().totalActual })),
           onDiagnostic: (diagnostic) => {
             this._authorizationDiagnostics.push(diagnostic);
             if (this._authorizationDiagnostics.length > AUTHORIZATION_DIAGNOSTIC_LIMIT) {

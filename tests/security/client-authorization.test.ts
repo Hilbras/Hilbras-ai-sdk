@@ -368,6 +368,152 @@ describe("client rbac wiring", () => {
     expect(diagnostic.severity).toBe("warning");
   });
 
+  it("keys a per-role rate limit once an identity resolver is supplied", async () => {
+    const reached: string[] = [];
+    const client = new HilbrasClient({
+      transport: mockTransport(reached),
+      config: {
+        rbac: {
+          roles: { limited: { name: "limited", rateLimit: { maxRequests: 2, windowMs: 60_000 } } },
+          defaultRole: "limited",
+        },
+        providers: [provider("p", "https://p.test/v1")],
+      },
+      authorization: { resolveUserId: () => "user-1" },
+    });
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      statuses.push(await client
+        .complete({ provider: "p", model: "m1", messages: [{ role: "user", content: "hi" }] })
+        .then(() => 200)
+        .catch(() => 429));
+    }
+
+    expect(statuses).toEqual([200, 200, 429, 429]);
+    // Only the permitted attempts reached the provider.
+    expect(reached).toHaveLength(2);
+    expect(client.getAuthorizationDiagnostics().map((d) => d.code))
+      .not.toContain("RBAC_RATE_LIMIT_UNKEYED");
+  });
+
+  it("keeps separate rate-limit buckets per identity", async () => {
+    let current = "user-1";
+    const client = new HilbrasClient({
+      transport: mockTransport(),
+      config: {
+        rbac: {
+          roles: { limited: { name: "limited", rateLimit: { maxRequests: 1, windowMs: 60_000 } } },
+          defaultRole: "limited",
+        },
+        providers: [provider("p", "https://p.test/v1")],
+      },
+      authorization: { resolveUserId: () => current },
+    });
+
+    const call = () => client
+      .complete({ provider: "p", model: "m1", messages: [{ role: "user", content: "hi" }] })
+      .then(() => 200)
+      .catch(() => 429);
+
+    expect(await call()).toBe(200);
+    expect(await call()).toBe(429);
+    current = "user-2";
+    expect(await call()).toBe(200);
+  });
+
+  it("selects a per-user role through resolveRole", async () => {
+    const reached: string[] = [];
+    const client = new HilbrasClient({
+      transport: mockTransport(reached),
+      config: {
+        rbac: {
+          roles: {
+            viewer: { name: "viewer", allowedProviders: ["openai-provider"] },
+            admin: { name: "admin" },
+          },
+          defaultRole: "viewer",
+        },
+        providers: [
+          provider("openai-provider", "https://openai-provider.test/v1"),
+          provider("other-provider", "https://other-provider.test/v1"),
+        ],
+      },
+      authorization: {
+        resolveUserId: () => "root",
+        resolveRole: (userId) => (userId === "root" ? "admin" : "viewer"),
+      },
+    });
+
+    // The admin role is unrestricted, so both providers are reachable.
+    expect(await client
+      .complete({ provider: "other-provider", model: "m1", messages: [{ role: "user", content: "hi" }] })
+    ).toBe("ok");
+    expect(reached).toHaveLength(1);
+  });
+
+  it("reports an unresolvable rate limit when no identity is available", async () => {
+    const client = new HilbrasClient({
+      transport: mockTransport(),
+      config: {
+        rbac: {
+          roles: { limited: { name: "limited", rateLimit: { maxRequests: 1, windowMs: 60_000 } } },
+          defaultRole: "limited",
+        },
+        providers: [provider("p", "https://p.test/v1")],
+      },
+    });
+
+    for (let i = 0; i < 3; i += 1) {
+      await client.complete({ provider: "p", model: "m1", messages: [{ role: "user", content: "hi" }] });
+    }
+    // Unkeyed means unapplied, and the SDK says so rather than implying a limit.
+    expect(client.getAuthorizationDiagnostics().map((d) => d.code))
+      .toContain("RBAC_RATE_LIMIT_UNKEYED");
+  });
+
+  it("resolves the identity once per request", async () => {
+    let calls = 0;
+    const client = new HilbrasClient({
+      transport: mockTransport(),
+      config: {
+        rbac: {
+          roles: { viewer: { name: "viewer" }, admin: { name: "admin" } },
+          defaultRole: "viewer",
+        },
+        providers: [provider("p", "https://p.test/v1")],
+      },
+      authorization: {
+        resolveUserId: () => { calls += 1; return "user-1"; },
+        resolveRole: (userId) => (userId === "root" ? "admin" : "viewer"),
+      },
+    });
+
+    await client.complete({ provider: "p", model: "m1", messages: [{ role: "user", content: "hi" }] });
+    expect(calls).toBe(1);
+  });
+
+  it("uses a supplied resolveBudget instead of the session tracker", async () => {
+    const client = new HilbrasClient({
+      transport: mockTransport(),
+      config: {
+        rbac: {
+          roles: { capped: { name: "capped", maxBudgetPerSession: 10 } },
+          defaultRole: "capped",
+        },
+        providers: [provider("p", "https://p.test/v1")],
+      },
+      authorization: {
+        resolveUserId: () => "user-1",
+        resolveBudget: () => ({ spent: 25 }),
+      },
+    });
+
+    await expect(client
+      .complete({ provider: "p", model: "m1", messages: [{ role: "user", content: "hi" }] })
+    ).rejects.toThrow();
+  });
+
   it("bounds the authorization diagnostic log", async () => {
     const client = new HilbrasClient({
       transport: mockTransport(),
