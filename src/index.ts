@@ -57,6 +57,7 @@ export {
   InvalidFormatError,
   ConfigurationError,
   CircuitBreakerOpenError,
+  RequestValidationError,
   ValidationError,
 } from "./errors/index.js";
 

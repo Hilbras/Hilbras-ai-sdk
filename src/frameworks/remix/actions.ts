@@ -5,19 +5,23 @@
  * Uses the HilbrasClient to generate streaming responses with full protocol support.
  */
 
-import { HilbrasClient } from "../../client/client.js";
 import { createSSEResponse } from "../../utils/sse-writer.js";
 import type { Tool } from "../../types/tools.js";
+import {
+  createFrameworkClientPool,
+  errorResponse,
+  readJsonBody,
+  requireArray,
+  requireString,
+  type FrameworkHandlerBaseOptions,
+} from "../shared/handler-core.js";
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
 }
 
-export interface ActionOptions {
-  provider: string;
-  model: string;
-  systemPrompt?: string;
+export interface ActionOptions extends FrameworkHandlerBaseOptions {
   tools?: Tool[];
   maxSteps?: number;
 }
@@ -28,73 +32,107 @@ export interface ActionOptions {
  * @example
  * ```ts
  * // app/routes/api.chat.ts
- * import { createChatAction } from "@hilbras/remix";
+ * import { createChatAction } from "@hilbras/sdk/remix";
  *
  * export const action = createChatAction({
- *   provider: "OpenAI",
+ *   provider: "openai",
  *   model: "gpt-4o",
  * });
  * ```
  */
 export function createChatAction(options: ActionOptions) {
-  return async ({ request }: { request: Request }) => {
-    const body = await request.json();
-    const { messages, stream } = body as { messages: ChatMessage[]; stream?: boolean };
+  const pool = createFrameworkClientPool({
+    provider: options.provider,
+    model: options.model,
+    apiKey: options.apiKey,
+  });
 
-    const client = new HilbrasClient();
-    client.addProviderFromCatalog(options.provider, options.model, process.env.AI_API_KEY ?? "");
+  const action = async ({ request }: { request: Request }): Promise<Response> => {
+    try {
+      const body = await readJsonBody(request);
+      const messages = requireArray(body, "messages") as ChatMessage[];
 
-    const allMessages = options.systemPrompt
-      ? [{ role: "system" as const, content: options.systemPrompt }, ...messages]
-      : messages;
+      const client = pool.get(options.model);
+      const providerName = pool.providerName;
 
-    if (stream === false) {
-      const result = await client.complete({
-        provider: options.provider,
+      const allMessages = options.systemPrompt
+        ? [{ role: "system" as const, content: options.systemPrompt }, ...messages]
+        : messages;
+
+      if (body.stream === false) {
+        const result = await client.complete({
+          provider: providerName,
+          model: options.model,
+          messages: allMessages,
+          signal: request.signal,
+        });
+        return new Response(JSON.stringify({
+          id: `cmpl-${Date.now()}`,
+          choices: [{ message: { role: "assistant", content: result }, finishReason: "stop" }],
+        }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const chunks = client.streamText({
+        provider: providerName,
         model: options.model,
         messages: allMessages,
+        tools: options.tools,
+        maxSteps: options.maxSteps,
+        signal: request.signal,
       });
-      return new Response(JSON.stringify({
-        id: `cmpl-${Date.now()}`,
-        choices: [{ message: { role: "assistant", content: result }, finishReason: "stop" }],
-      }), {
-        headers: { "Content-Type": "application/json" },
-      });
+
+      return createSSEResponse(chunks);
+    } catch (error) {
+      return errorResponse(error);
     }
-
-    const chunks = client.streamText({
-      provider: options.provider,
-      model: options.model,
-      messages: allMessages,
-      tools: options.tools,
-      maxSteps: options.maxSteps,
-    });
-
-    return createSSEResponse(chunks);
   };
+
+  async function dispose(): Promise<void> {
+    await pool.dispose();
+  }
+
+  return Object.assign(action, { dispose });
 }
 
 /**
  * Create a non-streaming completion action for Remix.
  */
 export function createCompletionAction(options: ActionOptions) {
-  return async ({ request }: { request: Request }) => {
-    const body = await request.json();
+  const pool = createFrameworkClientPool({
+    provider: options.provider,
+    model: options.model,
+    apiKey: options.apiKey,
+  });
 
-    const client = new HilbrasClient();
-    client.addProviderFromCatalog(options.provider, options.model, process.env.AI_API_KEY ?? "");
+  const action = async ({ request }: { request: Request }): Promise<Response> => {
+    try {
+      const body = await readJsonBody(request);
+      const prompt = requireString(body, "prompt");
 
-    const result = await client.complete({
-      provider: options.provider,
-      model: options.model,
-      messages: [{ role: "user", content: body.prompt ?? "" }],
-    });
+      const client = pool.get(options.model);
+      const result = await client.complete({
+        provider: pool.providerName,
+        model: options.model,
+        messages: [{ role: "user", content: prompt }],
+        signal: request.signal,
+      });
 
-    return new Response(JSON.stringify({
-      id: `cmpl-${Date.now()}`,
-      choices: [{ message: { role: "assistant", content: result }, finishReason: "stop" }],
-    }), {
-      headers: { "Content-Type": "application/json" },
-    });
+      return new Response(JSON.stringify({
+        id: `cmpl-${Date.now()}`,
+        choices: [{ message: { role: "assistant", content: result }, finishReason: "stop" }],
+      }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return errorResponse(error);
+    }
   };
+
+  async function dispose(): Promise<void> {
+    await pool.dispose();
+  }
+
+  return Object.assign(action, { dispose });
 }

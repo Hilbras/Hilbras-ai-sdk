@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.4] - 2026-09-30
+
+### Fixed
+
+- **The shipped framework handlers were non-functional.**
+  `addProviderFromCatalog` registers a provider under its catalog display name
+  (`"OpenAI"`), but `createChatHandler`, `createCompletionHandler`,
+  `createChatEndpoint`, `createCompletionEndpoint`, `createChatAction`, and
+  `createCompletionAction` all discarded the returned canonical name and then
+  called with the caller's spelling (`"openai"`), so every request threw
+  `ProviderNotFoundError`. The handlers now use the returned name. This affected
+  the spelling used in the SDK's own JSDoc examples and in `docs/frameworks.md`.
+- **A failed request reported HTTP 200.** Because the provider was resolved
+  lazily inside the streaming generator, a configuration failure was returned as
+  `200 text/event-stream` with the error inside the SSE body. The client is now
+  resolved before the response is constructed, so an unknown provider or model
+  produces a real error status.
+- `createCompletionHandler` registered with `body.model` but answered with
+  `options.model`, so a caller-supplied model could only cause a failure, never
+  change the response.
+- A missing `prompt` produced an empty completion instead of a 400.
+- Malformed or non-object JSON threw a bare `SyntaxError` out of the handler,
+  delegating the response shape to the host framework.
+- The API key was read only from `process.env.AI_API_KEY`, ignoring the
+  provider's catalog `envKey` such as `OPENAI_API_KEY`.
+- Handlers no longer build a new `HilbrasClient` per request. Clients are cached
+  per provider and model, preserving the connection pool and adapter registry
+  instead of discarding both on every request and leaving a cleanup interval
+  behind.
+- The request `signal` is now passed through, so a client disconnect aborts the
+  in-flight provider call instead of billing for output nobody receives.
+
+### Added
+
+- `RequestValidationError` with a `status`, exported from the root entry.
+- `src/frameworks/shared/handler-core.ts` — shared provider resolution, API key
+  resolution, client pooling, body parsing, and error mapping.
+- `dispose()` on every handler factory, to release the cached clients.
+- 27 tests that read the response body. The pre-existing handler tests asserted
+  only the status and content type and never read the body, which is why the
+  provider-name defect shipped unnoticed.
+
+### Compatibility
+
+No export removed and no existing signature changed. The one intentional
+behavior change: a request that previously returned `200` with an error inside
+the stream body now returns an error status, and a missing `prompt` now returns
+400 instead of an empty completion. Error messages for unexpected failures are
+generic; `ConfigurationError` is reported with its message so a handler
+misconfiguration stays debuggable.
+
+---
+
 ## [3.4.3] - 2026-09-30
 
 ### Fixed
