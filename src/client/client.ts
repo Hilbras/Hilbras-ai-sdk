@@ -35,6 +35,10 @@ import { resolveConfig } from "../config/config-resolver.js";
 import type { ConfigDiagnostic, ConfigSource, SafeSDKConfig } from "../config/config-schema.js";
 import { budgetFromConfig, policyFromConfig, type ResolvedSDKConfig } from "../config/resolved-config.js";
 import type { SDKConfig } from "../config/schema.js";
+import { createRBACMiddleware } from "../security/rbac.js";
+import type { AuthorizationDiagnostic } from "../security/authorization.js";
+import { ToolPolicy } from "../security/tool-policy.js";
+import { composeMiddlewares, type Middleware } from "../middleware/middleware.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { cloneProviderConfig } from "../config/provider-config.js";
 import { FetchTransport } from "../transport/fetch.js";
@@ -149,6 +153,12 @@ export interface HilbrasClientConfig {
   tokenizer?: Tokenizer;
 }
 
+/**
+ * Maximum number of authorization diagnostics retained per client. Older
+ * entries are dropped so a long-lived client cannot grow without bound.
+ */
+const AUTHORIZATION_DIAGNOSTIC_LIMIT = 200;
+
 export class HilbrasClient implements AsyncDisposable {
   private _registry = new ProviderRegistry();
   private _transport: Transport;
@@ -166,13 +176,12 @@ export class HilbrasClient implements AsyncDisposable {
   private _plugins = new PluginRegistry();
   private _requestExecutor: RequestExecutor;
   private _requestPipeline: RequestPipeline;
+  private _toolPolicy: ToolPolicy;
+  private _authorizationDiagnostics: AuthorizationDiagnostic[] = [];
 
   constructor(config?: HilbrasClientConfig) {
-    this._transport = config?.transport ?? new FetchTransport();
-    // v2.5.0: Wrap transport with middleware pipeline when provided
-    if (config?.middleware) {
-      this._transport = new MiddlewareTransport(this._transport, config.middleware);
-    }
+    const baseTransport: Transport = config?.transport ?? new FetchTransport();
+    this._transport = baseTransport;
     this._adapterRegistry = config?.adapterRegistry ?? getDefaultAdapterRegistry();
     this._router = new ModelRouter();
     this._allowInsecureUrls = config?.allowInsecureUrls ?? false;
@@ -190,6 +199,44 @@ export class HilbrasClient implements AsyncDisposable {
     this._defaultPolicy = config?.policy ?? policyFromConfig(resolvedSdk);
     const sdkBudget = budgetFromConfig(resolvedSdk);
     this._budgetTracker = new BudgetTracker(config?.budget ?? sdkBudget);
+
+    // v3.4.0: allowedTools / deniedTools become enforceable. They were part of
+    // the schema from the start but nothing consulted them.
+    this._toolPolicy = new ToolPolicy({
+      allowedTools: resolvedSdk.allowedTools,
+      deniedTools: resolvedSdk.deniedTools,
+    });
+
+    // v3.4.0: a configured `rbac` block is now live. Provider resolution is
+    // read lazily from the registry so providers added after construction are
+    // covered by the same policy.
+    const middlewareChain: Middleware[] = [];
+    if (resolvedSdk.rbac) {
+      middlewareChain.push(createRBACMiddleware(
+        resolvedSdk.rbac,
+        () => null,
+        {
+          resolveProviderByUrl: (url) => this._registry.findByUrl(url),
+          resolveBudget: () => ({ spent: this._budgetTracker.report().totalActual }),
+          onDiagnostic: (diagnostic) => {
+            this._authorizationDiagnostics.push(diagnostic);
+            if (this._authorizationDiagnostics.length > AUTHORIZATION_DIAGNOSTIC_LIMIT) {
+              this._authorizationDiagnostics.splice(
+                0,
+                this._authorizationDiagnostics.length - AUTHORIZATION_DIAGNOSTIC_LIMIT,
+              );
+            }
+          },
+        },
+      ));
+    }
+    // v2.5.0: Wrap transport with middleware pipeline when provided
+    if (config?.middleware) middlewareChain.push(config.middleware);
+    if (middlewareChain.length === 1) {
+      this._transport = new MiddlewareTransport(baseTransport, middlewareChain[0]);
+    } else if (middlewareChain.length > 1) {
+      this._transport = new MiddlewareTransport(baseTransport, composeMiddlewares(...middlewareChain));
+    }
     this._requestExecutor = new RequestExecutor({
       policy: {
         resolve: (policy) => resolvePolicy(policy ?? this._defaultPolicy),
@@ -334,6 +381,34 @@ export class HilbrasClient implements AsyncDisposable {
   /** Return configuration diagnostics without secret values. */
   getConfigDiagnostics(): ConfigDiagnostic[] {
     return this._resolvedConfig.diagnostics.map((diagnostic) => ({ ...diagnostic }));
+  }
+
+  /**
+   * Return the enforced tool policy derived from `allowedTools` and
+   * `deniedTools`. Pass it to a `ToolLoopAgent` to make tool execution obey the
+   * same policy the client admits requests under.
+   */
+  getToolPolicy(): ToolPolicy {
+    return this._toolPolicy;
+  }
+
+  /**
+   * Return the redacted authorization decision log in decision order, bounded
+   * to the most recent entries. Empty when no `rbac` policy is configured.
+   */
+  getAuthorizationDiagnostics(): AuthorizationDiagnostic[] {
+    return this._authorizationDiagnostics.map((diagnostic) => ({ ...diagnostic }));
+  }
+
+  /**
+   * Throw when any of the supplied tool names is not permitted by the client's
+   * tool policy. Called on the request-admission path so a request that would
+   * use a denied tool fails before a provider call is made.
+   */
+  private _assertToolsAllowed(toolNames: readonly string[]): void {
+    if (this._toolPolicy.isEmpty()) return;
+    const violation = this._toolPolicy.checkAll(toolNames);
+    if (violation) throw new Error(violation.reason ?? "tool is not permitted by policy");
   }
 
   /**
@@ -672,6 +747,10 @@ export class HilbrasClient implements AsyncDisposable {
     const requestId = this._nextRequestId();
     const startTime = performance.now();
 
+    // v3.4.0: reject a request that would use a tool the policy forbids before
+    // any provider call is made.
+    if (params.tools) this._assertToolsAllowed(params.tools.map((tool) => tool.function.name));
+
     this._emit({ type: "request.start", requestId, timestamp: startTime, provider: params.provider, model: params.model, task: params.task });
 
     // Resolve provider + model — either explicit or via router
@@ -995,6 +1074,9 @@ export class HilbrasClient implements AsyncDisposable {
     const maxSteps = params.maxSteps ?? 1;
     const messages = this._normalizeMessages(params.messages);
     const allowedToolNames = new Set((params.tools ?? []).map((tool) => tool.function.name));
+    // v3.4.0: tool policy is enforced on the tool-execution path, because a
+    // denied tool must not run even though the provider already saw its schema.
+    if (params.tools) this._assertToolsAllowed([...allowedToolNames]);
     let currentMessages = [...messages];
 
     for (let step = 0; step < maxSteps; step++) {

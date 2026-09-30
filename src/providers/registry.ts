@@ -35,6 +35,42 @@ export class ProviderRegistry {
     return [...this._providers.values()].map(cloneProviderConfig);
   }
 
+  /**
+   * Resolve a provider name from a request URL.
+   *
+   * Authorization decisions happen at the transport layer, where the request
+   * body carries a model but never a provider. Matching the URL back to a
+   * registered provider is how the provider for a request is identified.
+   * Matches on origin, tolerating base-path prefixes and trailing slashes.
+   */
+  findByUrl(url: string): string | null {
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
+      return null;
+    }
+    const targetOrigin = target.origin.toLowerCase();
+
+    for (const provider of this._providers.values()) {
+      let base: URL;
+      try {
+        base = new URL(provider.baseUrl);
+      } catch {
+        continue;
+      }
+      if (base.origin.toLowerCase() !== targetOrigin) continue;
+
+      const basePath = base.pathname.replace(/\/+$/, "");
+      if (basePath.length > 0) {
+        const targetPath = target.pathname;
+        if (targetPath !== basePath && !targetPath.startsWith(`${basePath}/`)) continue;
+      }
+      return provider.name;
+    }
+    return null;
+  }
+
   /** Find a model across all providers */
   findModel(modelId: string): { provider: ProviderConfig; model: Model } | null {
     for (const provider of this._providers.values()) {

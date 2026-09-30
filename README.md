@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.3.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-3.4.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1662%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-1797%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -210,6 +210,7 @@ See [Configuration](docs/configuration.md) and the [v3.2 migration guide](docs/m
 | **Reasoning normalization** | Detect & normalize `<thinking>` / `<reasoning>` tags and native fields | [API Reference](docs/api-reference.md) |
 | **Per-client tokenizer** | Scoped BPE tokenizer per client instance — no global singletons | [API Reference](docs/api-reference.md) |
 | **Configuration resolver** | Typed layered configuration with strict validation and redacted diagnostics | [Configuration](docs/configuration.md) |
+| **Authorization enforcement** | RBAC that actually evaluates, enforced tool policy, body-bound request signing with replay protection | [Security](docs/security.md) |
 | **Middleware pipeline** | Transport-level middleware: auth headers, logging, custom request/response transforms | [API Reference](docs/api-reference.md) |
 | **Agent framework** | ToolLoopAgent, ReActAgent, PlanAndExecuteAgent with approval, budget, cost tracking | [Agent](docs/agent.md) |
 | **Evaluation** | LLM output evaluation with built-in metrics (exact_match, similarity, toxicity) | [Eval](docs/eval.md) |
@@ -222,6 +223,48 @@ See [Configuration](docs/configuration.md) and the [v3.2 migration guide](docs/m
 | **Fine-tuning** | Export training data in 6 formats, data splitting, quality validation | [Fine-tune](docs/fine-tune.md) |
 | **Scaffolding** | `npx create-hilbras-app` project scaffolding | [CLI](docs/cli.md) |
 | **Zero runtime deps** | Pure TypeScript, no transitive dependencies | — |
+
+---
+
+## What's New in v3.4.0
+
+**Authorization now enforces.** `config.rbac` was accepted by the configuration
+resolver but read by nothing, and even when the RBAC middleware was wired up
+manually its permission check was unreachable: it read `provider` from the
+request body, which no adapter sends. RBAC now resolves the provider from the
+request URL, maps caller identity onto a role, and enforces the result. A
+configured `rbac` block is enforced by the client automatically, and a malformed
+policy is rejected at construction instead of degrading to "no restrictions".
+
+**Tool policy is enforced.** `allowedTools` and `deniedTools` were declared,
+overlap-checked, and then ignored. The client now rejects a request that names a
+denied tool, and `ToolLoopAgent` refuses to execute one. See `getToolPolicy()`.
+
+**Request signing binds the body.** The HMAC signature covered the method, path,
+and configured headers, but not the request body: the body digest was emitted as
+an unsigned header, and `verify()` trusted a received digest header rather than
+recomputing it. The new `v2` profile binds the body, the key id, and a nonce,
+and recomputes the digest from the received bytes. The `v1` wire format is
+frozen and unchanged, so existing verifiers keep working.
+
+**Replay protection.** `ReplayGuard` adds a signed-timestamp window and a
+bounded seen-signature cache. `RequestSigner.verifyFresh()` composes the two.
+
+**Middleware and transport fixes.** `composeMiddlewares` used a shared cursor
+that permanently exhausted the chain, so any stage after a retry was skipped on
+every later attempt — a signature computed at T0 was reused unchanged for
+attempts 2..N. Composition now re-enters per attempt. Streaming a non-2xx
+response now throws instead of yielding an empty stream, and signed requests no
+longer emit both `Content-Type` and `content-type`.
+
+**Compatibility.** No export is removed. `checkPermission`, `RBACRole`,
+`RBACConfig`, `RequestSigner`, and `signingMiddleware` keep their signatures.
+One intentional behavior change: a malformed `config.rbac` now fails at
+construction. See the [v3.3 migration guide](docs/migration-from-v3.3.md).
+
+**Audit.** All 20 audited findings, with a finding-to-test map in
+[`HILBRAS-SDK-FULL-AUDIT.md`](HILBRAS-SDK-FULL-AUDIT.md) and
+[`SPEC-v3.4.0-security.md`](SPEC-v3.4.0-security.md).
 
 ---
 

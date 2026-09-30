@@ -11,6 +11,7 @@ import {
   type ConfigSourceKind,
 } from "./config-schema.js";
 import { validateBaseUrl } from "../security/url-guard.js";
+import { validateRbacConfig } from "../security/authorization.js";
 import { ConfigurationError } from "../errors/index.js";
 
 const LOG_LEVELS = new Set<SDKConfig["logLevel"]>(["none", "error", "info", "debug"]);
@@ -151,6 +152,19 @@ function validateValues(values: SDKConfig, source: ConfigSourceKind): ConfigDiag
     const overlap = values.allowedTools.filter((tool) => denied.has(tool));
     if (overlap.length > 0) {
       diagnostics.push(errorDiagnostic(source, "CONFIG_TOOL_POLICY_CONFLICT", "allowedTools", "allowedTools and deniedTools must not overlap"));
+    }
+  }
+  // A malformed authorization policy is rejected as configuration rather than
+  // degrading to "no restrictions" at request time.
+  if (values.rbac !== undefined) {
+    for (const issue of validateRbacConfig(values.rbac, "rbac")) {
+      diagnostics.push({
+        code: issue.code,
+        message: issue.message,
+        path: issue.path,
+        severity: issue.severity,
+        source,
+      });
     }
   }
   return diagnostics;

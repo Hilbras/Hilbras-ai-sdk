@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "esnext",
+    "lib": ["esnext", "dom"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "@hilbras/sdk": ["./src/index.ts"],
+      "@hilbras/sdk/agent": ["./src/features/agent/index.ts"]
+    }
+  },
+  "include": ["examples/authorization", "examples/configuration"]
+}

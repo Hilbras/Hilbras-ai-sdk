@@ -14,15 +14,24 @@ export interface MiddlewareContext {
 
 export type Middleware = (ctx: MiddlewareContext) => Promise<Response>;
 
+/**
+ * Compose middlewares into a single middleware. The leftmost middleware runs
+ * first.
+ *
+ * Each `next()` re-enters the chain at the following index rather than
+ * consuming a shared cursor, so a stage that calls `next()` more than once —
+ * `retryMiddleware`, for example — re-runs every downstream stage on each
+ * attempt. A shared monotonic cursor permanently exhausts the chain after the
+ * first attempt, which silently skipped signing and auth on all retries.
+ */
 export function composeMiddlewares(...middlewares: Middleware[]): Middleware {
   return async (ctx: MiddlewareContext) => {
-    let idx = 0;
-    const next = async (): Promise<Response> => {
-      if (idx >= middlewares.length) return ctx.next();
-      const mw = middlewares[idx++];
-      return mw({ ...ctx, next });
+    const invoke = async (index: number): Promise<Response> => {
+      if (index >= middlewares.length) return ctx.next();
+      const mw = middlewares[index];
+      return mw({ ...ctx, next: () => invoke(index + 1) });
     };
-    return next();
+    return invoke(0);
   };
 }
 

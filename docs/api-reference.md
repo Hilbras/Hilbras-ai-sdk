@@ -155,6 +155,84 @@ recorded as a provider failure.
 A timeout of `0` disables the internal deadline. A provider-level timeout is
 used only when the resolved policy does not provide a positive request timeout.
 
+### Authorization
+
+```typescript
+type AuthorizationEnforcement = "permissive" | "strict";
+
+interface AuthorizationDiagnostic {
+  code: string;
+  message: string;
+  path: string;
+  severity: "info" | "warning" | "error";
+  role?: string;
+  userId?: string;
+}
+
+interface AuthorizationVerdict {
+  allow: boolean;
+  status?: 403 | 429;
+  reason?: string;
+  retryAfterMs?: number;
+  role?: string;
+  /** True when the verdict came from an unresolvable context, not a violation. */
+  unresolved: boolean;
+}
+```
+
+`createRBACMiddleware(config, getUserId, options)` enforces provider, model,
+token, and tool restrictions. Pass `options.resolveRole` to map caller identity
+onto a role; without it, `config.defaultRole` always applies.
+`options.enforcement` selects `"permissive"` (allow an unresolvable context and
+record a diagnostic) or `"strict"` (deny it with 403).
+
+```typescript
+validateRbacConfig(value: unknown, basePath?: string): AuthorizationDiagnostic[];
+resolveRequestFromContext(ctx, resolveProviderByUrl?): RBACRequestContext | null;
+evaluateAuthorization(input): AuthorizationVerdict;
+```
+
+### Tool policy
+
+```typescript
+class ToolPolicy {
+  constructor(input?: { allowedTools?: readonly string[]; deniedTools?: readonly string[] });
+  isEmpty(): boolean;
+  check(toolName: string): { allowed: boolean; reason?: string };
+  isAllowed(toolName: string): boolean;
+  checkAll(toolNames: readonly string[]): { allowed: boolean; reason?: string } | null;
+  assertAllowed(toolName: string): void;
+  narrow(other: ToolPolicyInput | ToolPolicy | undefined): ToolPolicy;
+}
+```
+
+`narrow` only ever removes permissions, so a per-user policy can restrict a
+client policy but never widen it. `client.getToolPolicy()` returns the policy
+derived from `allowedTools` / `deniedTools`.
+
+### Request signing
+
+```typescript
+type SignatureProfile = "v1" | "v2";
+
+class RequestSigner {
+  constructor(config: RequestSignerConfig);
+  sign(url, request): SignedRequest;
+  verify(url, request, receivedSignature): boolean;
+  verifyFresh(url, request, receivedSignature, options?): { valid: boolean; reason?: string };
+}
+
+class ReplayGuard {
+  constructor(options?: { maxAgeMs?, maxSkewMs?, maxEntries?, dateHeader?, now? });
+  verify(headers, signature): { valid: boolean; reason?: string };
+}
+```
+
+`v1` is the frozen pre-v3.4.0 wire format and does not authenticate the body.
+`v2` binds the body digest, key id, and nonce, and recomputes the digest from
+the received bytes during verification. Neither profile provides replay
+protection; use `ReplayGuard` or `verifyFresh`.
+
 ### Configuration resolver
 
 ```typescript
