@@ -101,6 +101,32 @@ describe("ToolPolicy", () => {
     expect(narrowed.isAllowed("a")).toBe(false);
   });
 
+  it("permits nothing when narrowing yields an empty intersection", () => {
+    // Regression: an empty intersection must mean "nothing is permitted", not
+    // "no restriction". Collapsing it to unrestricted made narrow() wider.
+    const narrowed = createToolPolicy({ allowedTools: ["a"] }).narrow({ allowedTools: ["b"] });
+    expect(narrowed.allowedTools).toEqual([]);
+    expect(narrowed.isAllowed("a")).toBe(false);
+    expect(narrowed.isAllowed("b")).toBe(false);
+    expect(narrowed.isAllowed("anything")).toBe(false);
+    expect(narrowed.isEmpty()).toBe(false);
+  });
+
+  it("keeps an empty allow-list restrictive across a second narrowing", () => {
+    const narrowed = createToolPolicy({ allowedTools: ["a"] })
+      .narrow({ allowedTools: ["b"] })
+      .narrow({ allowedTools: ["a", "b"] });
+    expect(narrowed.isAllowed("a")).toBe(false);
+  });
+
+  it("treats an empty allow-list as unrestricted in ordinary construction", () => {
+    // Configuration semantics: `allowedTools: []` means "no restriction".
+    const policy = createToolPolicy({ allowedTools: [] });
+    expect(policy.allowedTools).toBeUndefined();
+    expect(policy.isAllowed("anything")).toBe(true);
+    expect(policy.isEmpty()).toBe(true);
+  });
+
   it("reports the first violation in a set and throws on assert", () => {
     const policy = createToolPolicy({ allowedTools: ["a"] });
     expect(policy.checkAll(["a", "b"])).toMatchObject({ allowed: false });

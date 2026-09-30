@@ -30,10 +30,25 @@ export class ToolPolicy {
   private readonly _allowed: readonly string[] | undefined;
   private readonly _denied: readonly string[];
 
-  constructor(input: ToolPolicyInput = {}) {
-    this._allowed = input.allowedTools && input.allowedTools.length > 0
-      ? Object.freeze([...input.allowedTools])
-      : undefined;
+  /**
+   * @param input The allow-list and deny-list.
+   * @param options `emptyAllowListIsRestrictive` keeps an empty allow-list
+   *   meaningful as "nothing is permitted". It is off by default because an
+   *   empty `allowedTools` in configuration means "no restriction", and
+   *   {@link narrow} needs the opposite meaning: the intersection of two
+   *   allow-lists can legitimately be empty, and treating that as unrestricted
+   *   would make narrowing wider instead of narrower.
+   */
+  constructor(
+    input: ToolPolicyInput = {},
+    options: { emptyAllowListIsRestrictive?: boolean } = {},
+  ) {
+    const allowed = input.allowedTools;
+    this._allowed = allowed === undefined
+      ? undefined
+      : allowed.length > 0 || options.emptyAllowListIsRestrictive
+        ? Object.freeze([...allowed])
+        : undefined;
     this._denied = Object.freeze([...(input.deniedTools ?? [])]);
   }
 
@@ -76,15 +91,18 @@ export class ToolPolicy {
   narrow(other: ToolPolicyInput | ToolPolicy | undefined): ToolPolicy {
     if (other === undefined) return this;
     const narrower = other instanceof ToolPolicy ? other : new ToolPolicy(other);
-    const allowed = this._allowed === undefined
-      ? narrower.allowedTools
-      : narrower.allowedTools === undefined
-        ? this._allowed
-        : this._allowed.filter((name) => narrower.allowedTools!.includes(name));
-    return new ToolPolicy({
-      allowedTools: allowed,
-      deniedTools: [...this._denied, ...narrower.deniedTools],
-    });
+    let allowed: readonly string[] | undefined;
+    if (this._allowed === undefined) {
+      allowed = narrower.allowedTools;
+    } else if (narrower.allowedTools === undefined) {
+      allowed = this._allowed;
+    } else {
+      allowed = this._allowed.filter((name) => narrower.allowedTools!.includes(name));
+    }
+    return new ToolPolicy(
+      { allowedTools: allowed, deniedTools: [...this._denied, ...narrower.deniedTools] },
+      { emptyAllowListIsRestrictive: true },
+    );
   }
 
   /**
