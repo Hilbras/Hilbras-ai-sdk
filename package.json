@@ -231,6 +231,7 @@
     "build": "node tools/clean-dist.mjs dist && tsc -p tsconfig.build.json",
     "dev": "tsc --watch",
     "pretest": "npx tsc --noEmit",
+    "typecheck:examples": "tsc -p tsconfig.examples-check.json",
     "test": "npm run test:root",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

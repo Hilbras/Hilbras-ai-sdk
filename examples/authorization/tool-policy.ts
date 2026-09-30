@@ -1,4 +1,5 @@
-import { HilbrasClient, ToolLoopAgent } from "@hilbras/sdk";
+import { HilbrasClient } from "@hilbras/sdk";
+import { ToolLoopAgent } from "@hilbras/sdk/agent";
 
 /**
  * Tool policy is enforced where tools actually run, which is not the transport
@@ -15,14 +16,14 @@ const search = {
   name: "search",
   description: "Search the knowledge base",
   parameters: { type: "object", properties: { q: { type: "string" } } },
-  execute: async ({ q }: { q: string }) => `results for ${q}`,
+  execute: async (params: Record<string, unknown>) => `results for ${String(params.q)}`,
 };
 
 const shell = {
   name: "shell",
   description: "Run a shell command",
   parameters: { type: "object", properties: { cmd: { type: "string" } } },
-  execute: async ({ cmd }: { cmd: string }) => `ran: ${cmd}`,
+  execute: async (params: Record<string, unknown>) => `ran: ${String(params.cmd)}`,
 };
 
 const agent = new ToolLoopAgent({
