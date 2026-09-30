@@ -141,6 +141,22 @@ export type { CacheControl, CacheableMessage } from "./tokens/prompt-cache.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────
 export { loadConfig, createConfig, validateConfig } from "./config/config.js";
+export { resolveConfig } from "./config/config-resolver.js";
+export { createDefaultsSource } from "./config/sources/defaults.js";
+export { createEnvironmentSource } from "./config/sources/environment.js";
+export { createFileSource } from "./config/sources/file.js";
+export { createRuntimeSource } from "./config/sources/runtime.js";
+export type {
+  ConfigDiagnostic,
+  ConfigResolutionOptions,
+  ConfigSource,
+  ConfigSourceKind,
+  ConfigSourceResult,
+  SafeProviderConfig,
+  SafeSDKConfig,
+} from "./config/config-schema.js";
+export type { ResolvedSDKConfig } from "./config/resolved-config.js";
+export { budgetFromConfig, policyFromConfig } from "./config/resolved-config.js";
 export type { SDKConfig } from "./config/schema.js";
 export { DEFAULT_CONFIG } from "./config/schema.js";
 export { buildPrompt, buildToolSection, buildEnvironmentSection, buildCodingAgentPrompt } from "./config/prompts.js";

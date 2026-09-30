@@ -304,3 +304,64 @@ catalog/routing divergence; and framework route authorization/body limits.
 The full root suite and package gates pass, but the existing coverage gate is
 still below its declared thresholds and remains an explicit follow-up rather
 than a silently weakened requirement.
+
+---
+
+## v3.3.0 addendum — Configuration Architecture
+
+**Audit date:** 2026-09-30
+**Release branch:** `release/v3.3.0`
+**Package target:** `@hilbras/sdk@3.3.0`
+**Baseline:** v3.2.0 commit `6a4474e`
+
+### Scope and result
+
+The v3.3 phase adds one canonical, typed configuration resolver while keeping
+the v3.2 configuration API compatible:
+
+- `src/config/config-schema.ts` owns `SDKConfig`, defaults, source contracts,
+  diagnostics, and defensive cloning.
+- `src/config/config-resolver.ts` provides deterministic precedence,
+  schema-aware merging, validation aggregation, and field-source tracking.
+- `src/config/sources/` provides defaults, environment, injected-file, and
+  runtime sources.
+- `src/config/resolved-config.ts` provides redacted safe snapshots and shared
+  policy/budget mapping.
+- `HilbrasClient` resolves configuration once and exposes redacted snapshot and
+  diagnostic inspection methods.
+- `loadConfig()`, `createConfig()`, `validateConfig()`, and `sdkConfig` remain
+  supported.
+- The universal resolver and injected file source do not require direct Node
+  filesystem access; the legacy `loadConfig({ configPath })` path remains
+  Node-oriented for compatibility.
+
+### v3.3 verification
+
+| Check | Result |
+|---|---|
+| `npm test` | Pass: 91 files, 1,662 root tests |
+| CI-shaped root shards | Pass: all four shards |
+| `npm run test:packages` | Pass: 44 companion tests and all companion builds |
+| `npm run pretest` / `npx tsc --noEmit` | Pass |
+| `npm run lint` | Pass with 0 errors and existing warnings; no new suppression |
+| `npm run check:package` | Pass: 47 export entrypoints imported |
+| `npx publint` | Pass: `All good!` |
+| `npm audit --omit=dev` | Pass: 0 vulnerabilities |
+| `npm run size` | Pass: 1,126.4 KB / 1,900 KB |
+| `npm run benchmark` | Pass; canonical benchmark suite completed |
+| `npm run test:coverage` | Tests pass; thresholds remain unmet at 62.56% statements, 57.69% branches, 66.39% functions, 64.89% lines versus 80/70/80/80. Thresholds were not lowered. |
+
+### Security and compatibility findings
+
+- Provider URLs are validated from file, environment, runtime, and client
+  configuration sources.
+- Diagnostics and safe snapshots redact authentication values and sensitive
+  headers.
+- Unknown keys warn by default and can be rejected explicitly.
+- No provider adapters, catalogs, or public execution contracts were removed.
+
+The release still carries the previously documented deferred risks, including
+request-signing replay protection, fail-open RBAC, browser credential
+isolation, DNS/egress SSRF controls, agent approval/schema enforcement,
+multimodal and unpriced-model budget policy, incomplete provider protocols,
+catalog divergence, and coverage thresholds.

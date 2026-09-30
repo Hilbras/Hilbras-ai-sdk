@@ -15,6 +15,9 @@ export const NextResponse = {
 export default defineConfig({
   test: {
     globals: true,
+    // Cold module transforms and import-heavy provider contracts can exceed
+    // the default 5s under parallel CI load; assertions remain unchanged.
+    testTimeout: 15_000,
     include: ["tests/**/*.test.ts", "tests/**/*.test-d.ts"],
     exclude: ["tests/benchmarks/**"],
     coverage: {
