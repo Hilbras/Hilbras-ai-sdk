@@ -432,7 +432,7 @@ pre-existing hardening tests passing without modification.
 
 | Check | Result |
 |---|---|
-| `npm test` | Pass: 96 files, 1,806 root tests |
+| `npm test` | Pass: 96 files, 1,809 root tests |
 | `npm run test:packages` | Pass: 44 companion tests and all companion builds |
 | `npm run pretest` / `npx tsc --noEmit` | Pass |
 | `npm run typecheck:examples` | Pass: new gate added in v3.4.0, wired into CI |

@@ -38,11 +38,21 @@ export class FetchTransport implements Transport {
     this._maxConnections = options.maxConnectionsPerOrigin ?? 6;
     this._idleTimeout = options.idleTimeout ?? 30000;
     this._coalesce = options.coalesceRequests ?? false;
+  }
 
-    // Clean up idle connections periodically
-    if (typeof setInterval !== "undefined") {
-      this._cleanupTimer = setInterval(() => this._cleanupPools(), this._idleTimeout);
-    }
+  /**
+   * Start the idle-connection cleanup timer on first use.
+   *
+   * The timer is deliberately lazy. A client that never issues a request —
+   * including one whose constructor throws before the caller can dispose it —
+   * then holds no interval, so a failed construction cannot leave a repeating
+   * timer that pins the Node event loop open.
+   */
+  private _ensureCleanupTimer(): void {
+    if (this._cleanupTimer !== null || typeof setInterval === "undefined") return;
+    this._cleanupTimer = setInterval(() => this._cleanupPools(), this._idleTimeout);
+    // Never keep a process alive just to age out an idle connection pool.
+    this._cleanupTimer.unref?.();
   }
 
   private _getOrigin(url: string): string {
@@ -100,6 +110,7 @@ export class FetchTransport implements Transport {
   }
 
   async request(url: string, init: TransportRequestInit): Promise<Response> {
+    this._ensureCleanupTimer();
     const origin = this._getOrigin(url);
     const externalSignal = init.signal;
 
