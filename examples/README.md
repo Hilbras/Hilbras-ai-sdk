@@ -10,6 +10,7 @@ Example apps demonstrating `@hilbras/sdk` with popular frameworks.
 | **SvelteKit** | [sveltekit/](./sveltekit/) | Streaming, structured output, reactive UI |
 | **Hono** | [hono/](./hono/) | Edge runtime, lightweight API server |
 | **Configuration** | [configuration/](./configuration/) | Layered resolver, runtime sources, injected file reader |
+| **Authorization** | [authorization/](./authorization/) | RBAC enforcement, tool policy, request signing, replay protection |
 
 ## Quick Start
 

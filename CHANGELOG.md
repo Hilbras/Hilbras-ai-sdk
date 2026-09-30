@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.4.0] - 2026-09-30
+
+### Added
+
+- `resolveRequestFromContext()` and `ProviderRegistry.findByUrl()` so a request's
+  provider can be identified at the transport layer, where no adapter puts
+  `provider` in the body.
+- `validateRbacConfig()` plus nine `RBAC_*` configuration diagnostics; a malformed
+  authorization policy is now rejected at construction.
+- `AuthorizationOptions` with injectable `resolveRole`, `resolveRequest`,
+  `resolveProviderByUrl`, and `resolveBudget` resolvers.
+- `enforcement: "permissive" | "strict"` on `RBACConfig`.
+- `ToolPolicy`, `createToolPolicy()`, `client.getToolPolicy()`, and
+  `ToolLoopAgentConfig.toolPolicy`.
+- `client.getAuthorizationDiagnostics()` — a bounded, redacted decision log.
+- Signature profile `v2`: binds the request body, the key id, and a per-request
+  nonce, and recomputes the body digest from the received bytes.
+- `ReplayGuard`, `createReplayGuard()`, and `RequestSigner.verifyFresh()`.
+- `RateLimiter.tryConsume()`.
+- `examples/authorization/` and `docs/migration-from-v3.3.md`.
+
+### Changed
+
+- `createRBACMiddleware` evaluates a real request context, so role restrictions
+  are enforced instead of skipped. Rate limits consume tokens, denial audits
+  carry the caller's user id and the role applied, and resolver exceptions are
+  reported rather than propagated.
+- `config.rbac` is enforced by `HilbrasClient` when present.
+- `SDKConfig.allowedTools` / `deniedTools` are enforced on request admission and
+  before every `ToolLoopAgent` tool execution.
+- `composeMiddlewares` re-enters the chain per attempt, so stages after a retry
+  stage run on every attempt. Previously a shared monotonic cursor exhausted the
+  chain after the first attempt.
+- `signingMiddleware` normalizes the outgoing header bag to one lowercase key per
+  name, so signed requests no longer emit both `Content-Type` and
+  `content-type`.
+- A role's `maxBudgetPerSession` is enforced against the session budget tracker,
+  and a role that declares a budget with no budget source configured now reports
+  `RBAC_BUDGET_NOT_ENFORCED` rather than silently claiming enforcement.
+- `RequestSigner` accepts `string | Uint8Array` bodies and no longer string-coerces
+  a `FormData` body, which previously hashed to the constant `"[object FormData]"`.
+
+### Fixed
+
+- `MiddlewareTransport.stream` throws `ProviderRequestError` for a non-2xx
+  response instead of returning the error body as the stream, so a 403 or 429 is
+  no longer indistinguishable from an empty completion.
+- `checkPermission` denies when a role's policy is malformed instead of throwing
+  an uncaught `TypeError` or allowing by accident.
+- Signature profile `v1` is unchanged and remains the default.
+
+### Security and compatibility
+
+- No public export is removed. `checkPermission`, `RBACRole`, `RBACConfig`,
+  `RequestSigner`, `signingMiddleware`, and all v3.3 configuration entry points
+  keep their existing signatures.
+- One intentional behavior change: a client constructed with a malformed
+  `config.rbac` now throws. `config.rbac` has never been read by any released
+  version, so no operator can be relying on its previous behavior.
+- Signature profile `v1` does not authenticate the request body. Use `v2` for new
+  integrations; the default flips in v4.0.0.
+- No provider adapter, catalog, or public execution contract was removed.
+- Coverage thresholds were not lowered.
+
+---
+
 ## [3.3.0] - 2026-09-30
 
 ### Added

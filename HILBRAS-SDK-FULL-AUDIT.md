@@ -369,3 +369,80 @@ request-signing replay protection, fail-open RBAC, browser credential
 isolation, DNS/egress SSRF controls, agent approval/schema enforcement,
 multimodal and unpriced-model budget policy, incomplete provider protocols,
 catalog divergence, and coverage thresholds.
+
+---
+
+## v3.4.0 addendum — Security Enforcement Integrity
+
+**Audit date:** 2026-09-30
+**Release branch:** `release/v3.4.0`
+**Package target:** `@hilbras/sdk@3.4.0`
+**Baseline:** v3.3.0 commit `a739d1e`
+
+### Scope and result
+
+A read-only audit of `src/security/` against the v3.3.0 baseline found that both
+headline security features were non-functional in shipped code paths: RBAC had
+four unconditional-allow paths and one dead control, and the HMAC signer did not
+authenticate the request body. v3.4.0 closes 20 findings. No public export is
+removed and one behavior change is intentional.
+
+### Finding-to-test map
+
+Every finding below has a test. `T1` is
+`tests/security/authorization-baseline.test.ts` (the characterization file that
+began the release, where each defect was first recorded as a red `it.fails`
+assertion and is now a green one).
+
+| # | Severity | Defect | Fix | Test |
+|---|---|---|---|---|
+| R1 | Critical | `getUserId` never resolved the role; every caller got `defaultRole` | `options.resolveRole` | `T1` "R1" |
+| R2 | Critical | Permission check unreachable: `provider` read from a body no adapter sends | `resolveRequestFromContext` + `ProviderRegistry.findByUrl` | `T1` "R2" |
+| R3 | High | `limiter.acquire()` never decremented, so the 429 branch was dead | `RateLimiter.tryConsume` | `T1` "R3" |
+| R4 | High | A missing role failed open; a `defaultRole` typo disabled enforcement silently | `validateRbacConfig` existence check + `strict` mode | `T1` "R4" |
+| R5 | High | `config.rbac` accepted, unvalidated, never read | Validated in the resolver, enforced in the client | `client-authorization.test.ts` |
+| R6 | High | `allowedTools` / `deniedTools` declared but never enforced | `ToolPolicy` on admission and in `ToolLoopAgent` | `client-authorization.test.ts` |
+| R7 | Medium | Malformed policy failed open or threw an uncaught `TypeError` | `validateRbacConfig` + deny on invalid policy | `T1` "R7" |
+| R8 | Medium | `maxBudgetPerSession` declared and never read | Budget view, or `RBAC_BUDGET_NOT_ENFORCED` | `T1` "R8" |
+| R9 | Medium | Denial audits carried no `userId` or role | Attributed audit events | `T1` "R9" |
+| R10 | Medium | A streaming 403 was returned as the SSE stream | `MiddlewareTransport.stream` throws | `transport-integrity.test.ts` |
+| R11 | Low | A throwing `getUserId` propagated unhandled | Reported, never propagated | `authorization.test.ts` |
+| S1 | High | Signature did not authenticate the body | `v2` binds the content digest | `T1` "S1" |
+| S2 | High | `verify()` trusted a received digest header | Recomputed from received bytes | `T1` "S2" |
+| S3 | High | No replay protection anywhere | `ReplayGuard`, `verifyFresh` | `signing.test.ts` |
+| S4 | High | A monotonic cursor skipped post-retry stages, reusing a stale signature | Recursive `composeMiddlewares` | `T1` "S4" |
+| S5 | Medium | `FormData` hashed to the constant `"[object FormData]"` | No digest emitted for unreadable bodies | `T1` "S5" |
+| S6 | Medium | Duplicate-case headers on signed requests | Header normalization | `T1` "S6" |
+| S7 | Medium | `keyId` was unauthenticated | Bound into `v2`; mismatched header fails | `T1` "S7" |
+| S8 | Low | One-second timestamp resolution collided | Per-sign nonce | `T1` "S8" |
+| S9 | Low | A `sha512` signer emitted a header named `x-content-sha256` | `x-hilbras-content-digest` | `T1` "S9" |
+
+### Compatibility
+
+One intentional behavior change: a client constructed with a malformed
+`config.rbac` now throws. `config.rbac` has never been read by any released
+version, so no operator can be relying on its previous behavior. Everything else
+is either an internal fix that cannot change an operator-observable result, or is
+gated behind an opt-in (`enforcement: "strict"`, `profile: "v2"`,
+`verifyFresh()`, a declared `rateLimit`, or a non-empty tool list). The
+signature `v1` wire format is frozen and unchanged, verified by the 64
+pre-existing hardening tests passing without modification.
+
+### Still deferred
+
+- **Framework route authorization.** `createChatHandler` and its Astro and Remix
+  siblings trust caller-supplied `body.tools`, `body.model`, and `body.maxSteps`
+  with no authentication and no body-size limit, so an unauthenticated caller can
+  choose the agent's tool set. This is the top v3.5.0 item. It is in the
+  companion packages and needs a route-security design of its own.
+- **`node:crypto` in the package barrel.** `request-signer.ts` imports
+  `node:crypto` and is re-exported from the root entry, which breaks edge and
+  browser bundling. Needs a WebCrypto implementation. Scoped to v3.5.0.
+- **Per-role budget attribution.** `maxBudgetPerSession` is compared against the
+  session-scoped tracker; per-role totals need a role-aware budget pipeline.
+- **Browser credential isolation**, **DNS and egress SSRF controls**, and
+  **agent approval and runtime schema enforcement** remain open, as do the
+  previously documented multimodal budget policy, incomplete provider protocols,
+  catalog divergence, and coverage thresholds.
+- **Default signature profile flip to `v2`** is scheduled for v4.0.0, together
+  with removal of `v1`.
