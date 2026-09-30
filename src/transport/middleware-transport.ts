@@ -19,7 +19,8 @@
  */
 
 import type { Transport, TransportRequestInit } from "./transport.js";
-import type { Middleware, MiddlewareContext } from "../middleware/middleware.js";
+import type { Middleware } from "../middleware/middleware.js";
+import { ProviderRequestError } from "../errors/index.js";
 
 export class MiddlewareTransport implements Transport {
   private _inner: Transport;
@@ -45,6 +46,14 @@ export class MiddlewareTransport implements Transport {
       init,
       next: () => this._inner.request(url, init),
     });
+    // A non-2xx response must not be handed back as a stream. Middleware such
+    // as RBAC returns 403/429 with a JSON body; returning it here would look to
+    // an adapter like an empty SSE stream, turning a denial into a silent empty
+    // completion.
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ProviderRequestError(res.status, body || res.statusText, "middleware");
+    }
     if (!res.body) {
       throw new Error(`Response body is null for ${url}`);
     }

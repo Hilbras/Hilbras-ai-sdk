@@ -13,6 +13,8 @@ import { describe, it, expect } from "vitest";
 import { checkPermission, createRBACMiddleware } from "../../src/security/rbac.js";
 import type { Middleware, MiddlewareContext } from "../../src/middleware/middleware.js";
 import { composeMiddlewares, retryMiddleware } from "../../src/middleware/middleware.js";
+import { MiddlewareTransport } from "../../src/transport/middleware-transport.js";
+import type { Transport } from "../../src/transport/transport.js";
 import { AuditLogger } from "../../src/security/audit-logger.js";
 import { RequestSigner, signingMiddleware } from "../../src/security/request-signer.js";
 import { resolveConfig } from "../../src/config/config-resolver.js";
@@ -267,23 +269,35 @@ describe("B. request signing and transport defects (red on v3.3.0, fixed in v3.4
     )).toBe(true);
   });
 
-  it.fails("S4: a stage after a retry stage re-runs on every attempt", async () => {
-    let downstreamCalls = 0;
-    const counting: Middleware = async (ctx) => {
-      downstreamCalls += 1;
+  it("S4: a stage after a retry stage re-runs on every attempt", async () => {
+    // A retry stage followed by a per-attempt stage. With a shared monotonic
+    // cursor the second stage ran once and attempts 2..N bypassed it entirely.
+    let signCount = 0;
+    let transportCalls = 0;
+    const inner: Transport = {
+      request: async () => {
+        transportCalls += 1;
+        if (transportCalls < 3) throw new Error("transient");
+        return okResponse();
+      },
+      stream: async () => new ReadableStream<Uint8Array>(),
+      abort: () => {},
+    };
+    const signing: Middleware = async (ctx) => {
+      signCount += 1;
       return ctx.next();
     };
-    let attempts = 0;
-    const failing: Middleware = async () => {
-      attempts += 1;
-      if (attempts < 3) throw new Error("transient");
-      return okResponse();
-    };
-    const composed = composeMiddlewares(failing, counting);
-    const res = await composed(makeCtx({ headers: {}, body: { model: "gpt-4o" } }));
+    const transport = new MiddlewareTransport(inner, composeMiddlewares(retryMiddleware(2, 0), signing));
+
+    const res = await transport.request(OPENAI_URL, {
+      method: "POST",
+      headers: {},
+      body: JSON.stringify({ model: "gpt-4o" }),
+    });
+
     expect(res.status).toBe(200);
-    expect(attempts).toBe(3);
-    expect(downstreamCalls).toBe(3);
+    expect(transportCalls).toBe(3);
+    expect(signCount).toBe(3);
   });
 
   it("S5: a FormData body emits no content digest instead of a constant one", async () => {
@@ -361,22 +375,29 @@ describe("B. request signing and transport defects (red on v3.3.0, fixed in v3.4
 });
 
 describe("B. middleware composition defect (red on v3.3.0, fixed in v3.4.0)", () => {
-  it.fails("retryMiddleware re-runs the whole downstream chain per attempt", async () => {
+  it("retryMiddleware re-runs the whole downstream chain per attempt", async () => {
     let downstreamCalls = 0;
+    let transportCalls = 0;
+    const inner: Transport = {
+      request: async () => {
+        transportCalls += 1;
+        if (transportCalls < 3) throw new Error("transient");
+        return okResponse();
+      },
+      stream: async () => new ReadableStream<Uint8Array>(),
+      abort: () => {},
+    };
     const counting: Middleware = async (ctx) => {
       downstreamCalls += 1;
       return ctx.next();
     };
-    const composed = composeMiddlewares(retryMiddleware(2, 0), counting);
-    const ctx = makeCtx({ headers: {} });
-    let thrown: unknown;
-    try {
-      await composed(ctx);
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeDefined();
-    // 1 initial attempt + 2 retries.
+    const transport = new MiddlewareTransport(inner, composeMiddlewares(retryMiddleware(2, 0), counting));
+
+    const res = await transport.request(OPENAI_URL, { method: "POST", headers: {} });
+
+    expect(res.status).toBe(200);
+    expect(transportCalls).toBe(3);
+    // 1 initial attempt + 2 retries, with the downstream stage on every one.
     expect(downstreamCalls).toBe(3);
   });
 });
