@@ -24,7 +24,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@hilbras/react": "^2.0.0"
+    "@hilbras/sdk": "^3.5.0"
   },
   "peerDependencies": {
     "react": ">=18.0.0"

@@ -7,7 +7,7 @@ import {
   useCost,
   type ChatMessage,
   type UseChatOptions,
-} from "@hilbras/react";
+} from "@hilbras/sdk/react-client";
 
 interface ChatBoxContextValue {
   messages: ChatMessage[];

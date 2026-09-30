@@ -33,7 +33,10 @@ mutate() { # name  sed-expr  test-substring
   local out
   out=$(npx vitest run tests/frameworks/route-security.test.ts \
           --testNamePattern "$want" 2>&1)
-  if echo "$out" | grep -qE "Tests +[0-9]+ failed"; then
+  # A suite can fail two ways: an assertion failure ("Tests N failed"), or a
+  # module that cannot be collected at all ("Tests no tests"). Checking only the
+  # first reports a real kill as a hole.
+  if echo "$out" | grep -qE "Tests +[0-9]+ failed|Tests +no tests|Test Files +[0-9]+ failed"; then
     echo "KILLED   $name  (expects: $want)"
   else
     echo "HOLE     $name  (survived: $want)"
@@ -65,7 +68,10 @@ amutate() { # name  sed-expr  test-substring
   local out
   out=$(npx vitest run tests/frameworks/route-security.test.ts \
           --testNamePattern "$want" 2>&1)
-  if echo "$out" | grep -qE "Tests +[0-9]+ failed"; then
+  # A suite can fail two ways: an assertion failure ("Tests N failed"), or a
+  # module that cannot be collected at all ("Tests no tests"). Checking only the
+  # first reports a real kill as a hole.
+  if echo "$out" | grep -qE "Tests +[0-9]+ failed|Tests +no tests|Test Files +[0-9]+ failed"; then
     echo "KILLED   $name  (expects: $want)"
   else
     echo "HOLE     $name  (survived: $want)"

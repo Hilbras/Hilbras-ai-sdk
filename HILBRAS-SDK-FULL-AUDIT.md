@@ -5,7 +5,7 @@
 **Release branch:** `release/v3.1.0`
 **Audited baseline:** `7a3801d`
 **Package release:** `@hilbras/sdk@3.1.0`
-**Companion packages:** `hilbras`, `create-hilbras-app`, `@hilbras/next`, `@hilbras/react`, `@hilbras/ui`
+**Companion packages (as of v3.5.0):** `hilbras`, `create-hilbras-app`, `@hilbras/ui`. `@hilbras/next` and `@hilbras/react` were folded into `@hilbras/sdk` as the `/nextjs/api`, `/nextjs/edge` and `/react-client` subpaths — neither was ever published to npm.
 
 ## Executive summary
 
