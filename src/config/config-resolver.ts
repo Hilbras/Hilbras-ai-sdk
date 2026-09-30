@@ -6,7 +6,6 @@ import { createResolvedConfig, type ResolvedSDKConfig } from "./resolved-config.
 import {
   CONFIG_KEYS,
   cloneConfigValue,
-  isConfigKey,
   type ConfigDiagnostic,
   type ConfigResolutionOptions,
   type ConfigSourceKind,
@@ -192,7 +191,8 @@ export function resolveConfig(options: ConfigResolutionOptions = {}): ResolvedSD
     diagnostics.push(...(loaded.diagnostics ?? []));
     if (loaded.diagnostics?.some((diagnostic) => diagnostic.severity === "error")) {
       if (strict) throwForDiagnostics(diagnostics);
-      continue;
+      // In compatibility mode retain valid fields from the source while
+      // surfacing the invalid ones as diagnostics.
     }
     values = mergeValues(values, loaded.values, source.kind, rejectUnknownKeys, diagnostics, fieldSources);
   }

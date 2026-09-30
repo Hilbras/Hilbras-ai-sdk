@@ -31,6 +31,10 @@ import type {
   TranscriptionResult,
   RerankResult,
 } from "../types/multi-modal.js";
+import { resolveConfig } from "../config/config-resolver.js";
+import type { ConfigDiagnostic, ConfigSource, SafeSDKConfig } from "../config/config-schema.js";
+import { budgetFromConfig, policyFromConfig, type ResolvedSDKConfig } from "../config/resolved-config.js";
+import type { SDKConfig } from "../config/schema.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { cloneProviderConfig } from "../config/provider-config.js";
 import { FetchTransport } from "../transport/fetch.js";
@@ -108,6 +112,16 @@ export interface HilbrasClientConfig {
    */
   sdkConfig?: import("../config/schema.js").SDKConfig;
   /**
+   * Canonical v3.3 configuration input. Sources are resolved once during
+   * construction using defaults < file/environment sources < runtime values.
+   * Existing `sdkConfig` remains supported as a compatibility alias.
+   */
+  config?: Partial<SDKConfig>;
+  /** Explicit configuration sources for the canonical resolver. */
+  configSources?: ConfigSource[];
+  /** An already-resolved configuration, primarily for framework adapters. */
+  resolvedConfig?: ResolvedSDKConfig;
+  /**
    * v1.1.0: Optional telemetry sinks. When provided, the client automatically
    * forwards lifecycle events to the configured sinks.
    */
@@ -141,6 +155,7 @@ export class HilbrasClient implements AsyncDisposable {
   private _adapterRegistry: AdapterRegistry;
   private _adapters = new Map<string, AIProvider>();
   private _defaultPolicy: ExecutionPolicy | undefined;
+  private _resolvedConfig: ResolvedSDKConfig;
   private _router: ModelRouter;
   private _hooks = new ClientHooks();
   private _requestCounter = 0;
@@ -164,11 +179,16 @@ export class HilbrasClient implements AsyncDisposable {
     this._allowPrivateNetwork = config?.allowPrivateNetwork ?? false;
     this._tokenizer = config?.tokenizer ?? null;
 
-    // v0.10.0 PR-5: derive policy + budget from sdkConfig when not
-    // explicitly provided. Precedence: explicit > sdkConfig > defaults.
-    const sdk = config?.sdkConfig;
-    this._defaultPolicy = config?.policy ?? (sdk ? this._policyFromSDK(sdk) : undefined);
-    const sdkBudget = sdk ? this._budgetFromSDK(sdk) : undefined;
+    // v3.3.0: resolve layered configuration exactly once at construction.
+    const inputConfig = config?.config ?? config?.sdkConfig;
+    this._resolvedConfig = config?.resolvedConfig ?? resolveConfig({
+      sources: config?.configSources,
+      overrides: inputConfig,
+      strict: true,
+    });
+    const resolvedSdk = this._resolvedConfig.values;
+    this._defaultPolicy = config?.policy ?? policyFromConfig(resolvedSdk);
+    const sdkBudget = budgetFromConfig(resolvedSdk);
     this._budgetTracker = new BudgetTracker(config?.budget ?? sdkBudget);
     this._requestExecutor = new RequestExecutor({
       policy: {
@@ -195,8 +215,8 @@ export class HilbrasClient implements AsyncDisposable {
     });
 
     // v1.1.0: Register providers from SDKConfig if provided
-    if (sdk?.providers?.length) {
-      for (const provider of sdk.providers) {
+    if (resolvedSdk.providers.length > 0) {
+      for (const provider of resolvedSdk.providers) {
         if (!this._registry.get(provider.name)) {
           this.addProvider(provider);
         }
@@ -210,38 +230,6 @@ export class HilbrasClient implements AsyncDisposable {
     if (config?.telemetry?.openTelemetry) {
       config.telemetry.openTelemetry.instrumentClient(this as any);
     }
-  }
-
-  /**
-   * Map the legacy SDKConfig fields (maxRetries, requestTimeoutMs,
-   * circuitBreakerEnabled/Threshold/ResetMs) to an ExecutionPolicy.
-   * Unrecognized fields are left undefined; the per-request policy
-   * resolver fills in defaults.
-   */
-  private _policyFromSDK(sdk: import("../config/schema.js").SDKConfig): ExecutionPolicy {
-    const policy: ExecutionPolicy = {};
-    if (sdk.maxRetries !== undefined) {
-      policy.retry = { maxRetries: sdk.maxRetries };
-    }
-    if (sdk.requestTimeoutMs !== undefined) {
-      policy.timeout = { requestTimeoutMs: sdk.requestTimeoutMs };
-    }
-    if (sdk.circuitBreakerEnabled !== undefined || sdk.circuitBreakerThreshold !== undefined || sdk.circuitBreakerResetMs !== undefined) {
-      policy.circuitBreaker = {
-        enabled: sdk.circuitBreakerEnabled,
-        failureThreshold: sdk.circuitBreakerThreshold,
-        timeoutMs: sdk.circuitBreakerResetMs,
-      };
-    }
-    return policy;
-  }
-
-  /** Map the legacy SDKConfig budget fields to a BudgetConfig. */
-  private _budgetFromSDK(sdk: import("../config/schema.js").SDKConfig): BudgetConfig {
-    const budget: BudgetConfig = {};
-    if (sdk.sessionBudget !== undefined) budget.sessionBudget = sdk.sessionBudget;
-    if (sdk.perRequestBudget !== undefined) budget.perRequestBudget = sdk.perRequestBudget;
-    return budget;
   }
 
   /** Subscribe to lifecycle events. Returns an unsubscribe function. */
@@ -336,6 +324,16 @@ export class HilbrasClient implements AsyncDisposable {
 
   listProviders() {
     return this._registry.list();
+  }
+
+  /** Return a redacted snapshot of the resolved client configuration. */
+  getConfigSnapshot(): SafeSDKConfig {
+    return this._resolvedConfig.safeSnapshot();
+  }
+
+  /** Return configuration diagnostics without secret values. */
+  getConfigDiagnostics(): ConfigDiagnostic[] {
+    return this._resolvedConfig.diagnostics.map((diagnostic) => ({ ...diagnostic }));
   }
 
   /**

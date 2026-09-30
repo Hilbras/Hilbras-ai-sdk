@@ -136,8 +136,8 @@
       "import": "./dist/tokens/counter.js"
     },
     "./config": {
-      "types": "./dist/config/config.d.ts",
-      "import": "./dist/config/config.js"
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js"
     },
     "./transport": {
       "types": "./dist/transport/transport.d.ts",

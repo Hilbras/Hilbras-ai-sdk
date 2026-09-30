@@ -1,4 +1,6 @@
 import type { SDKConfig } from "./schema.js";
+import type { ExecutionPolicy } from "../types/policy.js";
+import type { BudgetConfig } from "../cost/types.js";
 import {
   cloneConfigValue,
   type ConfigDiagnostic,
@@ -27,6 +29,25 @@ function redactValue(key: string, value: unknown): unknown {
     return result;
   }
   return value;
+}
+
+export function policyFromConfig(config: SDKConfig): ExecutionPolicy {
+  return {
+    retry: { maxRetries: config.maxRetries },
+    timeout: { requestTimeoutMs: config.requestTimeoutMs },
+    circuitBreaker: {
+      enabled: config.circuitBreakerEnabled,
+      failureThreshold: config.circuitBreakerThreshold,
+      timeoutMs: config.circuitBreakerResetMs,
+    },
+  };
+}
+
+export function budgetFromConfig(config: SDKConfig): BudgetConfig {
+  const budget: BudgetConfig = {};
+  if (config.sessionBudget !== undefined) budget.sessionBudget = config.sessionBudget;
+  if (config.perRequestBudget !== undefined) budget.perRequestBudget = config.perRequestBudget;
+  return budget;
 }
 
 export function createSafeSnapshot(values: SDKConfig): SafeSDKConfig {

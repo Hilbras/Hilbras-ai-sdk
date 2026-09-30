@@ -1,18 +1,11 @@
 /**
  * Canonical configuration contracts for the v3.3 resolver.
  *
- * The existing SDKConfig and DEFAULT_CONFIG remain re-exported from
- * `schema.ts` while callers migrate to the resolver. New configuration
- * sources and diagnostics are defined here so the resolver has no dependency
- * on the client or provider implementations.
+ * This module owns `SDKConfig` and `DEFAULT_CONFIG`. `schema.ts` re-exports
+ * these symbols for compatibility with existing imports.
  */
 
 import type { ProviderConfig, Authentication } from "../types/providers.js";
-
-export type { SDKConfig } from "./schema.js";
-export { DEFAULT_CONFIG } from "./schema.js";
-import { DEFAULT_CONFIG } from "./schema.js";
-import type { SDKConfig } from "./schema.js";
 
 export type ConfigSourceKind = "defaults" | "file" | "environment" | "runtime";
 export type ConfigDiagnosticSeverity = "info" | "warning" | "error";
@@ -51,6 +44,54 @@ export type SafeSDKConfig = Omit<SDKConfig, "providers"> & {
   providers: SafeProviderConfig[];
 };
 
+/** Application-level SDK configuration. */
+export interface SDKConfig {
+  defaultProvider: string;
+  defaultModel: string;
+  temperature: number;
+  maxTokens: number;
+  stream: boolean;
+  toolsEnabled: boolean;
+  reasoningEnabled: boolean;
+  logLevel: "none" | "error" | "info" | "debug";
+  requestTimeoutMs: number;
+  maxRetries: number;
+  circuitBreakerEnabled: boolean;
+  circuitBreakerThreshold: number;
+  circuitBreakerResetMs: number;
+  promptCaching: boolean;
+  workspaceDir: string;
+  providers: ProviderConfig[];
+  allowedTools: string[];
+  deniedTools: string[];
+  sessionBudget?: number;
+  perRequestBudget?: number;
+  rbac?: import("../security/rbac.js").RBACConfig;
+  costAlerts?: import("../cost/alerts.js").CostAlertConfig;
+  sla?: Array<import("../telemetry/sla.js").SLADefinition>;
+}
+
+export const DEFAULT_CONFIG: SDKConfig = {
+  defaultProvider: "",
+  defaultModel: "gpt-4o",
+  temperature: 0.7,
+  maxTokens: 4096,
+  stream: true,
+  toolsEnabled: true,
+  reasoningEnabled: false,
+  logLevel: "none",
+  requestTimeoutMs: 120_000,
+  maxRetries: 3,
+  circuitBreakerEnabled: true,
+  circuitBreakerThreshold: 5,
+  circuitBreakerResetMs: 60_000,
+  promptCaching: true,
+  workspaceDir: typeof process !== "undefined" && typeof process.cwd === "function" ? process.cwd() : "/",
+  providers: [],
+  allowedTools: [],
+  deniedTools: [],
+};
+
 const OPTIONAL_CONFIG_KEYS = [
   "sessionBudget",
   "perRequestBudget",
@@ -66,7 +107,6 @@ export const CONFIG_KEYS = new Set<string>([
 
 const BLOCKED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-/** Clone configuration data without preserving caller-owned references. */
 export function cloneConfigValue<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => cloneConfigValue(item)) as T;
@@ -82,7 +122,6 @@ export function cloneConfigValue<T>(value: T): T {
   return value;
 }
 
-/** Return true for a safe, schema-known configuration key. */
 export function isConfigKey(key: string): key is keyof SDKConfig {
   return CONFIG_KEYS.has(key) && !BLOCKED_KEYS.has(key);
 }

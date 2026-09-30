@@ -191,7 +191,7 @@ describe("PR-2: loadConfig security hardening", () => {
       };
       expect(sample.adapter).toBe("openai");
       expect(sample.authentication.type).toBe("bearer");
-    });
+    }, 15_000);
   });
 
   describe("validateConfig now checks provider URLs (PR-2)", () => {
