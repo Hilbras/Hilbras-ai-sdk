@@ -191,6 +191,24 @@ export class CircuitBreakerOpenError extends HilbrasSdkError {
   }
 }
 
+/**
+ * A request could not be accepted as written: malformed JSON, a missing or
+ * wrongly typed field, or a body that exceeds the configured limits.
+ *
+ * This is a caller error, so the default `status` is 400. Framework handlers
+ * map it to that status instead of surfacing a 200 with a failure buried in a
+ * stream.
+ */
+export class RequestValidationError extends HilbrasSdkError {
+  readonly status: number;
+
+  constructor(message: string, hint?: string, status = 400) {
+    super(message, { hint });
+    this.name = "RequestValidationError";
+    this.status = status;
+  }
+}
+
 export class ValidationError extends HilbrasSdkError {
   constructor(
     public readonly attempts: number,
