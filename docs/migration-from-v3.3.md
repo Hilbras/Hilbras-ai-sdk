@@ -53,6 +53,19 @@ decremented the bucket, so the 429 branch was unreachable. It now consumes. If
 you declared a rate limit and never saw a 429, you will start to. The bucket is
 keyed `rbac:<userId>:<role>`, so two roles for one caller get independent limits.
 
+When you wire `rbac` through client configuration, also give the client an
+identity, otherwise the limit cannot be keyed and is reported instead of
+applied:
+
+```typescript
+new HilbrasClient({
+  config: { rbac: { roles, defaultRole: "viewer" } },
+  authorization: { resolveUserId: () => currentUserId() },
+});
+```
+
+Without it you will see `RBAC_RATE_LIMIT_UNKEYED` on every request.
+
 ### `allowedTools` / `deniedTools` are enforced
 
 These configuration fields were declared and overlap-checked but read by

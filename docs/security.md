@@ -192,14 +192,38 @@ A `rbac` block in client configuration is enforced automatically:
 const client = new HilbrasClient({
   config: {
     rbac: {
-      roles: { viewer: { name: "viewer", allowedProviders: ["openai"] } },
+      roles: {
+        viewer: {
+          name: "viewer",
+          allowedProviders: ["openai"],
+          rateLimit: { maxRequests: 10, windowMs: 60_000 },
+        },
+      },
       defaultRole: "viewer",
     },
+  },
+  // Give the client an identity so per-user roles and per-role rate limits
+  // can actually be applied.
+  authorization: {
+    resolveUserId: () => currentUserId(),
+    resolveRole: (userId) => roleForUser(userId),
   },
 });
 
 client.getAuthorizationDiagnostics(); // redacted decision log, bounded
 ```
+
+The client resolves provider identity from its own registry, so providers added
+with `addProvider()` after construction are covered by the same policy.
+
+Without `authorization.resolveUserId` the client has no notion of a caller. A
+per-user role then cannot be selected and a `rateLimit` cannot be keyed, so the
+SDK reports `RBAC_RATE_LIMIT_UNKEYED` on every request rather than implying a
+limit is in force. Supply `resolveUserId` to make those controls work; supply
+`resolveBudget` to attribute spend per role.
+
+The identity is resolved once per request and shared between the user id and
+role resolvers, so an expensive auth lookup is not repeated.
 
 A malformed policy is rejected when the client is constructed rather than
 degrading to "no restrictions":
@@ -210,10 +234,6 @@ new HilbrasClient({
 });
 // ConfigurationError: rbac.roles.v.allowedModels must be an array of non-empty strings
 ```
-
-The client resolves provider identity from its own provider registry, so
-providers added with `addProvider()` after construction are covered by the same
-policy.
 
 ### Session budgets
 
