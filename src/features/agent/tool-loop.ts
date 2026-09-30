@@ -12,6 +12,7 @@
  */
 
 import type { HilbrasClient, Tool } from "../../index.js";
+import { ToolPolicy, type ToolPolicyInput } from "../../security/tool-policy.js";
 import type {
   AgentTool,
   AgentConfig,
@@ -40,6 +41,14 @@ export interface ToolLoopAgentConfig extends AgentConfig {
   }>;
   /** Function to estimate cost from usage */
   costEstimator?: (usage: { promptTokens: number; completionTokens: number }, model: string) => number;
+  /**
+   * Tool policy enforced before every tool execution. A denied tool is not run
+   * and the step records the policy error.
+   *
+   * Tool policy must be applied here rather than at the transport layer,
+   * because tools execute locally and never reach a provider request.
+   */
+  toolPolicy?: ToolPolicyInput | ToolPolicy;
   /** Approval handler — return true to approve, false to reject */
   onApproval?: (step: number, tool: string, args: Record<string, unknown>) => boolean | Promise<boolean>;
   /** Event listener for agent lifecycle */
@@ -92,6 +101,12 @@ export class ToolLoopAgent {
       onApproval,
       onEvent,
     } = this._config;
+
+    const toolPolicy = this._config.toolPolicy === undefined
+      ? undefined
+      : this._config.toolPolicy instanceof ToolPolicy
+        ? this._config.toolPolicy
+        : new ToolPolicy(this._config.toolPolicy);
 
     // If client is provided, wrap it as an LLM function
     const effectiveLLM = client
@@ -206,6 +221,26 @@ export class ToolLoopAgent {
             error: `Tool "${tc.name}" not found`,
           });
           continue;
+        }
+
+        // Tool policy check. Tools execute locally, so the transport layer
+        // cannot govern them; this is the only place a denied tool can be
+        // stopped before it runs.
+        if (toolPolicy && !toolPolicy.isEmpty()) {
+          const decision = toolPolicy.check(tc.name);
+          if (!decision.allowed) {
+            stepToolCalls.push({
+              name: tc.name,
+              args: tc.arguments,
+              result: null,
+              error: decision.reason ?? `Tool "${tc.name}" is not permitted`,
+            });
+            onEvent?.({
+              type: "error",
+              error: new Error(decision.reason ?? `Tool "${tc.name}" is not permitted`),
+            });
+            continue;
+          }
         }
 
         // Approval check
