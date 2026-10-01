@@ -17,10 +17,10 @@ deficit, and the largest contributor is nine zero-covered adapter files.
 Ordered by (breaking-ness × security value) / effort, which puts the work that
 can ship on a minor release first and defers what forces a major.
 
-| # | Item | Impact | Effort | Release |
-|---|------|--------|--------|---------|
-| 1 | Coverage: nine 0%-covered adapters | quality | M | 3.7.0 |
-| 2 | Coverage: `frameworks` at 25% | quality | M | 3.7.0 |
+| # | Item | Impact | Effort | Release | State |
+|---|------|--------|--------|---------|-------|
+| 1 | Coverage: nine 0%-covered adapters | quality | M | 3.7.0 | **done** — `src/adapters` 67.9% → 76.0% |
+| 2 | Coverage: `frameworks` at 25% | quality | M | 3.7.0 | open — 11 files still at 0% |
 | 3 | `trustClientFields` default flip → `false` | breaking | S | 4.0.0 |
 | 4 | Signature profile default flip → `v2` | breaking | S | 4.0.0 |
 | 5 | Browser credential isolation | security | M | 4.0.0 |
@@ -52,12 +52,25 @@ thin `openai-compatible` subclass (covered by a single shared contract test) or
 genuinely distinct (needs its own). Do not write one test per file by default;
 that produces 9 shallow files instead of 1 meaningful one.
 
-**Guard.** `tools/mutation-adapters.sh` — break the shared base class and
-require the contract test to fail. A test that passes for a mutated adapter
-proves nothing.
+**Guard.** `tools/mutation-adapters.sh` — 16 mutations, all killed, no holes.
 
-**Done when.** `src/adapters` ≥ 80% statements and the mutation harness kills
-its mutations.
+**Done: 76.0%, short of the 80% target.** The remaining gap is the
+`openai-compatible` file itself at partial coverage, not the eight subclasses —
+they are fully covered through the shared contract. Whether to push the last
+4% by covering SSE edge cases, or accept 76% and move on, is a judgement call;
+item 2 has a larger deficit for the same effort.
+
+**Three findings from this work.** Four of the first version's assumptions were
+wrong and the tests caught them: `complete()` returns a plain string;
+`stream()` reads `res.body` from `transport.request()`, not `transport.stream()`;
+the tool-call field is `argumentsDelta`; and max_tokens degradation exists only
+in `stream()`, not `complete()`, though the class docblock lists it as a
+class-wide behaviour. That docblock is now wrong and is worth correcting.
+
+Four defects in the mutation harness also surfaced, all fixed — a mutation aimed
+at the wrong line, a `|` delimiter colliding with a regex alternation, a mutation
+applied to a file the helper did not snapshot, and a shell-escaping bug that
+turned a line continuation into a separate command.
 
 ---
 
@@ -77,8 +90,12 @@ contract, then add a structural guard asserting the five files stay identical
 apart from their header. That converts four untested files into one test plus a
 guard that fails if a copy drifts.
 
+**Remaining at 0%:** `qwik|solid|svelte|vue/stream-parser.ts` (the four copies —
+react's is now covered), `react/use-completion.ts`, `react/use-object.ts`,
+`vue/use-completion.ts`, `vue/use-object.ts`, `remix/hooks.ts`.
+
 **Done when.** `src/frameworks` ≥ 70% statements — not 80%, because this is the
-lowest-risk surface and the first two items can carry the release.
+lowest-risk surface and item 1 can carry the release.
 
 ---
 
