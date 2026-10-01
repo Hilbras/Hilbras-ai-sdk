@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.6.0] - 2026-10-01
+
+### Added
+
+- **`@hilbras/sdk/react-client`.** The hooks previously shipped as the
+  `@hilbras/react` package, which was never published to npm, are now reachable
+  from the SDK under their own subpath:
+  `HilbrasProvider`, `useHilbrasClient`, `useChat`, `useCompletion`, `useCost`.
+
+  It is deliberately separate from `@hilbras/sdk/react`. Both export `useChat`
+  and `useCompletion`, with different signatures and different transports:
+
+  | Subpath | `useChat` calls | Credentials | Use when |
+  |---------|-----------------|-------------|----------|
+  | `@hilbras/sdk/react` | `fetch(api)` — your route | Stay on your server | **Default.** |
+  | `@hilbras/sdk/react-client` | `client.stream()` — the provider | Reach the browser | Trusted/internal apps only. |
+
+  A client built from `config` with an API key bundles that key into
+  client-side JavaScript. For a public app, use `@hilbras/sdk/react` with
+  `createChatHandler` instead.
+
+  `React` remains an optional peer dependency and is not installed by this
+  package.
+
+### Documentation
+
+- `docs/api-reference.md` now carries a generated table of all 51 entry points,
+  derived from `package.json#exports` and the emitted `.d.ts` files.
+  `npm run check:subpaths` fails CI when it drifts.
+- `docs/security.md` documents the v3.5.0 route-security controls, which it
+  previously omitted entirely.
+- `tools/check-doc-examples.sh` typechecks every example in `docs/frameworks.md`,
+  `docs/security.md` and `docs/api-reference.md` against the built package, and
+  runs in CI. Ten examples had drifted out of compile — including five importing
+  `useChat` from the package root, which exports no hooks.
+
+### Compatibility
+
+Purely additive: 679 insertions, no deletions, and no change to any existing
+export. `import { useChat } from "@hilbras/sdk"` still resolves to nothing, as
+before — the React hooks live only on their subpaths.
+
 ## [3.5.0] - 2026-09-30
 
 ### Added
