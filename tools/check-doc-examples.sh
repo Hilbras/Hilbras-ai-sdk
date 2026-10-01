@@ -18,7 +18,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
-DOCS=("$REPO/docs/frameworks.md" "$REPO/docs/security.md")
+DOCS=("$REPO/docs/frameworks.md" "$REPO/docs/security.md" "$REPO/docs/api-reference.md")
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
 

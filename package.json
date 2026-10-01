@@ -255,7 +255,8 @@
     "test:root": "vitest run",
     "build:packages": "npm run build --workspaces --if-present",
     "test:packages": "npm run build:packages && npm run test --workspace hilbras --workspace create-hilbras-app --workspace @hilbras/ui",
-    "check:docs": "bash tools/check-doc-examples.sh"
+    "check:docs": "bash tools/check-doc-examples.sh",
+    "check:subpaths": "node tools/gen-subpath-table.mjs --check"
   },
   "engines": {
     "node": ">=18"

@@ -18,6 +18,83 @@ Complete reference for all public types, functions, and classes exported by `@hi
 - [Logging](#logging)
 - [Catalog](#catalog)
 
+## Entry points
+
+Everything ships in one package. Pick the subpath you need; you do not have to
+install anything per provider or per framework.
+
+<!-- subpath-table:start -->
+
+_Counts are names declared in the emitted `.d.ts`, so type-only exports are
+counted too — the runtime surface is smaller. Use it to find a symbol, then read
+the section below for its contract._
+
+| Subpath | Type exports | Notes |
+| --- | --- | --- |
+| **Core** | | |
+| `@hilbras/sdk` | 175 | |
+| `@hilbras/sdk/types` | 53 | |
+| `@hilbras/sdk/adapter` | 3 | |
+| **Configuration & transport** | | |
+| `@hilbras/sdk/config` | 11 | |
+| `@hilbras/sdk/transport` | 2 | |
+| `@hilbras/sdk/transport/fetch` | 2 | |
+| `@hilbras/sdk/reliability/*` | pattern | |
+| **Cost & tokens** | | |
+| `@hilbras/sdk/tokens` | 8 | |
+| **Catalog** | | |
+| `@hilbras/sdk/catalog` | 8 | |
+| **Adapters** | | |
+| `@hilbras/sdk/adapters/openai` | 2 | |
+| `@hilbras/sdk/adapters/anthropic` | 2 | |
+| `@hilbras/sdk/adapters/google-genai` | 2 | |
+| `@hilbras/sdk/adapters/azure` | 2 | |
+| `@hilbras/sdk/adapters/groq` | 2 | |
+| `@hilbras/sdk/adapters/ollama` | 2 | |
+| `@hilbras/sdk/adapters/openai-compatible` | 3 | |
+| `@hilbras/sdk/adapters/mistral` | 2 | |
+| `@hilbras/sdk/adapters/deepseek` | 2 | |
+| `@hilbras/sdk/adapters/xai` | 2 | |
+| `@hilbras/sdk/adapters/together` | 2 | |
+| `@hilbras/sdk/adapters/fireworks` | 2 | |
+| `@hilbras/sdk/adapters/cohere` | 2 | |
+| `@hilbras/sdk/adapters/perplexity` | 2 | |
+| `@hilbras/sdk/adapters/cerebras` | 2 | |
+| `@hilbras/sdk/adapters/deepinfra` | 2 | |
+| `@hilbras/sdk/adapters/bedrock` | 2 | |
+| `@hilbras/sdk/adapters/google-vertex` | 2 | |
+| `@hilbras/sdk/adapters/huggingface` | 2 | |
+| `@hilbras/sdk/adapters/deepgram` | 2 | |
+| `@hilbras/sdk/adapters/elevenlabs` | 2 | |
+| `@hilbras/sdk/adapters/voyageai` | 2 | |
+| `@hilbras/sdk/adapters/cohere-rerank` | 2 | |
+| **Frameworks** | | |
+| `@hilbras/sdk/react` | 8 | |
+| `@hilbras/sdk/react-client` | 5 | |
+| `@hilbras/sdk/vue` | 4 | |
+| `@hilbras/sdk/svelte` | 4 | |
+| `@hilbras/sdk/solid` | 4 | |
+| `@hilbras/sdk/angular` | 3 | |
+| `@hilbras/sdk/qwik` | 3 | |
+| `@hilbras/sdk/nextjs` | 6 | |
+| `@hilbras/sdk/nextjs/api` | 2 | |
+| `@hilbras/sdk/nextjs/edge` | 2 | |
+| `@hilbras/sdk/astro` | 3 | |
+| `@hilbras/sdk/remix` | 3 | |
+| **Agent & AI features** | | |
+| `@hilbras/sdk/agent` | 3 | |
+| `@hilbras/sdk/eval` | 8 | |
+| `@hilbras/sdk/rag` | 5 | |
+| `@hilbras/sdk/fine-tune` | 5 | |
+| `@hilbras/sdk/mcp` | 8 | |
+| `@hilbras/sdk/realtime` | 4 | |
+| `@hilbras/sdk/devtools` | 5 | |
+
+_51 subpaths. Generated from `package.json#exports` and the emitted `.d.ts` files by `tools/gen-subpath-table.mjs` — do not edit by hand._
+
+<!-- subpath-table:end -->
+
+
 ---
 
 ## Client
@@ -27,9 +104,18 @@ Complete reference for all public types, functions, and classes exported by `@hi
 The main entry point. Manages providers, adapters, and the reliability pipeline.
 
 ```typescript
-import { HilbrasClient } from "@hilbras/sdk";
+import { HilbrasClient, type HilbrasClientConfig } from "@hilbras/sdk";
 
-const client = new HilbrasClient({ transport?: Transport });
+const config: HilbrasClientConfig = {
+  // Swap the default fetch-based transport for your own.
+  // transport: myTransport,
+  policy: {
+    retry: { maxRetries: 3 },
+    timeout: { requestTimeoutMs: 30_000 },
+  },
+};
+
+const client = new HilbrasClient(config);
 ```
 
 #### `client.addProvider(config: ProviderConfig): void`
