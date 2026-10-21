@@ -116,10 +116,12 @@ describe("OpenTelemetryExporter", () => {
     };
 
     const unsub = otel.instrumentClient(mockClient as any);
-    expect(mockClient.on).toHaveBeenCalledTimes(3);
+    expect(mockClient.on).toHaveBeenCalledTimes(5);
     expect(mockClient.on).toHaveBeenCalledWith("request.completed", expect.any(Function));
     expect(mockClient.on).toHaveBeenCalledWith("request.failed", expect.any(Function));
     expect(mockClient.on).toHaveBeenCalledWith("request.retrying", expect.any(Function));
+    expect(mockClient.on).toHaveBeenCalledWith("routing.resolved", expect.any(Function));
+    expect(mockClient.on).toHaveBeenCalledWith("circuit_breaker.open", expect.any(Function));
 
     unsub();
   });

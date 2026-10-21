@@ -37,7 +37,7 @@ off();
 |---|---|---|
 | `request.start` | Request initiated | `requestId`, `provider`, `model`, `task` |
 | `routing.resolved` | Router picked a model | `requestId`, `provider`, `model`, `score`, `reasons` |
-| `request.completed` | Success with latency, tokens | `requestId`, `provider`, `model`, `durationMs`, `attempts`, `inputTokens`, `outputTokens` |
+| `request.completed` | Success with latency, tokens | `requestId`, `provider`, `model`, `durationMs`, `attempts`, `inputTokens`, `outputTokens`, `estimatedCost` |
 | `request.failed` | Failure after all retries | `requestId`, `provider`, `model`, `durationMs`, `attempts`, `error` |
 | `request.retrying` | Before retry sleep | `requestId`, `attempt`, `delayMs`, `reason` |
 | `fallback.started` | Fallback to alternate model | `requestId`, `originalProvider`, `originalModel`, `fallbackProvider`, `fallbackModel` |
@@ -47,6 +47,49 @@ off();
 | `stream.first_chunk` | First chunk yielded | `requestId`, `latencyMs` |
 
 Every event includes a `requestId` for correlation.
+
+## OpenTelemetry attributes
+
+`OpenTelemetryExporter` bridges these events onto OpenTelemetry spans and
+metrics. It has no dependency on `@opentelemetry/api` — install it and it
+activates, leave it out and every call is a no-op.
+
+```typescript
+import { OpenTelemetryExporter } from "@hilbras/sdk";
+
+const otel = new OpenTelemetryExporter({ serviceName: "my-app" });
+otel.instrumentClient(client);
+```
+
+`instrumentClient` subscribes to `request.completed`, `request.failed`,
+`request.retrying`, `routing.resolved` and `circuit_breaker.open`, and
+returns a function that unsubscribes all of them.
+
+### Span attributes
+
+| Span | Attributes |
+|---|---|
+| `llm.complete` | `llm.provider`, `llm.model`, `llm.duration_ms`, `llm.input_tokens`, `llm.output_tokens`, `llm.estimated_cost` |
+| `llm.route` | `llm.provider`, `llm.model`, `llm.routing.score`, `llm.routing.reasons` |
+| `llm.circuit_breaker` | `llm.provider`, `llm.circuit_breaker.state` |
+
+A failed request sets `llm.error` and an error status on `llm.complete`.
+
+### Metrics
+
+| Metric | Type | Description |
+|---|---|---|
+| `llm.request.duration` | Histogram | Request duration in milliseconds |
+| `llm.request.count` | Counter | Total number of requests |
+| `llm.error.count` | Counter | Total number of failed requests |
+| `llm.tokens` | Histogram | Tokens per request, tagged with `token_type` |
+| `llm.cost` | Histogram | Estimated cost per request in USD |
+| `llm.requests.active` | Gauge | Requests currently in flight |
+| `llm.retry.count` | Counter | Total number of retries |
+
+`llm.estimated_cost` and `llm.cost` are only reported when cost tracking is
+enabled. `llm.routing.score` is the router's 0–100 match score; an explicitly
+requested provider has no router score, so it reports `0`.
 
 ## Removing listeners
 

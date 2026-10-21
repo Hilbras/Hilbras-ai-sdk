@@ -52,6 +52,8 @@ export interface RequestCompletedEvent extends BaseEvent {
   inputTokens?: number;
   /** Output tokens (if available from usage chunk) */
   outputTokens?: number;
+  /** Estimated cost of the request in USD (if cost tracking is enabled) */
+  estimatedCost?: number;
   /** Whether structured output was used */
   structuredOutput: boolean;
 }
