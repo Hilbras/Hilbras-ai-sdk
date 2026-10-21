@@ -649,10 +649,20 @@ export class HilbrasClient implements AsyncDisposable {
     excludeModels?: string[];
     preferredProvider?: string;
     hasOutput?: boolean;
-  }): { providerName: string; modelId: string } {
+  }): {
+    providerName: string;
+    modelId: string;
+    score: number;
+    reasons: string[];
+  } {
     // If explicit provider + model, use them directly
     if (params.provider && params.model) {
-      return { providerName: params.provider, modelId: params.model };
+      return {
+        providerName: params.provider,
+        modelId: params.model,
+        score: 0,
+        reasons: ["Explicit provider/model"],
+      };
     }
 
     // Auto-connect: structured output requirement → router capability filter
@@ -678,7 +688,12 @@ export class HilbrasClient implements AsyncDisposable {
       );
     }
 
-    return { providerName: result.provider, modelId: result.model };
+    return {
+      providerName: result.provider,
+      modelId: result.model,
+      score: result.score,
+      reasons: result.reasons,
+    };
   }
 
   // ─── Message Normalization ──────────────────────────────────────────────
@@ -721,12 +736,12 @@ export class HilbrasClient implements AsyncDisposable {
     this._emit({ type: "request.start", requestId, timestamp: startTime, provider: params.provider, model: params.model, task: params.task });
 
     // Resolve provider + model — either explicit or via router
-    const { providerName, modelId } = this._resolveProviderModel(params);
+    const { providerName, modelId, score, reasons } = this._resolveProviderModel(params);
     const providerConfig = this._registry.getOrThrow(providerName);
     const model = providerConfig.models.find((m) => m.id === modelId);
     if (!model) throw new ModelNotFoundError(modelId, providerName, providerConfig.models.map((m) => m.id));
 
-    this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
+    this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score, reasons });
 
     const messages = this._normalizeMessages(params.messages);
     const estimatedCost = this._budgetTracker.estimate(
@@ -809,7 +824,7 @@ export class HilbrasClient implements AsyncDisposable {
     const providerName = resolved_.providerName;
     const modelId = resolved_.modelId;
 
-    this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: 0, reasons: params.provider ? ["Explicit provider/model"] : ["Router selected"] });
+    this._emit({ type: "routing.resolved", requestId, timestamp: performance.now(), provider: providerName, model: modelId, score: resolved_.score, reasons: resolved_.reasons });
 
     if (!params.output) {
       const messages = this._normalizeMessages(params.messages);

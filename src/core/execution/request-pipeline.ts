@@ -375,6 +375,7 @@ export class RequestPipeline {
             attempts: attempt + 1,
             inputTokens,
             outputTokens,
+            estimatedCost: input.estimatedCost,
             structuredOutput: false,
           });
           await this.ports.plugins.fireResponse({
@@ -505,6 +506,7 @@ export class RequestPipeline {
                     attempts: attempt + 2,
                     inputTokens: fallbackInputTokens,
                     outputTokens: fallbackOutputTokens,
+                    estimatedCost: input.estimatedCost,
                     structuredOutput: false,
                   });
                   await this.ports.plugins.fireResponse({
@@ -913,6 +915,7 @@ export class RequestPipeline {
       model,
       durationMs: this.ports.now() - input.startTime,
       attempts,
+      estimatedCost: input.estimatedCost,
       structuredOutput,
     });
   }

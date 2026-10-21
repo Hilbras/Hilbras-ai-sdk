@@ -16,7 +16,14 @@
  *   otel.instrumentClient(client);
  */
 
-import type { HookEvent, RequestCompletedEvent, RequestFailedEvent, RetryEvent } from "../types/observability.js";
+import type {
+  CircuitBreakerOpenEvent,
+  HookEvent,
+  RequestCompletedEvent,
+  RequestFailedEvent,
+  RetryEvent,
+  RoutingResolvedEvent,
+} from "../types/observability.js";
 
 /** Configuration for the OpenTelemetry exporter */
 export interface OpenTelemetryConfig {
@@ -89,6 +96,7 @@ export class OpenTelemetryExporter {
   private _requestCount?: Counter;
   private _errorCount?: Counter;
   private _tokenUsage?: Histogram;
+  private _cost?: Histogram;
   private _activeRequests?: Gauge;
   private _retryCount?: Counter;
 
@@ -131,6 +139,10 @@ export class OpenTelemetryExporter {
       description: "Token usage per request",
     });
 
+    this._cost = this._meter.createHistogram("llm.cost", {
+      description: "Estimated cost per request in USD",
+    });
+
     this._activeRequests = this._meter.createGauge("llm.requests.active", {
       description: "Number of currently active LLM requests",
     });
@@ -157,6 +169,9 @@ export class OpenTelemetryExporter {
     if (event.outputTokens) {
       this._tokenUsage?.record(event.outputTokens, { ...attrs, token_type: "output" });
     }
+    if (event.estimatedCost != null) {
+      this._cost?.record(event.estimatedCost, attrs);
+    }
 
     // Trace span
     if (this._tracer) {
@@ -166,6 +181,7 @@ export class OpenTelemetryExporter {
       span.setAttribute("llm.duration_ms", event.durationMs);
       if (event.inputTokens) span.setAttribute("llm.input_tokens", event.inputTokens);
       if (event.outputTokens) span.setAttribute("llm.output_tokens", event.outputTokens);
+      if (event.estimatedCost != null) span.setAttribute("llm.estimated_cost", event.estimatedCost);
       span.setStatus({ code: 0 }); // OK
       span.end();
     }
@@ -200,6 +216,30 @@ export class OpenTelemetryExporter {
     });
   }
 
+  /** Record a routing decision */
+  recordRouting(event: RoutingResolvedEvent): void {
+    if (!this._tracer) return;
+
+    const span = this._tracer.startSpan(`llm.route`);
+    span.setAttribute("llm.provider", event.provider);
+    span.setAttribute("llm.model", event.model);
+    span.setAttribute("llm.routing.score", event.score);
+    span.setAttribute("llm.routing.reasons", event.reasons.join("; "));
+    span.setStatus({ code: 0 }); // OK
+    span.end();
+  }
+
+  /** Record a circuit breaker opening */
+  recordCircuitBreakerOpen(event: CircuitBreakerOpenEvent): void {
+    if (!this._tracer) return;
+
+    const span = this._tracer.startSpan(`llm.circuit_breaker`);
+    span.setAttribute("llm.provider", event.provider);
+    span.setAttribute("llm.circuit_breaker.state", "open");
+    span.setStatus({ code: 0 }); // OK
+    span.end();
+  }
+
   /** Record active request count */
   recordActiveRequests(count: number): void {
     this._activeRequests?.record(count);
@@ -219,11 +259,19 @@ export class OpenTelemetryExporter {
     const unsub3 = client.on("request.retrying", (e) => {
       if (e.type === "request.retrying") this.recordRetry(e);
     });
+    const unsub4 = client.on("routing.resolved", (e) => {
+      if (e.type === "routing.resolved") this.recordRouting(e);
+    });
+    const unsub5 = client.on("circuit_breaker.open", (e) => {
+      if (e.type === "circuit_breaker.open") this.recordCircuitBreakerOpen(e);
+    });
 
     return () => {
       unsub1();
       unsub2();
       unsub3();
+      unsub4();
+      unsub5();
     };
   }
 
