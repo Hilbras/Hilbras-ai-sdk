@@ -30,6 +30,6 @@ export function computed<T>(fn: () => T): Signal<T> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function Injectable(options?: any): ClassDecorator {
+export function Injectable(): ClassDecorator {
   return () => {};
 }

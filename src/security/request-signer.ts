@@ -114,6 +114,8 @@ function isByteBody(body: SignableBody | FormData | undefined): body is Signable
  */
 export class RequestSigner {
   private _config: ResolvedSignerConfig;
+  /** Lazily created default replay guard, so `verifyFresh` calls without a `guard` share one persistent seen-signature cache. */
+  private _defaultGuard?: ReplayGuard;
 
   constructor(config: RequestSignerConfig) {
     this._config = {
@@ -313,7 +315,7 @@ export class RequestSigner {
     const signatureOk = this.verify(url, request, receivedSignature);
     if (!signatureOk) return { valid: false, reason: "signature does not match" };
 
-    const freshness = (guard ?? new ReplayGuard(guardOptions)).verify(request.headers, receivedSignature);
+    const freshness = (guard ?? (this._defaultGuard ??= new ReplayGuard(guardOptions))).verify(request.headers, receivedSignature);
     if (!freshness.valid) return { valid: false, reason: freshness.reason };
 
     return { valid: true };

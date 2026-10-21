@@ -88,7 +88,7 @@ export class ServerHilbrasClient {
     provider?: string;
     systemPrompt?: string;
   }): Promise<Response> {
-    const { messages, model, provider, systemPrompt } = params;
+    const { messages, systemPrompt } = params;
 
     const allMessages = systemPrompt
       ? [{ role: "system", content: systemPrompt }, ...messages]

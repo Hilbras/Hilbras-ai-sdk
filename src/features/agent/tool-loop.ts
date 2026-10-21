@@ -68,7 +68,7 @@ function defaultCostEstimator(usage: { promptTokens: number; completionTokens: n
   return (usage.promptTokens * p.input + usage.completionTokens * p.output) / 1_000_000;
 }
 
-function defaultLLM(messages: Array<{ role: string; content: string }>): Promise<{
+function defaultLLM(): Promise<{
   content: string;
   toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
   usage?: { promptTokens: number; completionTokens: number };

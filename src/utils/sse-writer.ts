@@ -15,7 +15,7 @@
  */
 
 import type { StreamChunk } from "../types/streams.js";
-import type { UIProtocolMessage, DataAnnotation } from "../types/ui-protocol.js";
+import type { UIProtocolMessage } from "../types/ui-protocol.js";
 
 /** Options for the SSE writer */
 export interface SSEWriterOptions {
@@ -133,7 +133,7 @@ export function createSSEStream(
       }
 
         // Flush any remaining pending tool calls
-        for (const [id, tc] of pendingToolCalls) {
+        for (const [id] of pendingToolCalls) {
           writeEvent(controller, encoder, { type: "tool_call_end", id });
         }
 

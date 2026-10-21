@@ -72,7 +72,6 @@ export class PlanAndExecuteAgent {
       maxSteps = 10,
       budget = null,
       systemPrompt = PLAN_SYSTEM_PROMPT,
-      temperature = 0,
       signal,
       llm,
       costEstimator,

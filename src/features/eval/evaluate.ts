@@ -10,7 +10,6 @@ import type {
   EvalConfig,
   EvalResult,
   EvalItemResult,
-  EvalEvent,
   MetricConfig,
   MetricResult,
 } from "./types.js";

@@ -257,7 +257,7 @@ function extractText(content: Message["content"]): string {
   return content
     .filter((part): part is Extract<ContentPart, { type: "text" }> => part.type === "text")
     .map((part) => part.text)
-    .join("\\n");
+    .join("\n");
 }
 
 /**
