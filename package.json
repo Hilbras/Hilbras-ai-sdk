@@ -315,14 +315,15 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@vitest/coverage-v8": "^4.1.11",
-    "oxlint": "^1.79.0",
-    "react": "^19.3.0",
+    "oxlint": "^1.88.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
-    "vue": "^3.5.43"
+    "vue": "^3.5.44"
   },
   "packageManager": "npm@11.19.0",
   "workspaces": [
