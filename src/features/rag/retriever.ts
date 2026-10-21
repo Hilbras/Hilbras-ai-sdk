@@ -5,7 +5,7 @@
  * Supports optional reranking for improved relevance.
  */
 
-import type { VectorStore, SearchResult } from "./vector-store.js";
+import type { VectorStore } from "./vector-store.js";
 
 export interface RetrieverConfig {
   /** Vector store to search */

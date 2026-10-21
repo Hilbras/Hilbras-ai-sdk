@@ -4,7 +4,7 @@
  * Format training data for different providers.
  */
 
-import type { TrainingExample, ConversationExample, TrainingFormat, ExportResult, ExportOptions } from "./types.js";
+import type { TrainingExample, ConversationExample, ExportResult, ExportOptions } from "./types.js";
 
 function filterExamples(examples: TrainingExample[], options: ExportOptions): TrainingExample[] {
   let filtered = [...examples];

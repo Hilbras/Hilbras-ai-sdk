@@ -62,9 +62,24 @@ const PII_PATTERNS: Record<PiiType, RegExp> = {
   credit_card: /\b(?:4\d{3}|5[1-5]\d{2}|3[47]\d{2}|6(?:011|5\d{2}))[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
   ip_address: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g,
   uk_nhs: /\b\d{3}\s?\d{3}\s?\d{4}\b/g,
-  eu_iban: /\b[A-Z]{2}\d{2}[\s]?[\dA-Z]{4}[\s]?(?:[\dA-Z]{4}[\s]?){1,7}[\dA-Z]{1,4}\b/g,
+  // Unrolled: IBANs are at most 34 chars (2+2+7*4+4). Nested quantifiers like
+  // ([\dA-Z]{4}[\s]?){1,7} followed by [\dA-Z]{1,4} are ReDoS-vulnerable, so
+  // the repeating group is written out explicitly instead.
+  eu_iban: /\b[A-Z]{2}\d{2}[\s]?[\dA-Z]{4}[\s]?[\dA-Z]{4}[\s]?[\dA-Z]{4}[\s]?[\dA-Z]{4}[\s]?[\dA-Z]{4}[\s]?[\dA-Z]{4}[\s]?[\dA-Z]{4}[\s]?[\dA-Z]{1,4}\b/g,
   custom: /(?!.)/, // Never matches — placeholder
 };
+
+/** Validate an NHS number with the MOD 11 check-digit algorithm. */
+function isValidUkNhs(value: string): boolean {
+  const digits = value.replace(/\s/g, "");
+  if (!/^\d{10}$/.test(digits)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i += 1) sum += Number(digits[i]) * (10 - i);
+  const remainder = sum % 11;
+  if (remainder === 0) return Number(digits[9]) === 0;
+  if (remainder === 1) return false; // check digit would be 10 — invalid
+  return Number(digits[9]) === 11 - remainder;
+}
 
 /** Mask a value by keeping first and last characters */
 function maskValue(value: string): string {
@@ -112,6 +127,7 @@ export function detectPii(text: string, config?: PiiGuardConfig): PiiMatch[] {
         re.lastIndex++;
         continue;
       }
+      if (type === "uk_nhs" && !isValidUkNhs(m[0])) continue;
       matches.push({
         type,
         value: m[0],

@@ -23,7 +23,7 @@ export interface ObjectOptions<T> {
   body?: Record<string, unknown>;
 }
 
-@Injectable({ providedIn: "root" })
+@Injectable()
 export class HilbrasObjectService {
   private _object = signal<Partial<unknown> | null>(null);
   private _isLoading = signal(false);

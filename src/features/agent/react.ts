@@ -68,7 +68,6 @@ export class ReActAgent {
       maxSteps = 10,
       budget = null,
       systemPrompt = REACT_SYSTEM_PROMPT,
-      temperature = 0,
       signal,
       llm,
       costEstimator,

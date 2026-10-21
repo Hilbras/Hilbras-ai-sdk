@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.6.1] - 2026-10-21
+
+### Fixed
+
+- **`RequestPipeline` retry classification.** Transport-level failures were only
+  retried when they surfaced as a `TypeError` or an `AbortError`. A refused
+  connection, DNS failure, socket reset or timeout raised as a plain `Error`
+  was treated as a non-retryable provider error and failed the request on the
+  first attempt. The pipeline now detects those failures from the error code
+  (`ECONNREFUSED`, `ECONNRESET`, `ENOTFOUND`, `ENETUNREACH`, `ETIMEDOUT`,
+  `EAI_*`, `ESOCKETTIMEDOUT`) and from the error message, and retries them.
+- **`RequestPipeline` budget release.** The request budget was released on
+  every retry attempt, so a retried request could be charged more than once.
+  The release is now idempotent — exactly one release per request, no matter
+  how many attempts were made.
+- **`AuditLogger.logError` emitted a mislabeled entry.** Error events were
+  written as an `AuthAuditEntry` with `{ success: false, reason }` — a shape
+  that does not exist on that type, produced by an unchecked cast. Consumers
+  filtering on `category === "auth"` were matching error events they were
+  never meant to see. Errors are now recorded as their own entry with
+  `category: "error"` and an `error` message.
+- **`AuditLogger` crashed on circular values.** Cloning an audit payload that
+  contained a circular reference recursed forever and blew the stack. The
+  clone now tracks visited objects and stops at the cycle.
+- **`PiiGuard` EU-IBAN pattern was ReDoS-vulnerable.** The regex used nested
+  quantifiers over a repeated group, so a crafted non-matching string could
+  trigger catastrophic backtracking. The repeating group is now written out
+  explicitly; IBANs are at most 34 characters, so the unrolled form is exact.
+- **`PiiGuard` UK NHS numbers were matched without validation.** Any
+  ten-digit string was reported as an NHS number. Matches are now checked
+  against the MOD 11 check digit, so ordinary numbers are no longer flagged.
+- **`PromptInjectionGuard` joined message content with a literal `\n`.**
+  `extractText` used `join("\\n")`, which concatenated the two characters
+  backslash and `n` rather than a newline, so the text handed to the guard
+  differed from the text the model actually receives.
+- **`RateLimiter` produced `Infinity`/`NaN` retry-after values.** A token
+  bucket configured with a refill rate of zero (or negative) never refills, so
+  a request that could not be afforded never becomes affordable — but the
+  retry-after computation divided by that rate. A static bucket now reports
+  `Infinity` instead of `NaN`.
+- **`RBAC` middleware did not await the downstream handler.** `ctx.next()` was
+  returned without `await`, so a rejected downstream handler escaped the
+  middleware's own error handling.
+- **`RequestSigner` replay protection was defeated across calls.** When no
+  `guard` was passed to `verifyFresh`, a fresh `ReplayGuard` was constructed
+  per call, so every call started with an empty seen-signature cache and a
+  replayed signature was accepted. The signer now keeps one lazily-created
+  default guard for its lifetime.
+- **`UrlGuard` accepted invalid octal IP literals.** The octal form of
+  `normalizeIpLiteral` matched octets containing `8` or `9`, which are not
+  octal digits, and parsed them with `parseInt(p, 8)` anyway. The pattern now
+  restricts each octet to `0-7`.
+
+### Changed
+
+- Unused imports and parameters were removed across the agent, eval, fine-tune
+  and RAG features, the Angular framework shims, the SLA telemetry module and
+  the SSE writer.
+- The Angular `Injectable` shim no longer accepts a `providedIn` option it
+  never used.
+- The lockfile was regenerated. It still referenced `@hilbras/next` and
+  `@hilbras/react`, which were folded into this package in v3.6.0, and it
+  pinned transitive dependencies with published high-severity advisories.
+  `npm audit --omit=dev` now reports zero vulnerabilities. The lockfile is not
+  published — the package ships `dist/` only — so this does not change the
+  published artifact.
+
+---
+
 ## [3.6.0] - 2026-10-01
 
 ### Added

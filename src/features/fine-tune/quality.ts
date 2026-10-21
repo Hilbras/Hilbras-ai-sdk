@@ -4,7 +4,7 @@
  * Validate and clean training data.
  */
 
-import type { TrainingExample, ConversationExample } from "./types.js";
+import type { TrainingExample } from "./types.js";
 
 export interface QualityCheck {
   /** Check name */

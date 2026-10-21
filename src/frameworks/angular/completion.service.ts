@@ -23,7 +23,7 @@ export interface CompletionOptions {
   body?: Record<string, unknown>;
 }
 
-@Injectable({ providedIn: "root" })
+@Injectable()
 export class HilbrasCompletionService {
   private _text = signal("");
   private _isLoading = signal(false);

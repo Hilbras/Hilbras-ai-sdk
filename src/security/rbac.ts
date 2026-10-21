@@ -167,7 +167,7 @@ export function createRBACMiddleware(
     if (roleName === null) roleName = config.defaultRole ?? "default";
 
     const role = config.roles?.[roleName] ?? null;
-    if (roleName === null || role === null) {
+    if (role === null) {
       report({
         code: "RBAC_UNRESOLVED_ROLE",
         message: `role "${roleName}" is not defined in the configured roles`,
@@ -259,7 +259,7 @@ export function createRBACMiddleware(
       report,
     });
 
-    if (verdict.allow) return ctx.next();
+    if (verdict.allow) return await ctx.next();
 
     auditLogger?.logSecurity({
       eventType: "custom",
