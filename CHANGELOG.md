@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.7.0] - 2026-10-21
+
+### Added
+
+- **Cost, routing score and circuit breaker state on OpenTelemetry spans.**
+  `OpenTelemetryExporter` reported provider, model and tokens; three of the
+  attributes it was meant to carry were missing, and the two events that would
+  have carried them were never subscribed to.
+
+  | Span | Attributes |
+  |---|---|
+  | `llm.complete` | `llm.provider`, `llm.model`, `llm.duration_ms`, `llm.input_tokens`, `llm.output_tokens`, `llm.estimated_cost` |
+  | `llm.route` | `llm.provider`, `llm.model`, `llm.routing.score`, `llm.routing.reasons` |
+  | `llm.circuit_breaker` | `llm.provider`, `llm.circuit_breaker.state` |
+
+  A new `llm.cost` histogram reports estimated cost per request in USD.
+
+  `instrumentClient` now subscribes to `routing.resolved` and
+  `circuit_breaker.open` in addition to the three it already handled, and
+  unsubscribes all five.
+
+- **`estimatedCost` on `RequestCompletedEvent`.** The cost of a request is
+  already known at every point where the event is emitted — it is the same
+  value used to reserve and settle the budget — so it is now carried on the
+  event rather than being recalculated by each consumer. The field is
+  optional and only populated when cost tracking is enabled.
+
+### Fixed
+
+- **`routing.resolved` reported a score of 0 and a hardcoded reason.** The
+  router scores candidates on a 0–100 scale, but `_resolveProviderModel`
+  discarded the score and reasons and returned only the provider and model
+  id, so the event was emitted with `score: 0` and `"Router selected"` no
+  matter what the router had decided. The real score and reasons are now
+  returned and reported. An explicitly requested provider has no router score
+  and still reports `0` with the reason `"Explicit provider/model"`.
+
+---
+
 ## [3.6.1] - 2026-10-21
 
 ### Fixed
