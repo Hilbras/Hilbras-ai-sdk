@@ -320,6 +320,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "oxlint": "^1.88.0",
     "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
     "vue": "^3.5.44"
