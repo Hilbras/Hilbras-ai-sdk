@@ -67,6 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the SSE writer.
 - The Angular `Injectable` shim no longer accepts a `providedIn` option it
   never used.
+- The lockfile was regenerated. It still referenced `@hilbras/next` and
+  `@hilbras/react`, which were folded into this package in v3.6.0, and it
+  pinned transitive dependencies with published high-severity advisories.
+  `npm audit --omit=dev` now reports zero vulnerabilities. The lockfile is not
+  published — the package ships `dist/` only — so this does not change the
+  published artifact.
 
 ---
 
