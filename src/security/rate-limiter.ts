@@ -88,6 +88,11 @@ export class RateLimiter {
     this._lastRefill = Date.now();
   }
 
+  /** `true` when the bucket never refills (refillRate of 0 or negative). */
+  get _isStaticBucket(): boolean {
+    return !Number.isFinite(this._refillRate) || this._refillRate <= 0;
+  }
+
   /** Current token count (refills on access) */
   get tokens(): number {
     this._refill();
@@ -108,7 +113,10 @@ export class RateLimiter {
     }
 
     const deficit = tokensNeeded - this._tokens;
-    const retryAfterMs = Math.ceil((deficit / this._refillRate) * 1000);
+    // A rate of 0 (or negative) means the bucket never refills, so a request
+    // that cannot be afforded now will never become affordable. Division by
+    // zero would otherwise yield Infinity/NaN retry-after values.
+    const retryAfterMs = this._isStaticBucket ? Infinity : Math.ceil((deficit / this._refillRate) * 1000);
 
     return { allowed: false, retryAfterMs };
   }

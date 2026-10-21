@@ -24,6 +24,33 @@ import { RequestExecutor, type RequestPreparationInput } from "./request-executo
 import type { RequestOperation } from "./request-context.js";
 import type { BudgetPort } from "./ports.js";
 
+const NETWORK_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+  "ENETUNREACH",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "EAI_FAIL",
+  "EAI_NONAME",
+  "EAI_SERVICE",
+  "ESOCKETTIMEDOUT",
+]);
+
+/**
+ * Best-effort detection of transport-level failures (DNS, connection,
+ * timeout, socket errors) so they are retried like network errors even
+ * when they surface as generic Errors rather than TypeErrors.
+ */
+function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof Error) {
+    const code = (error as { code?: string }).code;
+    if (typeof code === "string" && NETWORK_ERROR_CODES.has(code)) return true;
+    if (/network|unreachable|connection|reset|refused|timed out|dns|resolve|socket/i.test(error.message)) return true;
+  }
+  return false;
+}
+
 export interface PipelinePluginPort {
   fireRequest(context: PluginRequestContext): Promise<void>;
   fireResponse(context: PluginResponseContext): Promise<void>;
@@ -99,6 +126,13 @@ export class RequestPipeline {
 
       let attempt = 0;
       let primaryError: unknown;
+      let budgetReleased = false;
+      const releaseBudget = (): void => {
+        if (!budgetReleased) {
+          this.ports.budget.release(input.requestId);
+          budgetReleased = true;
+        }
+      };
 
       for (;;) {
         const result = await this.ports.executor.executeComplete(
@@ -130,8 +164,10 @@ export class RequestPipeline {
         }
 
         const status = (primaryError as { status?: number }).status;
-        const isNetworkError = primaryError instanceof TypeError
-          || (primaryError instanceof Error && primaryError.name === "AbortError");
+        const isNetworkError =
+          primaryError instanceof TypeError
+          || (primaryError instanceof Error && primaryError.name === "AbortError")
+          || isNetworkFailure(primaryError);
         const canRetry = (isNetworkError && shouldRetryNetworkError(attempt, prepared.retryConfig))
           || (typeof status === "number" && shouldRetry(status, attempt, prepared.retryConfig));
 
@@ -157,7 +193,7 @@ export class RequestPipeline {
         }
 
         if (prepared.context.policy.allowFallback) {
-          this.ports.budget.release(input.requestId);
+          releaseBudget();
           const attemptedModels = [input.model];
           const fallbacks = input.fallbackCandidates(attemptedModels);
           for (const fallback of fallbacks) {
@@ -204,7 +240,7 @@ export class RequestPipeline {
                 return fallbackResult.value;
               }
             } catch (error) {
-              if (input.callerSignal?.aborted) primaryError = error;
+              primaryError = error;
             } finally {
               fallbackPrepared?.dispose();
               this.ports.budget.release(fallbackId);
@@ -216,7 +252,7 @@ export class RequestPipeline {
       }
 
       this.recordTerminalFailure(prepared, primaryError);
-      this.ports.budget.release(input.requestId);
+      releaseBudget();
       const error = primaryError instanceof Error ? primaryError : new Error(String(primaryError));
       this.ports.emit({
         type: "request.failed",
@@ -228,14 +264,18 @@ export class RequestPipeline {
         attempts: attempt + 1,
         error: error.message,
       });
-      await this.ports.plugins.fireError({
-        requestId: input.requestId,
-        provider: input.provider,
-        model: input.model,
-        error,
-        durationMs: this.ports.now() - input.startTime,
-        attempts: attempt + 1,
-      });
+      try {
+        await this.ports.plugins.fireError({
+          requestId: input.requestId,
+          provider: input.provider,
+          model: input.model,
+          error,
+          durationMs: this.ports.now() - input.startTime,
+          attempts: attempt + 1,
+        });
+      } catch {
+        // Swallow plugin hook failures so the original request error is still surfaced.
+      }
       throw primaryError;
     } finally {
       prepared.dispose();
@@ -250,6 +290,14 @@ export class RequestPipeline {
     let firstChunkEmitted = false;
     let attempt = 0;
     let primaryError: unknown;
+    let budgetReleased = false;
+    const releaseMainBudget = (): void => {
+      if (!budgetReleased) {
+        this.ports.budget.release(input.requestId);
+        budgetReleased = true;
+      }
+      reservationActive = false;
+    };
 
     try {
       await this.ports.plugins.fireRequest({
@@ -344,10 +392,7 @@ export class RequestPipeline {
           const callerAborted = input.callerSignal?.aborted === true;
           const internalTimeout = prepared.signal?.aborted === true;
           if (callerAborted || firstChunkEmitted || internalTimeout) {
-            if (reservationActive) {
-              this.ports.budget.release(input.requestId);
-              reservationActive = false;
-            }
+            releaseMainBudget();
             const terminalError = error instanceof Error ? error : new Error(String(error));
             this.recordTerminalFailure(prepared, terminalError);
             this.ports.emit({
@@ -360,26 +405,31 @@ export class RequestPipeline {
               attempts: attempt + 1,
               error: terminalError.message,
             });
-            await this.ports.plugins.fireError({
-              requestId: input.requestId,
-              provider: input.provider,
-              model: input.model,
-              error: terminalError,
-              durationMs: this.ports.now() - input.startTime,
-              attempts: attempt + 1,
-            });
+            try {
+              await this.ports.plugins.fireError({
+                requestId: input.requestId,
+                provider: input.provider,
+                model: input.model,
+                error: terminalError,
+                durationMs: this.ports.now() - input.startTime,
+                attempts: attempt + 1,
+              });
+            } catch {
+              // Swallow plugin hook failures so the original stream error is still surfaced.
+            }
             throw error;
           }
 
           const status = (error as { status?: number }).status;
-          const isNetworkError = error instanceof TypeError
-            || (error instanceof Error && error.name === "AbortError");
+          const isNetworkError =
+            error instanceof TypeError
+            || (error instanceof Error && error.name === "AbortError")
+            || isNetworkFailure(error);
           const canRetry = (isNetworkError && shouldRetryNetworkError(attempt, prepared.retryConfig))
             || (typeof status === "number" && shouldRetry(status, attempt, prepared.retryConfig));
           if (!canRetry) {
             if (prepared.context.policy.allowFallback) {
-              this.ports.budget.release(input.requestId);
-              reservationActive = false;
+              releaseMainBudget();
               const attemptedModels = [input.model];
               const fallbacks = input.fallbackCandidates(attemptedModels);
               for (const fallback of fallbacks) {
@@ -400,7 +450,6 @@ export class RequestPipeline {
                 const fallbackReservation = this.ports.budget.reserve(fallbackId, fallbackCost);
                 if (!fallbackReservation) continue;
                 let fallbackPrepared: ReturnType<RequestExecutor["prepare"]> | undefined;
-                let fallbackVisible = false;
                 let fallbackInputTokens: number | undefined;
                 let fallbackOutputTokens: number | undefined;
                 let fallbackReservationActive = true;
@@ -418,7 +467,6 @@ export class RequestPipeline {
                     { ...input.params, model: fallback.model },
                     { recordCircuitFailure: false },
                   )) {
-                    fallbackVisible = true;
                     if (chunk.type === "usage") {
                       fallbackInputTokens = chunk.inputTokens;
                       fallbackOutputTokens = chunk.outputTokens;
@@ -470,10 +518,7 @@ export class RequestPipeline {
                   });
                   return;
                 } catch (fallbackError) {
-                  if (input.callerSignal?.aborted || prepared.signal?.aborted || fallbackVisible) {
-                    primaryError = fallbackError;
-                    break;
-                  }
+                  primaryError = fallbackError;
                 } finally {
                   fallbackPrepared?.dispose();
                   if (fallbackReservationActive) this.ports.budget.release(fallbackId);
@@ -484,10 +529,7 @@ export class RequestPipeline {
           }
 
           if (!canRetry) {
-            if (reservationActive) {
-              this.ports.budget.release(input.requestId);
-              reservationActive = false;
-            }
+            releaseMainBudget();
             const terminalError = primaryError instanceof Error ? primaryError : new Error(String(primaryError));
             this.recordTerminalFailure(prepared, terminalError);
             this.ports.emit({
@@ -500,14 +542,18 @@ export class RequestPipeline {
               attempts: attempt + 1,
               error: terminalError.message,
             });
-            await this.ports.plugins.fireError({
-              requestId: input.requestId,
-              provider: input.provider,
-              model: input.model,
-              error: terminalError,
-              durationMs: this.ports.now() - input.startTime,
-              attempts: attempt + 1,
-            });
+            try {
+              await this.ports.plugins.fireError({
+                requestId: input.requestId,
+                provider: input.provider,
+                model: input.model,
+                error: terminalError,
+                durationMs: this.ports.now() - input.startTime,
+                attempts: attempt + 1,
+              });
+            } catch {
+              // Swallow plugin hook failures so the original stream error is still surfaced.
+            }
             throw primaryError;
           }
 
@@ -524,10 +570,7 @@ export class RequestPipeline {
           try {
             await this.ports.sleep(delay, input.callerSignal);
           } catch (sleepError) {
-            if (reservationActive) {
-              this.ports.budget.release(input.requestId);
-              reservationActive = false;
-            }
+            releaseMainBudget();
             const terminalError = sleepError instanceof Error ? sleepError : new Error(String(sleepError));
             this.recordTerminalFailure(prepared, terminalError);
             this.ports.emit({
@@ -540,21 +583,25 @@ export class RequestPipeline {
               attempts: attempt + 1,
               error: terminalError.message,
             });
-            await this.ports.plugins.fireError({
-              requestId: input.requestId,
-              provider: input.provider,
-              model: input.model,
-              error: terminalError,
-              durationMs: this.ports.now() - input.startTime,
-              attempts: attempt + 1,
-            });
+            try {
+              await this.ports.plugins.fireError({
+                requestId: input.requestId,
+                provider: input.provider,
+                model: input.model,
+                error: terminalError,
+                durationMs: this.ports.now() - input.startTime,
+                attempts: attempt + 1,
+              });
+            } catch {
+              // Swallow plugin hook failures so the original stream error is still surfaced.
+            }
             throw sleepError;
           }
           attempt++;
         }
       }
     } finally {
-      if (reservationActive) this.ports.budget.release(input.requestId);
+      releaseMainBudget();
       prepared.dispose();
     }
   }
@@ -592,6 +639,13 @@ export class RequestPipeline {
       };
       let attempt = 0;
       let primaryError: unknown;
+      let budgetReleased = false;
+      const releaseBudget = (): void => {
+        if (!budgetReleased) {
+          this.ports.budget.release(input.requestId);
+          budgetReleased = true;
+        }
+      };
 
       for (;;) {
         const result = await this.ports.executor.executeComplete(
@@ -661,7 +715,7 @@ export class RequestPipeline {
             result.value,
             { requestId: input.requestId, model: input.model },
           );
-          this.ports.budget.release(input.requestId);
+          releaseBudget();
           this.ports.emit({
             type: "request.failed",
             requestId: input.requestId,
@@ -745,7 +799,13 @@ export class RequestPipeline {
                 primaryError = fallbackResult.error;
               }
               if (fallbackResult.ok) {
-                const parsed = JSON.parse(extractJson(fallbackResult.value));
+                let parsed: unknown;
+                try {
+                  parsed = JSON.parse(extractJson(fallbackResult.value));
+                } catch (error) {
+                  primaryError = error;
+                  break;
+                }
                 const validation = input.output.schema.safeParse(parsed);
                 if (validation.success) {
                   this.ports.budget.settle(fallbackId, fallbackCost, {
@@ -765,7 +825,7 @@ export class RequestPipeline {
                 }
               }
             } catch (error) {
-              if (input.callerSignal?.aborted) primaryError = error;
+              primaryError = error;
             } finally {
               fallbackPrepared?.dispose();
               this.ports.budget.release(fallbackId);
@@ -777,7 +837,7 @@ export class RequestPipeline {
       }
 
       this.recordTerminalFailure(prepared, primaryError);
-      this.ports.budget.release(input.requestId);
+      releaseBudget();
       const error = primaryError instanceof Error ? primaryError : new Error(String(primaryError));
       this.ports.emit({
         type: "request.failed",
@@ -789,14 +849,18 @@ export class RequestPipeline {
         attempts: attempt + 1,
         error: error.message,
       });
-      await this.ports.plugins.fireError({
-        requestId: input.requestId,
-        provider: input.provider,
-        model: input.model,
-        error,
-        durationMs: this.ports.now() - input.startTime,
-        attempts: attempt + 1,
-      });
+      try {
+        await this.ports.plugins.fireError({
+          requestId: input.requestId,
+          provider: input.provider,
+          model: input.model,
+          error,
+          durationMs: this.ports.now() - input.startTime,
+          attempts: attempt + 1,
+        });
+      } catch {
+        // Swallow plugin hook failures so the original request error is still surfaced.
+      }
       throw primaryError;
     } finally {
       prepared.dispose();

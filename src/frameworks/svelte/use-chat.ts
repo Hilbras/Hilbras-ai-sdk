@@ -43,7 +43,6 @@ export function useChat(options: UseChatToolOptions) {
     body = {},
     maxSteps = 1,
     onToolCall,
-    onStepFinish,
   } = options;
 
   const state: ChatState = {

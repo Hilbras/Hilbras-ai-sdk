@@ -58,7 +58,7 @@ export interface ChatOptions {
   body?: Record<string, unknown>;
 }
 
-@Injectable({ providedIn: "root" })
+@Injectable()
 export class HilbrasChatService {
   private _messages = signal<UIMessage[]>([]);
   private _input = signal("");

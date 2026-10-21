@@ -76,8 +76,9 @@ function normalizeIpLiteral(host: string): string | null {
     }
   }
 
-  // Octal: 0177.0.0.1 or 017700000001 — strip leading zeros in each octet
-  if (/^(?:0\d{1,3}\.){3}0?\d{1,3}$/.test(host)) {
+  // Octal: 0177.0.0.1 or 017700000001 — each octet must contain only octal digits (0-7);
+  // "08" and "09" are not valid octal and must not be misparsed as decimal.
+  if (/^(?:0[0-7]{1,3}\.){3}0?[0-7]{1,3}$/.test(host)) {
     const parts = host.split(".");
     const decimal = parts.map((p) => parseInt(p, 8));
     if (decimal.every((p) => p >= 0 && p <= 255)) {
@@ -426,7 +427,6 @@ export function validateBaseUrl(
  */
 export function validateResolvedAddress(
   ip: string,
-  originalHost: string,
 ): UrlGuardResult {
   const normalized = normalizeIpLiteral(ip);
   if (!normalized) {

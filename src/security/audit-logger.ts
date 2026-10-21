@@ -90,8 +90,15 @@ export interface SecurityAuditEntry extends AuditBase {
   eventType: "ssrf_blocked" | "rate_limit" | "circuit_breaker" | "invalid_input" | "pii_detected" | "custom";
 }
 
+/** Error audit entry */
+export interface ErrorAuditEntry extends AuditBase {
+  category: "error";
+  /** The error message */
+  error: string;
+}
+
 /** Union of all audit entry types */
-export type AuditEntry = AuthAuditEntry | DataAccessAuditEntry | ConfigChangeAuditEntry | SecurityAuditEntry;
+export type AuditEntry = AuthAuditEntry | DataAccessAuditEntry | ConfigChangeAuditEntry | SecurityAuditEntry | ErrorAuditEntry;
 
 /** Configuration for the audit logger */
 export interface AuditLoggerConfig {
@@ -117,11 +124,13 @@ function generateEventId(): string {
   return `audit_${ts}_${cnt}`;
 }
 
-function cloneValue<T>(value: T): T {
-  if (Array.isArray(value)) return value.map((item) => cloneValue(item)) as T;
+function cloneValue<T>(value: T, seen = new WeakSet<object>()): T {
+  if (Array.isArray(value)) return value.map((item) => cloneValue(item, seen)) as T;
   if (value && typeof value === "object") {
+    if (seen.has(value)) return value; // circular reference — stop recursing
+    seen.add(value);
     const result: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) result[key] = cloneValue(item);
+    for (const [key, item] of Object.entries(value)) result[key] = cloneValue(item, seen);
     return result as T;
   }
   return value;
@@ -242,9 +251,8 @@ export class AuditLogger {
   }): void {
     const entry = {
       ...this._base("error", "critical", event.action, event),
-      success: false,
-      reason: event.error,
-    } as AuthAuditEntry;
+      error: event.error,
+    } as ErrorAuditEntry;
     this._emit(entry);
   }
 

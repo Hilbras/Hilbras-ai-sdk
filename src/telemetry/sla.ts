@@ -6,7 +6,7 @@
  */
 
 import type { HilbrasClient } from "../client/client.js";
-import type { HookEventType, RequestCompletedEvent, RequestFailedEvent } from "../types/observability.js";
+import type { RequestCompletedEvent, RequestFailedEvent } from "../types/observability.js";
 
 /** Supported SLA metric types */
 export type SLAMetric =
