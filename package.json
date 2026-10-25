@@ -317,7 +317,7 @@
   "devDependencies": {
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.5",
     "oxlint": "^1.88.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
