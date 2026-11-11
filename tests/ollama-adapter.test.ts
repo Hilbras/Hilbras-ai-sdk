@@ -73,7 +73,10 @@ describe("OllamaAdapter", () => {
     expect(capturedHeaders["Authorization"]).toBeUndefined();
   });
 
-  it("sets options.num_predict for maxTokens", async () => {
+  // D3: this loop calls `/v1/chat/completions`, whose OpenAI-compatible layer
+  // reads `max_tokens`. The previous assertion pinned `options.num_predict`, a
+  // native-API field that endpoint ignores, so maxTokens silently did nothing.
+  it("sets max_tokens for maxTokens", async () => {
     let capturedBody: Record<string, unknown> = {};
     const transport: Transport = {
       async request(_url, init) {
@@ -85,7 +88,8 @@ describe("OllamaAdapter", () => {
     };
     const adapter = new OllamaAdapter({ provider, transport });
     await adapter.stream({ model: "llama3.1", messages: [{ role: "user", content: "hi" }], maxTokens: 2048 }).next();
-    expect((capturedBody.options as Record<string, unknown>)?.num_predict).toBe(2048);
+    expect(capturedBody.max_tokens).toBe(2048);
+    expect(capturedBody.options).toBeUndefined();
   });
 
   it("complete() returns text from non-streaming response", async () => {
@@ -140,7 +144,8 @@ describe("OllamaAdapter multi-modal", () => {
     };
     const adapter = new OllamaAdapter({ provider, transport });
     const result = await adapter.embed({ model: "nomic-embed-text", input: "hello world" });
-    expect(capturedUrl).toContain("/api/embeddings");
+    // D3: the native path must not be appended to the `/v1` base, or it 404s.
+    expect(capturedUrl).toBe("http://localhost:11434/api/embeddings");
     expect(capturedBody.model).toBe("nomic-embed-text");
     expect(capturedBody.prompt).toBe("hello world");
     expect(result.embeddings).toHaveLength(1);

@@ -26,6 +26,8 @@ import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import type { EmbeddingParams, EmbeddingResult, ImageParams, ImageResult, SpeechParams, SpeechResult, TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
+import { splitSseFrames } from "../utils/sse.js";
+import { toBase64 } from "../utils/base64.js";
 
 export interface VertexAIAdapterConfig extends AdapterConfig {
   /** Google Cloud project ID */
@@ -187,24 +189,35 @@ export class VertexAIAdapter implements AIProvider {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+        const decoded = splitSseFrames(buffer, decoder.decode(value, { stream: true }));
+        buffer = decoded.buffer;
 
-        for (const part of parts) {
-          const lines = part.split("\n");
-          let rawData = "";
-          for (const line of lines) {
-            if (line.startsWith("data: ")) rawData = line.slice(6).trim();
-          }
+        for (const frame of decoded.frames) {
+          const rawData = frame.data.trim();
           if (!rawData || rawData === "[DONE]") continue;
 
           let data: Record<string, unknown>;
           try { data = JSON.parse(rawData); } catch { continue; }
 
+          if (data.usageMetadata) {
+            const usage = data.usageMetadata as Record<string, number>;
+            yield {
+              type: "usage",
+              inputTokens: usage.promptTokenCount ?? 0,
+              outputTokens: usage.candidatesTokenCount ?? 0,
+              totalTokens: usage.totalTokenCount ?? 0,
+            };
+          }
+
           const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
           if (!candidates?.length) continue;
           const candidate = candidates[0];
+
+          const finishReason = candidate.finishReason as string | undefined;
+          if (finishReason) {
+            yield { type: "finish", reason: finishReason };
+          }
+
           const content = candidate.content as Record<string, unknown> | undefined;
           const contentParts = content?.parts as Array<Record<string, unknown>> | undefined;
           if (!contentParts?.length) continue;
@@ -212,9 +225,10 @@ export class VertexAIAdapter implements AIProvider {
           for (const p of contentParts) {
             // Text content
             if (typeof p.text === "string" && p.text) {
-              const reasoning = reasoningNormalizer.feedText(p.text);
-              if (reasoning) yield reasoning;
-              else if (!ReasoningNormalizer.looksLikeReasoningTag(p.text)) {
+              const reasoningParts = reasoningNormalizer.feedText(p.text);
+              if (reasoningParts.length > 0) {
+                for (const part of reasoningParts) yield part;
+              } else if (!ReasoningNormalizer.looksLikeReasoningTag(p.text)) {
                 yield { type: "text", text: p.text };
               }
             }
@@ -391,7 +405,7 @@ export class VertexAIAdapter implements AIProvider {
         languageCode: params.language ?? "en-US",
         enableAutomaticPunctuation: true,
       },
-      audio: { content: btoa(String.fromCharCode(...fileBytes)) },
+      audio: { content: toBase64(fileBytes) },
     };
 
     const res = await this._transport.request(url, {

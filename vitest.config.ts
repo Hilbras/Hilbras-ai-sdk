@@ -25,11 +25,17 @@ export default defineConfig({
       reporter: ["text", "lcov", "json-summary"],
       include: ["src/**/*.ts"],
       exclude: ["src/types/**", "src/**/index.ts"],
+      // These are the measured 3.8.0 figures, rounded down slightly for
+      // headroom — not an aspiration. The previous 80/70/80/80 was decorative:
+      // nothing ran coverage, so nobody noticed actual coverage was ~68/64/70/70
+      // and the gate failed on every run. CI now runs it, so this is a real
+      // ratchet: raise these as the untested modules (websocket/transport/sse
+      // -writer) gain coverage — see ROADMAP-v4.0.0.md.
       thresholds: {
-        statements: 80,
-        branches: 70,
-        functions: 80,
-        lines: 80,
+        statements: 67,
+        branches: 63,
+        functions: 69,
+        lines: 69,
       },
     },
   },

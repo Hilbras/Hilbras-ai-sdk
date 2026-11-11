@@ -225,7 +225,9 @@ describe("RequestPipeline plain complete", () => {
     }
 
     expect(chunks).toEqual([{ type: "text", text: "fallback" }]);
-    expect(events).toEqual(["fallback.started", "request.completed"]);
+    // A fallback stream emits its own first-chunk event (C7): TTFT was missing
+    // entirely for fallback-served requests.
+    expect(events).toEqual(["fallback.started", "stream.first_chunk", "request.completed"]);
     expect(budget.report().activeReservations).toBe(0);
   });
 

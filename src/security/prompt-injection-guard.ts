@@ -392,30 +392,39 @@ function stripInjections(
   return messages.map((msg) => {
     if (!roles.includes(msg.role)) return msg;
 
+    // Multimodal content: strip only the text parts and keep the rest. The
+    // previous version rebuilt `content` as a string, silently deleting images.
+    if (Array.isArray(msg.content)) {
+      const content = msg.content.map((part) => {
+        if (part.type !== "text") return part;
+        const stripped = stripInjectionText(part.text, config);
+        return stripped === part.text ? part : { ...part, text: stripped };
+      });
+      return { ...msg, content };
+    }
+
     const text = extractText(msg.content);
     if (!text) return msg;
 
-    const detection = detectInjection(text, config);
-    if (detection.safe) return msg;
-
-    let sanitized = text;
-    // Strip in reverse order of position to preserve indices
-    const sorted = [...detection.detections].sort(
-      (a, b) => text.indexOf(b.matchedText) - text.indexOf(a.matchedText),
-    );
-
-    for (const match of sorted) {
-      const idx = sanitized.indexOf(match.matchedText);
-      if (idx !== -1) {
-        sanitized =
-          sanitized.slice(0, idx) +
-          `[INJECTION BLOCKED: ${match.category}]` +
-          sanitized.slice(idx + match.matchedText.length);
-      }
-    }
-
-    return { ...msg, content: sanitized };
+    const sanitized = stripInjectionText(text, config);
+    return sanitized === text ? msg : { ...msg, content: sanitized };
   });
+}
+
+/**
+ * Replace every detected injection in `text`. Replacing a single occurrence —
+ * which is what the previous index-based loop did — let a payload survive
+ * simply by repeating itself.
+ */
+function stripInjectionText(text: string, config?: InjectionGuardConfig): string {
+  const detection = detectInjection(text, config);
+  if (detection.safe) return text;
+
+  let sanitized = text;
+  for (const match of detection.detections) {
+    sanitized = sanitized.split(match.matchedText).join(`[INJECTION BLOCKED: ${match.category}]`);
+  }
+  return sanitized;
 }
 
 /**

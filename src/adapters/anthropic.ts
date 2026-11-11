@@ -19,6 +19,7 @@ import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
+import { splitSseFrames } from "../utils/sse.js";
 import { mergeExtraParams } from "./extra.js";
 export type AnthropicAdapterConfig = AdapterConfig;
 
@@ -145,6 +146,8 @@ export class AnthropicAdapter implements AIProvider {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let inputTokens = 0;
+    let finishReason: string | undefined;
     const toolCalls = new Map<number, { id: string; name: string; inputJson: string }>();
 
     try {
@@ -152,18 +155,12 @@ export class AnthropicAdapter implements AIProvider {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+        const decoded = splitSseFrames(buffer, decoder.decode(value, { stream: true }));
+        buffer = decoded.buffer;
 
-        for (const part of parts) {
-          const lines = part.split("\n");
-          let eventType = "";
-          let rawData = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-            if (line.startsWith("data: ")) rawData = line.slice(6).trim();
-          }
+        for (const frame of decoded.frames) {
+          const eventType = frame.event;
+          const rawData = frame.data.trim();
           if (!rawData || rawData === "[DONE]") continue;
 
           let data: Record<string, unknown>;
@@ -175,9 +172,10 @@ export class AnthropicAdapter implements AIProvider {
             if (!delta) continue;
 
             if (delta.type === "text_delta" && typeof delta.text === "string") {
-              const reasoning = reasoningNormalizer.feedText(delta.text);
-              if (reasoning) yield reasoning;
-              else if (!ReasoningNormalizer.looksLikeReasoningTag(delta.text)) {
+              const reasoningParts = reasoningNormalizer.feedText(delta.text);
+              if (reasoningParts.length > 0) {
+                for (const part of reasoningParts) yield part;
+              } else if (!ReasoningNormalizer.looksLikeReasoningTag(delta.text)) {
                 yield { type: "text", text: delta.text };
               }
             }
@@ -220,15 +218,33 @@ export class AnthropicAdapter implements AIProvider {
             }
           }
 
-          // Usage
-          if (data.type === "message_delta" && data.usage) {
-            const usage = data.usage as Record<string, number>;
-            yield {
-              type: "usage",
-              inputTokens: usage.input_tokens ?? 0,
-              outputTokens: usage.output_tokens ?? 0,
-              totalTokens: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
-            };
+          // Prompt tokens arrive on message_start; message_delta carries only
+          // output_tokens, so reading input_tokens there always yielded 0.
+          if (data.type === "message_start") {
+            const message = data.message as Record<string, unknown> | undefined;
+            const usage = message?.usage as Record<string, number> | undefined;
+            if (usage?.input_tokens) inputTokens = usage.input_tokens;
+          }
+
+          if (data.type === "message_delta") {
+            const delta = data.delta as Record<string, unknown> | undefined;
+            if (typeof delta?.stop_reason === "string") finishReason = delta.stop_reason;
+
+            if (data.usage) {
+              const usage = data.usage as Record<string, number>;
+              const outputTokens = usage.output_tokens ?? 0;
+              yield {
+                type: "usage",
+                inputTokens,
+                outputTokens,
+                totalTokens: inputTokens + outputTokens,
+              };
+            }
+          }
+
+          // End of message
+          if (eventType === "message_stop" || data.type === "message_stop") {
+            yield { type: "finish", reason: finishReason ?? "stop" };
           }
         }
       }

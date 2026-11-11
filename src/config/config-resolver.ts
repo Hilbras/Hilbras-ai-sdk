@@ -133,7 +133,10 @@ function validateValues(values: SDKConfig, source: ConfigSourceKind): ConfigDiag
     } else {
       const guard = validateBaseUrl(provider.baseUrl, { allowInsecure: !!provider.allowInsecure });
       if (!guard.ok) {
-        diagnostics.push(errorDiagnostic(source, "CONFIG_UNSAFE_PROVIDER_URL", `${path}.baseUrl`, `provider URL rejected by security policy: ${guard.reason}`));
+        // The guard echoes the URL it rejected, and a URL can carry a key in
+        // its query string. Strip the literal before it reaches diagnostics.
+        const reason = guard.reason.split(provider.baseUrl).join("[URL]");
+        diagnostics.push(errorDiagnostic(source, "CONFIG_UNSAFE_PROVIDER_URL", `${path}.baseUrl`, `provider URL rejected by security policy: ${reason}`));
       }
     }
     const auth = provider.authentication;

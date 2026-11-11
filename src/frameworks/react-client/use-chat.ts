@@ -88,6 +88,33 @@ function nextId(): string {
  * }
  * ```
  */
+/**
+ * Build the provider payload for one turn.
+ *
+ * Extracted so the retry path is testable without a renderer: `retry` must not
+ * append the user turn a second time, and must not re-send the failed
+ * assistant turn.
+ */
+export function buildChatApiMessages(params: {
+  transcript: ChatMessage[];
+  userContent: string;
+  systemPrompt?: string;
+  maxContextMessages: number;
+  appendUserMessage: boolean;
+}): Array<{ role: "user" | "assistant" | "system"; content: string }> {
+  const apiMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
+  if (params.systemPrompt) {
+    apiMessages.push({ role: "system", content: params.systemPrompt });
+  }
+  for (const msg of params.transcript.slice(-params.maxContextMessages)) {
+    apiMessages.push({ role: msg.role, content: msg.content });
+  }
+  if (params.appendUserMessage) {
+    apiMessages.push({ role: "user", content: params.userContent });
+  }
+  return apiMessages;
+}
+
 export function useChat(options: UseChatOptions): UseChatReturn {
   const { provider, model, systemPrompt, initialMessages, maxContextMessages = 50, onChunk, onComplete, onError } = options;
 
@@ -125,7 +152,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     setTotalCost(0);
   }, [stop]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, options?: { retry?: boolean }) => {
     if (!content.trim() || isLoading) return;
 
     const userMessage: ChatMessage = {
@@ -137,14 +164,18 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     lastUserMessageRef.current = content.trim();
 
-    setMessages((prev) => {
-      const updated = [...prev, userMessage];
-      // Trim context window
-      if (updated.length > maxContextMessages + 1) {
-        return updated.slice(-maxContextMessages);
-      }
-      return updated;
-    });
+    // On a retry the user turn is already in the transcript. Appending it again
+    // sent the question to the provider twice and duplicated it in the UI.
+    if (!options?.retry) {
+      setMessages((prev) => {
+        const updated = [...prev, userMessage];
+        // Trim context window
+        if (updated.length > maxContextMessages + 1) {
+          return updated.slice(-maxContextMessages);
+        }
+        return updated;
+      });
+    }
     setInput("");
     setIsLoading(true);
     setIsStreaming(true);
@@ -154,18 +185,21 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     abortRef.current = controller;
 
     try {
-      // Build message array for the API
-      const apiMessages = [];
-      if (systemPrompt) {
-        apiMessages.push({ role: "system" as const, content: systemPrompt });
-      }
+      // On a retry the transcript may or may not still carry the failed
+      // assistant turn, depending on whether `retry`'s removal has rendered
+      // yet, so drop a trailing assistant message if there is one rather than
+      // assuming which state this closure captured.
+      const transcript = options?.retry && messages[messages.length - 1]?.role === "assistant"
+        ? messages.slice(0, -1)
+        : messages;
 
-      // Add context messages (all except the latest user message)
-      const contextMessages = messages.slice(-maxContextMessages);
-      for (const msg of contextMessages) {
-        apiMessages.push({ role: msg.role, content: msg.content });
-      }
-      apiMessages.push({ role: "user" as const, content: userMessage.content });
+      const apiMessages = buildChatApiMessages({
+        transcript,
+        userContent: userMessage.content,
+        systemPrompt,
+        maxContextMessages,
+        appendUserMessage: !options?.retry,
+      });
 
       let assistantContent = "";
       let inputTokens = 0;
@@ -258,7 +292,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
       return prev;
     });
-    await sendMessage(lastUserMessageRef.current);
+    // The user turn stays in the transcript, so ask sendMessage not to append it.
+    await sendMessage(lastUserMessageRef.current, { retry: true });
   }, [isLoading, sendMessage]);
 
   return {

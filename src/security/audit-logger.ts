@@ -19,6 +19,7 @@
  */
 
 import { redactPii } from "./pii-guard.js";
+import { redact } from "../logging/logger.js";
 
 /** Audit event categories */
 export type AuditCategory = "auth" | "data_access" | "config_change" | "security" | "error";
@@ -127,10 +128,45 @@ function generateEventId(): string {
 function cloneValue<T>(value: T, seen = new WeakSet<object>()): T {
   if (Array.isArray(value)) return value.map((item) => cloneValue(item, seen)) as T;
   if (value && typeof value === "object") {
-    if (seen.has(value)) return value; // circular reference — stop recursing
+    // Non-plain objects (Date, Map, Set, Error, class instances) are returned
+    // as-is: walking them with Object.entries silently turned a Date into {}.
+    if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+    if (seen.has(value)) return undefined as T; // circular reference — drop the branch
     seen.add(value);
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) result[key] = cloneValue(item, seen);
+    return result as T;
+  }
+  return value;
+}
+
+/**
+ * Redact PII and credentials from every string in a value, nested objects and
+ * arrays included. The logger previously redacted only `description`, so a
+ * `meta` / `previousValue` / `newValue` / `error` field carrying a credential
+ * was written verbatim to the log sink.
+ *
+ * Three passes, because no single one covers everything:
+ * - a value under a credential-shaped key (`apiKey`, `token`, `password`, ...)
+ *   is replaced outright — `ghp_...` and other opaque tokens carry no prefix a
+ *   pattern can recognise;
+ * - `redact` strips recognisable credential formats (`sk-`, `AKIA`, `AIza`, ...);
+ * - `redactPii` strips emails, phone numbers, card numbers and so on.
+ */
+const SENSITIVE_KEY = /(secret|token|password|passwd|api[_-]?key|apikey|credential|authorization|private[_-]?key|session[_-]?id)/i;
+
+function redactDeep<T>(value: T, keyHint = ""): T {
+  if (typeof value === "string") {
+    if (keyHint && SENSITIVE_KEY.test(keyHint)) return "[REDACTED]" as unknown as T;
+    return redact(redactPii(value)) as unknown as T;
+  }
+  if (Array.isArray(value)) return value.map((item) => redactDeep(item, keyHint)) as unknown as T;
+  if (value && typeof value === "object") {
+    // Non-plain objects (Date, Map, Error, ...) are not walked: it would
+    // destroy them the same way `cloneValue` used to.
+    if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) result[key] = redactDeep(item, key);
     return result as T;
   }
   return value;
@@ -294,11 +330,17 @@ export class AuditLogger {
 
   /** Count entries by category */
   countByCategory(): Record<AuditCategory, number> {
-    const counts: Record<string, number> = {};
+    const counts: Record<AuditCategory, number> = {
+      auth: 0,
+      data_access: 0,
+      config_change: 0,
+      security: 0,
+      error: 0,
+    };
     for (const entry of this._entries) {
       counts[entry.category] = (counts[entry.category] ?? 0) + 1;
     }
-    return counts as Record<AuditCategory, number>;
+    return counts;
   }
 
   /** Clear all entries (use with caution — audit logs should be immutable) */
@@ -335,15 +377,14 @@ export class AuditLogger {
       userId: event.userId,
       sourceIp: this._config.includeSourceIp ? event.sourceIp : undefined,
       requestId: event.requestId,
-      description: this._config.redactPii && event.description
-        ? redactPii(event.description)
-        : event.description,
+      description: event.description,
       meta: { ...this._config.defaultFields, ...event.meta },
     };
   }
 
   private _emit(entry: AuditEntry): void {
-    const stored = cloneEntry(entry);
+    const cloned = cloneEntry(entry);
+    const stored = this._config.redactPii ? redactDeep(cloned) : cloned;
     this._entries.push(stored);
     if (this._entries.length > this._maxEntries) {
       this._entries = this._entries.slice(-this._maxEntries);

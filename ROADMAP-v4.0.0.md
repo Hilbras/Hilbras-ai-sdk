@@ -289,3 +289,24 @@ pinning belongs in an SDK at all.
 
 **Do not batch these.** Each is independently releasable, and 4.0.0 is where
 six breaking changes arriving at once would be least reviewable.
+
+## Status after 3.8.0 (audit-fix release)
+
+- **Items 1–2 (coverage) — the gate now exists.** 3.8.0 wired
+  `npm run test:coverage` into CI and calibrated the global thresholds to the
+  measured floor (statements 67, branches 63, functions 69, lines 69). The
+  numbers declared before this release (80/70/80/80) were never enforced and
+  failed on every run, so nothing noticed actual coverage sat at ~68/64/70/70.
+  Raising the thresholds is these two items' job, and the ratchet is now real:
+  a regression fails CI.
+- **Item 8 (`node:crypto` → WebCrypto) — still open, claim corrected.** The
+  README asserted "runs everywhere … browsers … edge runtimes" while the root
+  entry re-exports config loading and request signing, which import `node:fs`
+  and `node:crypto`; `import "@hilbras/sdk"` therefore does not load in a
+  browser or edge bundle without shims. 3.8.0 corrected the README and pointed
+  it here. The breaking-change decision in this item is untouched.
+- **Item 4 (framework hooks) — one blocker removed, one confirmed.** The hooks
+  now abort in-flight streams on unmount, but the React and Vue lifecycle wiring
+  has **no automated test**: the repo has no DOM environment or test renderer, so
+  `useEffect` cleanup and `onUnmounted` cannot be exercised. Adding jsdom for
+  these hooks is unblocked work, and would also cover the React-client paths.

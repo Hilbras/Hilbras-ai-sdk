@@ -21,6 +21,7 @@ import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import type { EmbeddingParams, EmbeddingResult, ImageParams, ImageResult, TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
+import { splitSseFrames } from "../utils/sse.js";
 
 export interface HuggingFaceAdapterConfig extends AdapterConfig {
   /** Use OpenAI-compatible endpoint (default: true) */
@@ -149,16 +150,11 @@ export class HuggingFaceAdapter implements AIProvider {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+        const decoded = splitSseFrames(buffer, decoder.decode(value, { stream: true }));
+        buffer = decoded.buffer;
 
-        for (const part of parts) {
-          const lines = part.split("\n");
-          let rawData = "";
-          for (const line of lines) {
-            if (line.startsWith("data: ")) rawData = line.slice(6).trim();
-          }
+        for (const frame of decoded.frames) {
+          const rawData = frame.data.trim();
           if (!rawData || rawData === "[DONE]") continue;
 
           let data: Record<string, unknown>;
@@ -188,9 +184,10 @@ export class HuggingFaceAdapter implements AIProvider {
 
           const content = delta.content as string | undefined;
           if (content) {
-            const reasoning = reasoningNormalizer.feedText(content);
-            if (reasoning) yield reasoning;
-            else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {
+            const reasoningParts = reasoningNormalizer.feedText(content);
+            if (reasoningParts.length > 0) {
+              for (const part of reasoningParts) yield part;
+            } else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {
               yield { type: "text", text: content };
             }
             continue;

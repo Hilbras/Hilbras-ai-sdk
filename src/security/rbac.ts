@@ -17,6 +17,7 @@ import {
   evaluateAuthorization,
   resolveRequestFromContext,
   type AuthorizationDiagnostic,
+  type AuthorizationEnforcement,
   type AuthorizationOptions,
   type RBACConfig,
   type RBACRequestContext,
@@ -58,18 +59,23 @@ export interface PermissionCheck {
  * A role that declares no restrictions allows everything. A role whose policy
  * is malformed denies, because an invalid policy must never be treated as an
  * absent one.
+ *
+ * `enforcement` defaults to `"strict"`: a role that restricts providers cannot
+ * have that restriction evaluated when the caller names no provider, and an
+ * unevaluable restriction must not answer "allowed".
  */
 export function checkPermission(
   role: RBACRole,
   provider: string,
   model: string,
   tokenCount?: number,
+  enforcement: AuthorizationEnforcement = "strict",
 ): PermissionCheck {
   const verdict = evaluateAuthorization({
     role,
     roleName: role.name,
     request: { provider, model, tokenCount },
-    enforcement: "permissive",
+    enforcement,
     userId: null,
     report: () => {},
   });
@@ -270,9 +276,8 @@ export function createRBACMiddleware(
       meta: { role: verdict.role, unresolved: verdict.unresolved },
     });
 
-    if (verdict.status === 429) {
-      return jsonResponse(429, { error: verdict.reason, retryAfterMs: verdict.retryAfterMs });
-    }
+    // No 429 branch: a verdict is only ever 403 or an allow. Rate limiting
+    // answers before evaluation and never reaches here.
     return jsonResponse(403, { error: verdict.reason ?? "Access denied" });
   };
 }

@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.8.0] - 2026-11-11
+
+A correctness and safety release built from a whole-repo audit of 3.7.0. Every
+fix landed with a test that failed before it; the ids below are the audit's, so
+this doubles as the finding-to-fix map. Full inventory:
+[`SPEC-v3.8.0-audit-fixes.md`](./SPEC-v3.8.0-audit-fixes.md).
+
+### Security
+
+- **The audit log wrote credentials verbatim (B1).** Only `description` was
+  redacted, so an API key in `meta`, `previousValue`, `newValue`, or `error`
+  reached the log sink in full. Redaction now covers every string in the entry,
+  including credential-shaped keys, whose opaque values no pattern can match.
+- **Injection guard "strip" mode was trivially bypassed (B2, B3).** It replaced
+  only the first occurrence, so repeating the payload survived; and it rebuilt
+  multimodal content as a string, deleting image and audio parts.
+- **`jsonSchema` accepted a non-object for an `object` schema (B4)**, so
+  malformed model output passed validation and the repair loop never ran.
+- **`safeSnapshot()` crashed on a malformed `providers` value and leaked
+  credentials (B5)** — a webhook URL token, and the rejected URL echoed inside a
+  diagnostic.
+- **`checkPermission` failed open (H1).** A role restricting `allowedProviders`
+  returned `allowed: true` when the caller named no provider. It now defaults to
+  strict enforcement.
+- **Streaming provider failures returned HTTP 200 with the provider's error body
+  (E1)**, and `onError` was never called, so nothing reached the logs.
+- **The framework client pool retained a client per failed request (E2)**, and
+  `onRequest` ran after client construction, so an unauthenticated caller could
+  force it.
+
+### Fixed
+
+- **One request timeout per logical request (C1).** Because the timeout aborts
+  once and never resets, the fallback never ran in the one case it exists for —
+  a primary timeout.
+- **Cost was recorded as zero for five providers (A3).** Anthropic, Gemini,
+  Vertex, Groq and Ollama never emitted a `finish` or `usage` chunk, so
+  structured streaming never finalised and budget accounting under-reported.
+- **Budget alerts used the wrong denominator (A1)**, so threshold alerts were
+  missed or falsely fired; and a webhook alert was marked fired before delivery,
+  with failures swallowed (A2).
+- **Router cost weighting was inert (A4, A5, F1b).** A model with no known price
+  scored as perfectly cheap, and the score was clamped at 100 while the weighted
+  sum reaches ~155, so most models tied. `plan()` fallbacks also reported zero
+  cost and blank reasons.
+- **A circuit breaker could lock a provider out permanently (C2)** — half-open
+  probe slots were only released by a recorded result.
+- **Retry and abort hygiene (C3, C4).** Non-retryable statuses were retried on
+  the multimodal path, a cancelled request kept retrying, backoff jitter pushed
+  the delay past `maxDelayMs`, and `createRetryConfig` handed out the module's
+  own status `Set`.
+- **The structured fallback released its reservation twice (C5)**, and its retry
+  classifier omitted network failures that `complete()` retried (C6).
+- **`stream.first_chunk` reported `latencyMs: 0` and was missing entirely on
+  fallback (C7).**
+- **The reasoning normalizer swallowed the answer (D1)** when a `<thinking>`
+  block and the reply shared one delta, and leaked the closing tag into the
+  reasoning text.
+- **SSE parsing broke on CRLF framing and multi-line `data:` (D2)** across
+  eleven adapters: a CRLF upstream yielded no events at all while the buffer grew
+  for the whole response.
+- **Adapter correctness (D3):** Bedrock emitted a phantom tool call for every
+  text reply and re-quoted streamed argument fragments into invalid JSON; Cohere
+  sent a v1 request body to the `/v2/chat` endpoint (duplicating the last user
+  turn and dropping tool results); Groq and Ollama never sent `tools` at all, so
+  their advertised tool calling was dead; Ollama's `embed()` 404'd and ignored
+  `maxTokens`; Google audio transcribed as a `RangeError` past ~100 kB.
+- **Hooks kept streaming after unmount (E3)**, Next.js `append()` allowed
+  overlapping requests (E4), and `retry()` sent the question twice (E5).
+- **`FetchTransport` freed its connection slot at the response headers (E6)**,
+  so `maxConnectionsPerOrigin` limited nothing for streams.
+- Also: `degradation` discarded the real status (H2), `cloneValue` corrupted
+  `Date`/`Map` (H3), `countByCategory` returned a partial object (H4),
+  `CostBadge` always rendered `$0.0000` (I4), and the two catalog tables
+  disagreed on 21 context-window/output values (F1a).
+
+### Changed
+
+- **`checkPermission` defaults to strict enforcement.** Pass `"permissive"` to
+  keep the previous behaviour.
+- Coverage thresholds are now the measured floor (67/63/69/69 — previously a
+  declared 80/70/80/80 that failed on every run) and CI enforces them.
+- The README's "runs everywhere" claim is corrected: the root entry re-exports
+  config loading and request signing, which import `node:fs` and `node:crypto`,
+  so it does not load in a browser or edge bundle without shims.
+
+### Removed
+
+- **The MCP client and the `./mcp` subpath.** `MCPClient` never opened a
+  transport and answered `callTool` with fabricated output; shipping nothing is
+  better than shipping fake tool results.
+- **`streamIdleTimeoutMs`.** Declared, defaulted, and never read — the
+  documented stream idle timeout did not exist.
+- **`retryAfterMs` on `AuthorizationVerdict`**, and `status` narrowed to `403`:
+  a verdict is only ever an allow or a 403. Rate limiting answers separately.
+- Dead execution-layer surface (`ClockPort`, `deriveRequestContext`,
+  `toTelemetryContext`) and the unreachable 429 verdict branch.
+
+---
+
 ## [3.7.0] - 2026-10-21
 
 ### Added

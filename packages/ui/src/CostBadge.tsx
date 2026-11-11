@@ -17,16 +17,21 @@ export interface CostBadgeProps {
  * Headless CostBadge — real-time cost/token display.
  */
 export function CostBadge({ showTokens = true, showBudget = true, render, className }: CostBadgeProps) {
-  const { totalCost, totalTokens, costSnapshot } = useChatBox();
+  const { costSnapshot } = useChatBox();
+  // `costSnapshot` is where the real figures live. The hook's own `totalCost`
+  // and `totalTokens` are only ever set to 0, so the badge displayed $0.0000
+  // no matter how much was spent.
+  const cost = costSnapshot.totalCost;
+  const tokens = costSnapshot.totalTokens;
 
   if (render) {
-    return <span className={className}>{render({ cost: totalCost, tokens: totalTokens, remainingBudget: costSnapshot.remainingBudget })}</span>;
+    return <span className={className}>{render({ cost, tokens, remainingBudget: costSnapshot.remainingBudget })}</span>;
   }
 
   return (
     <span className={className} aria-label="Cost tracker">
-      ${totalCost.toFixed(4)}
-      {showTokens && <span> / {totalTokens} tokens</span>}
+      ${cost.toFixed(4)}
+      {showTokens && <span> / {tokens} tokens</span>}
       {showBudget && costSnapshot.remainingBudget != null && (
         <span> / ${costSnapshot.remainingBudget.toFixed(2)} left</span>
       )}

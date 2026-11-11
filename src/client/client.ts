@@ -946,14 +946,26 @@ export class HilbrasClient implements AsyncDisposable {
         return result;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
+
+        // Caller cancellation is not a provider failure: do not retry it, and
+        // do not count it against the circuit breaker.
+        if (userSignal?.aborted) {
+          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: lastError.message });
+          throw lastError;
+        }
+
         const status = (err as { status?: number }).status ?? 0;
-        const retryable = (status > 0 && shouldRetry(status, attempt, retryConfig)) || shouldRetryNetworkError(attempt, retryConfig);
+        // Gate on status when there is one. The network classifier ignores the
+        // status and defaults on, so `A || B` retried 401/403/404 as well.
+        const retryable = status > 0
+          ? shouldRetry(status, attempt, retryConfig)
+          : shouldRetryNetworkError(attempt, retryConfig);
         circuitBreaker?.recordFailure(lastError);
 
         if (retryable && attempt < maxAttempts - 1) {
           const delay = calculateBackoff(attempt, resolved.backoff);
           this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: lastError.message });
-          await sleep(delay);
+          await sleep(delay, userSignal);
           continue;
         }
 

@@ -50,7 +50,7 @@ describe("PR-4: _prepareRequest shared pre-flight (v0.10.0)", () => {
     const provider = testProvider();
     const result = callPrepare(client, provider, {
       retry: { maxRetries: 7, retryableStatuses: [500], retryableNetworkErrors: ["ECONNRESET"] },
-      timeout: { requestTimeoutMs: 0, streamIdleTimeoutMs: 0 },
+      timeout: { requestTimeoutMs: 0 },
     });
     expect(result.resolved.retry.maxRetries).toBe(7);
     expect(result.resolved.timeout.requestTimeoutMs).toBe(0);
@@ -87,7 +87,7 @@ describe("PR-4: _prepareRequest shared pre-flight (v0.10.0)", () => {
       "req_test",
       provider.name,
       provider,
-      { retry: { maxRetries: 0, retryableStatuses: [], retryableNetworkErrors: [] }, timeout: { requestTimeoutMs: 0, streamIdleTimeoutMs: 0 } },
+      { retry: { maxRetries: 0, retryableStatuses: [], retryableNetworkErrors: [] }, timeout: { requestTimeoutMs: 0 } },
       userSignal,
     );
     expect(result.signal).toBe(userSignal);

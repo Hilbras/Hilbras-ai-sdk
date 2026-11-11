@@ -25,7 +25,9 @@ export function calculateBackoff(attempt: number, config?: Partial<BackoffConfig
   const capped = Math.min(exponential, cfg.maxDelayMs);
   const jitterRange = capped * cfg.jitter;
   const jitter = (Math.random() * 2 - 1) * jitterRange;
-  return Math.max(0, capped + jitter);
+  // Clamp after jitter: capping first let the positive jitter push the delay
+  // above `maxDelayMs`, which callers treat as a hard ceiling.
+  return Math.min(cfg.maxDelayMs, Math.max(0, capped + jitter));
 }
 
 export async function sleep(ms: number, signal?: AbortSignal): Promise<void> {

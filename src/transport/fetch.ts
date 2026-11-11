@@ -153,23 +153,68 @@ export class FetchTransport implements Transport {
     }
     this._controllers.add(controller);
 
+    // The connection slot and the controller registration are held until the
+    // response BODY finishes, not until the headers arrive. Releasing at headers
+    // made `maxConnectionsPerOrigin` cosmetic for streams, and let
+    // destroy()/abort() forget a body that was still being read.
+    const settle = (): void => {
+      externalSignal?.removeEventListener("abort", onExternalAbort);
+      this._controllers.delete(controller);
+      this._release(origin);
+    };
+
     const requestFn = async (): Promise<Response> => {
+      let response: Response;
       try {
         const headers = init.headers
           ? Object.fromEntries(Object.entries(init.headers).filter(([, v]) => v !== undefined) as [string, string][])
           : undefined;
-        return await fetch(url, {
+        response = await fetch(url, {
           method: init.method,
           headers,
           body: init.body,
           signal: controller.signal,
           redirect: "error",
         });
-      } finally {
-        externalSignal?.removeEventListener("abort", onExternalAbort);
-        this._controllers.delete(controller);
-        this._release(origin);
+      } catch (error) {
+        // No response arrived, so no body will complete to release the slot.
+        settle();
+        throw error;
       }
+
+      // 204/205/304 and similar carry no body to wait for.
+      if (!response.body) {
+        settle();
+        return response;
+      }
+
+      const reader = response.body.getReader();
+      const body = new ReadableStream<Uint8Array>({
+        async pull(out) {
+          try {
+            const { done, value } = await reader.read();
+            if (done) {
+              settle();
+              out.close();
+              return;
+            }
+            out.enqueue(value);
+          } catch (error) {
+            settle();
+            out.error(error);
+          }
+        },
+        cancel(reason) {
+          settle();
+          return reader.cancel(reason);
+        },
+      });
+
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
     };
 
     const promise = requestFn();

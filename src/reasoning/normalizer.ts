@@ -9,62 +9,71 @@
  *   - Text-based reasoning tags (<thinking>, <reasoning>, <reason>)
  */
 
-import type { ReasoningChunk } from "../types/streams.js";
+import type { ReasoningChunk, TextChunk } from "../types/streams.js";
 
-const TAG_PATTERNS = [
-  /^<(?:thinking|reasoning|reason)>\s*/i,
-  /<\/(?:thinking|reasoning|reason)>\s*$/i,
-];
+/** Matched only at the start of the buffer, as before. */
+const OPEN_TAG = /^<(?:thinking|reasoning|reason)>\s*/i;
+/** Matched anywhere: the closing tag can sit mid-buffer when a provider batches. */
+const CLOSE_TAG = /<\/(?:thinking|reasoning|reason)>/i;
+/** "<reasoning>" is the longest opening tag — the tail kept for cross-chunk detection. */
+const MAX_TAG_PREFIX = 11;
+
+/** What one delta contributes, in order. */
+export type ReasoningPart = ReasoningChunk | TextChunk;
 
 export class ReasoningNormalizer {
   private _buffer = "";
   private _inTag = false;
-  private _lastReturnedIndex = 0;
 
   /**
-   * Feed text that might be reasoning. Returns a ReasoningChunk if the
-   * content is confirmed as reasoning, null if it should be treated as text.
+   * Feed text that might be reasoning and return the parts it contributes, in
+   * order.
+   *
+   * A single delta can carry a complete reasoning block *and* the reply that
+   * follows it — e.g. `<thinking>2+2=4</thinking>The answer is 4`. The previous
+   * single-chunk return value could not express that: it emitted everything
+   * after the opening tag as reasoning, so the answer was swallowed and the
+   * closing tag leaked into the reasoning text.
+   *
+   * An empty array means "nothing of its own" — the caller should fall back to
+   * treating the delta as plain text.
    */
-  feedText(text: string): ReasoningChunk | null {
+  feedText(text: string): ReasoningPart[] {
     this._buffer += text;
+    const parts: ReasoningPart[] = [];
 
-    // Check if we just entered a reasoning tag
     if (!this._inTag) {
-      for (const pat of TAG_PATTERNS) {
-        if (pat.test(this._buffer)) {
-          this._inTag = true;
-          // Strip the opening tag
-          this._buffer = this._buffer.replace(TAG_PATTERNS[0], "");
-          this._lastReturnedIndex = this._buffer.length;
-          return this._buffer.length > 0
-            ? { type: "reasoning", text: this._buffer }
-            : null;
+      const open = OPEN_TAG.exec(this._buffer);
+      if (!open) {
+        // Not a reasoning tag. Keep only a small tail so a tag split across
+        // deltas ("<think" + "ing>") is still detected, without unbounded
+        // buffer growth.
+        if (this._buffer.length > MAX_TAG_PREFIX) {
+          this._buffer = this._buffer.slice(-MAX_TAG_PREFIX);
         }
+        return parts;
       }
-      // Not a reasoning tag — return null (caller should yield as text).
-      // v2.4.0 BUG-02: keep only a small tail for cross-chunk tag detection
-      // (e.g. chunk ends with "<think") to prevent unbounded buffer growth.
-      const MAX_TAG_PREFIX = 11; // "<reasoning>" is the longest opening tag
-      if (this._buffer.length > MAX_TAG_PREFIX) {
-        this._buffer = this._buffer.slice(-MAX_TAG_PREFIX);
-      }
-      return null;
+      this._buffer = this._buffer.slice(open[0].length);
+      this._inTag = true;
     }
 
-    // We're inside a tag — check for closing
-    if (/<\/(?:thinking|reasoning|reason)>/i.test(this._buffer)) {
+    // Inside a reasoning block. The closing tag may already be present in this
+    // same delta, so check before treating the whole buffer as reasoning.
+    const close = CLOSE_TAG.exec(this._buffer);
+    if (close) {
+      const reasoning = this._buffer.slice(0, close.index).trim();
+      const trailing = this._buffer.slice(close.index + close[0].length).trim();
       this._inTag = false;
-      const cleaned = this._buffer.replace(TAG_PATTERNS[1], "").trim();
-      const newText = cleaned.slice(this._lastReturnedIndex).trim();
       this._buffer = "";
-      this._lastReturnedIndex = 0;
-      return newText ? { type: "reasoning", text: newText } : null;
+      if (reasoning) parts.push({ type: "reasoning", text: reasoning });
+      if (trailing) parts.push({ type: "text", text: trailing });
+      return parts;
     }
 
-    // Still accumulating inside tag — return only new content
-    const newText = this._buffer.slice(this._lastReturnedIndex);
-    this._lastReturnedIndex = this._buffer.length;
-    return { type: "reasoning", text: newText };
+    const reasoning = this._buffer;
+    this._buffer = "";
+    if (reasoning) parts.push({ type: "reasoning", text: reasoning });
+    return parts;
   }
 
   /** Explicitly yield a reasoning chunk (for adapters with native reasoning fields) */
@@ -80,6 +89,5 @@ export class ReasoningNormalizer {
   reset(): void {
     this._buffer = "";
     this._inTag = false;
-    this._lastReturnedIndex = 0;
   }
 }

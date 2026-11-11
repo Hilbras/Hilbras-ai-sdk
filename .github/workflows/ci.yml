@@ -89,3 +89,17 @@ jobs:
             echo "Some node 24 shards failed"
             exit 1
           fi
+
+  coverage:
+    # Not sharded: the thresholds are global, so the suite has to run in one go.
+    name: coverage thresholds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+

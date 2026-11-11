@@ -48,6 +48,8 @@ export class CircuitBreaker {
   private _totalFailures = 0;
   private _totalSuccesses = 0;
   private _halfOpenCalls = 0;
+  /** When the current half-open probe round started (for the stuck-round escape). */
+  private _halfOpenSince: number | null = null;
 
   constructor(
     public readonly name: string,
@@ -74,6 +76,7 @@ export class CircuitBreaker {
     if (this._state === "open") {
       if (this._lastFailureTime && Date.now() - this._lastFailureTime >= this.config.timeoutMs) {
         this._transitionTo("half_open");
+        this._halfOpenCalls++;
         return true;
       }
       return false;
@@ -81,6 +84,18 @@ export class CircuitBreaker {
     // half_open
     if (this._halfOpenCalls < this.config.halfOpenMaxCalls) {
       this._halfOpenCalls++;
+      return true;
+    }
+    // Every probe slot is taken, but slots are released only by recordSuccess /
+    // recordFailure. A probe that is admitted and never reported back — an
+    // aborted request, or a provider that turns out not to be registered —
+    // used to refuse every later request for the rest of the process lifetime.
+    // If this probe round has been stuck for a full timeout window, start a
+    // fresh one.
+    const since = this._halfOpenSince ?? this._lastFailureTime ?? 0;
+    if (Date.now() - since >= this.config.timeoutMs) {
+      this._halfOpenSince = Date.now();
+      this._halfOpenCalls = 1;
       return true;
     }
     return false;
@@ -129,9 +144,11 @@ export class CircuitBreaker {
       this._failureCount = 0;
       this._successCount = 0;
       this._halfOpenCalls = 0;
+      this._halfOpenSince = null;
     } else if (state === "half_open") {
       this._successCount = 0;
       this._halfOpenCalls = 0;
+      this._halfOpenSince = Date.now();
     }
   }
 }

@@ -32,7 +32,7 @@ the section below for its contract._
 | Subpath | Type exports | Notes |
 | --- | --- | --- |
 | **Core** | | |
-| `@hilbras/sdk` | 175 | |
+| `@hilbras/sdk` | 173 | |
 | `@hilbras/sdk/types` | 53 | |
 | `@hilbras/sdk/adapter` | 3 | |
 | **Configuration & transport** | | |
@@ -41,7 +41,7 @@ the section below for its contract._
 | `@hilbras/sdk/transport/fetch` | 2 | |
 | `@hilbras/sdk/reliability/*` | pattern | |
 | **Cost & tokens** | | |
-| `@hilbras/sdk/tokens` | 8 | |
+| `@hilbras/sdk/tokens` | 9 | |
 | **Catalog** | | |
 | `@hilbras/sdk/catalog` | 8 | |
 | **Adapters** | | |
@@ -86,11 +86,10 @@ the section below for its contract._
 | `@hilbras/sdk/eval` | 8 | |
 | `@hilbras/sdk/rag` | 5 | |
 | `@hilbras/sdk/fine-tune` | 5 | |
-| `@hilbras/sdk/mcp` | 8 | |
 | `@hilbras/sdk/realtime` | 4 | |
 | `@hilbras/sdk/devtools` | 5 | |
 
-_51 subpaths. Generated from `package.json#exports` and the emitted `.d.ts` files by `tools/gen-subpath-table.mjs` — do not edit by hand._
+_50 subpaths. Generated from `package.json#exports` and the emitted `.d.ts` files by `tools/gen-subpath-table.mjs` — do not edit by hand._
 
 <!-- subpath-table:end -->
 

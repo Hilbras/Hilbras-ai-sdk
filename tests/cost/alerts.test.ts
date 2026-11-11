@@ -169,3 +169,85 @@ describe("createCostAlertBudget", () => {
     expect(cb).toHaveBeenCalledOnce();
   });
 });
+
+describe("cost alert accounting regressions", () => {
+  // A1: the percent must be computed on committed cost (actual + reserved).
+  // The tracker's remainingBudget already nets out reservations, so dividing
+  // totalActual by (totalActual + remainingBudget) hides reserved spend.
+  it("counts reserved cost toward the threshold percent", () => {
+    const cb = vi.fn();
+    const monitor = new CostAlertMonitor({
+      thresholds: [{ percent: 50, channel: { type: "callback", callback: cb } }],
+    });
+
+    const tracker = new BudgetTracker({ sessionBudget: 100 });
+    expect(tracker.reserve("r1", 60)).not.toBeNull();
+
+    const alerts = monitor.check(tracker);
+    expect(alerts.map((a) => a.thresholdPercent)).toEqual([50]);
+    expect(cb).toHaveBeenCalledOnce();
+  });
+
+  it("agrees with the tracker's committed/sessionBudget ratio", () => {
+    const monitor = new CostAlertMonitor({ thresholds: [{ percent: 90 }] });
+    const tracker = new BudgetTracker({ sessionBudget: 100 });
+    tracker.reserve("r1", 90);
+
+    // 90% committed -> the 90 threshold fires
+    expect(monitor.check(tracker).map((a) => a.thresholdPercent)).toEqual([90]);
+  });
+
+  // A2: a webhook that fails to deliver must not be recorded as fired, and
+  // must not be swallowed silently.
+  it("does not mark a webhook threshold fired when delivery fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", fetchMock);
+    const errors: unknown[] = [];
+
+    try {
+      const monitor = new CostAlertMonitor({
+        thresholds: [{ percent: 50, channel: { type: "webhook", url: "https://example.test/hook" } }],
+        onDispatchError: (error) => errors.push(error),
+      });
+
+      const report = {
+        totalActual: 50, totalEstimated: 50, totalReserved: 0,
+        committedCost: 50, requestCount: 1, activeReservations: 0,
+        byProvider: {}, byPhase: {}, budgetExceeded: false, remainingBudget: 50,
+      };
+
+      monitor.handleWarning(report);
+      await vi.waitFor(() => expect(errors.length).toBe(1));
+
+      fetchMock.mockResolvedValue({ ok: true, status: 200 });
+      monitor.handleWarning(report);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not re-dispatch a webhook threshold that was delivered", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const monitor = new CostAlertMonitor({
+        thresholds: [{ percent: 50, channel: { type: "webhook", url: "https://example.test/hook" } }],
+      });
+
+      const report = {
+        totalActual: 50, totalEstimated: 50, totalReserved: 0,
+        committedCost: 50, requestCount: 1, activeReservations: 0,
+        byProvider: {}, byPhase: {}, budgetExceeded: false, remainingBudget: 50,
+      };
+
+      monitor.handleWarning(report);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      monitor.handleWarning(report);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

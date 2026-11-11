@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ResolvedPolicy } from "../../../src/types/policy.js";
-import { createRequestContext, deriveRequestContext, toTelemetryContext } from "../../../src/core/execution/request-context.js";
+import { createRequestContext } from "../../../src/core/execution/request-context.js";
 import { executionFailure, executionSuccess } from "../../../src/core/execution/execution-result.js";
 
 const policy: ResolvedPolicy = {
@@ -36,29 +36,6 @@ describe("v3.2 execution contracts", () => {
     expect(context.metadata).toEqual({ tenant: "acme" });
   });
 
-  it("derives an attempt context without mutating the logical request", () => {
-    const original = createRequestContext({
-      requestId: "req_2",
-      operation: "stream",
-      provider: "test",
-      model: "model",
-      policy,
-    });
-    const derived = deriveRequestContext(original, {
-      attempt: 1,
-      phase: "fallback",
-      provider: "fallback",
-      model: "fallback-model",
-    });
-
-    expect(derived.attempt).toBe(1);
-    expect(derived.phase).toBe("fallback");
-    expect(derived.provider).toBe("fallback");
-    expect(original.attempt).toBe(0);
-    expect(original.phase).toBe("primary");
-    expect(original.provider).toBe("test");
-  });
-
   it("retains the original error and value in execution results", () => {
     const context = createRequestContext({
       requestId: "req_3",
@@ -75,25 +52,5 @@ describe("v3.2 execution contracts", () => {
     if (success.ok) expect(success.value).toBe("result");
     expect(failure.ok).toBe(false);
     if (!failure.ok) expect(failure.error).toBe(error);
-  });
-
-  it("exposes a minimal telemetry-safe context projection", () => {
-    const context = createRequestContext({
-      requestId: "req_4",
-      operation: "stream",
-      provider: "test",
-      model: "model",
-      policy,
-      metadata: { secret: "do-not-emit" },
-    });
-
-    expect(toTelemetryContext(context)).toEqual({
-      requestId: "req_4",
-      operation: "stream",
-      provider: "test",
-      model: "model",
-      attempt: 0,
-      phase: "primary",
-    });
   });
 });

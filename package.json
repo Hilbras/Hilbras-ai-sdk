@@ -1,6 +1,6 @@
 {
   "name": "@hilbras/sdk",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "Provider-agnostic LLM client SDK \u2014 streaming, tool calling, embeddings, image generation, speech synthesis, transcription, reranking, circuit breaker, retry, reasoning normalization, cost enforcement, structured output with schema validation, type-safe tool builder, and SSRF-safe provider registration. Zero runtime dependencies.",
   "type": "module",
   "main": "dist/index.js",
@@ -150,10 +150,6 @@
     "./reliability/*": {
       "types": "./dist/reliability/*.d.ts",
       "import": "./dist/reliability/*.js"
-    },
-    "./mcp": {
-      "types": "./dist/mcp/index.d.ts",
-      "import": "./dist/mcp/index.js"
     },
     "./realtime": {
       "types": "./dist/realtime/index.d.ts",

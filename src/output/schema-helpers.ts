@@ -137,7 +137,9 @@ function validateJsonSchema(data: unknown, schema: Record<string, unknown>): str
         }
       }
     }
-  } else if (type && type !== "array" && type !== "object" && type !== typeof data) {
+  } else if (type === "object") {
+    errors.push(`Expected type "object", got "${Array.isArray(data) ? "array" : data === null ? "null" : typeof data}"`);
+  } else if (type && type !== typeof data) {
     errors.push(`Expected type "${schema.type}", got "${typeof data}"`);
   }
 

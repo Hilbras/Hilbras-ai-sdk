@@ -115,4 +115,20 @@ describe("jsonSchema", () => {
     );
     expect(config.maxRepairAttempts).toBe(5);
   });
+
+  // B4: an object schema must reject non-objects, otherwise malformed model
+  // output passes validation and the repair loop never runs.
+  it("rejects a non-object for an object schema", () => {
+    const config = jsonSchema({
+      type: "object",
+      required: ["name"],
+      properties: { name: { type: "string" } },
+    });
+
+    expect(config.schema.safeParse("oops").success).toBe(false);
+    expect(config.schema.safeParse(42).success).toBe(false);
+    expect(config.schema.safeParse(null).success).toBe(false);
+    expect(config.schema.safeParse(["name"]).success).toBe(false);
+    expect(config.schema.safeParse({ name: "ok" }).success).toBe(true);
+  });
 });

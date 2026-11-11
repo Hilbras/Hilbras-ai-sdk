@@ -17,9 +17,12 @@ export interface ResolvedSDKConfig {
 }
 
 const SECRET_KEY = /(secret|token|password|apikey|api_key|authorization|webhook|credential)/i;
+// Anchored so it matches a bare `url`/`uri` key without also catching
+// `baseUrl`, which is useful in a snapshot for diagnosing a bad endpoint.
+const SECRET_EXACT_KEY = /^(url|uri)$/i;
 
 function redactValue(key: string, value: unknown): unknown {
-  if (SECRET_KEY.test(key)) return "[REDACTED]";
+  if (SECRET_KEY.test(key) || SECRET_EXACT_KEY.test(key)) return "[REDACTED]";
   if (Array.isArray(value)) return value.map((item) => redactValue(key, item));
   if (value && typeof value === "object") {
     const result: Record<string, unknown> = {};
@@ -53,12 +56,16 @@ export function budgetFromConfig(config: SDKConfig): BudgetConfig {
 export function createSafeSnapshot(values: SDKConfig): SafeSDKConfig {
   const copied = cloneConfigValue(values);
   const safe = redactValue("config", copied) as SDKConfig;
+  // A malformed config can carry a non-array `providers` (e.g. loaded from
+  // JSON). Coerce rather than throw: the snapshot is the diagnostic path, and
+  // crashing it hides the very problem it exists to report.
+  const providers = Array.isArray(safe.providers) ? safe.providers : [];
   return {
     ...safe,
-    providers: safe.providers.map((provider) => ({
+    providers: providers.map((provider) => ({
       ...provider,
-      authentication: { type: provider.authentication.type },
-      extraHeaders: provider.extraHeaders
+      authentication: { type: provider?.authentication?.type },
+      extraHeaders: provider?.extraHeaders
         ? Object.fromEntries(Object.keys(provider.extraHeaders).map((key) => [key, "[REDACTED]"]))
         : undefined,
     })),
