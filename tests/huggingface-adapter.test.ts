@@ -10,7 +10,7 @@ const provider: ProviderConfig = {
   authentication: { type: "bearer", apiKey: "hf_xxxxxxxxxxxx" },
   adapter: "huggingface",
   models: [
-    { id: "meta-llama/Llama-3.3-70B-Instruct", contextWindow: 131_072, maxOutputTokens: 16_384, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } },
+    { id: "meta-llama/Llama-3.3-70B-Instruct", contextWindow: 131_072, maxOutputTokens: 16_384, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } },
   ],
 };
 
@@ -199,7 +199,7 @@ describe("HuggingFaceAdapter", () => {
         function: {
           name: "get_weather",
           description: "Get weather",
-          parameters: { type: "object", properties: { city: { type: "string" } } },
+          parameters: { type: "object", properties: { city: { type: "string" } }, required: ["city"] },
         },
       }],
     });

@@ -5,14 +5,15 @@
 import { describe, it, expect } from "vitest";
 import { HilbrasClient } from "../../src/client/client.js";
 import { ConfigurationError } from "../../src/errors/index.js";
+import type { ProviderConfig } from "../../src/types/providers.js";
 
-function makeProvider(baseUrl: string, allowInsecure?: boolean) {
+function makeProvider(baseUrl: string, allowInsecure?: boolean): ProviderConfig {
   return {
     name: "Test",
     baseUrl,
     authentication: { type: "none" as const },
     adapter: "openai" as const,
-    models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+    models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
     ...(allowInsecure !== undefined ? { allowInsecure } : {}),
   };
 }

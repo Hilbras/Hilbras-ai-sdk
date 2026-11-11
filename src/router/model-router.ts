@@ -19,7 +19,7 @@ import type { TaskRequirement, RoutingResult, RejectedCandidate, TaskType } from
 import type { ModelEntry } from "../catalog/models.js";
 import type { ScoreBreakdown } from "../types/execution.js";
 import { BUILTIN_MODELS } from "../catalog/models.js";
-import { estimateCost } from "../tokens/counter.js";
+import { estimateCost, hasPricing } from "../tokens/counter.js";
 
 /** Task-specific scoring weights — defines what matters for each task type */
 const TASK_WEIGHTS: Record<TaskType, { reasoning: number; tools: number; speed: number; cost: number; structured: number }> = {
@@ -87,6 +87,8 @@ export class ModelRouter {
       provider: s.entry.provider,
       model: s.entry.id,
       score: s.score,
+      estimatedCost: this._estimateCost(s.entry),
+      rejectionReason: s.reasons[0],
     }));
 
     return scored.map((s, i) => ({
@@ -134,7 +136,13 @@ export class ModelRouter {
     const fallbacks = (primary.fallbacks ?? []);
     const allCandidates = [
       { provider: primary.provider, model: primary.model, score: primary.score, estimatedCost: primary.estimatedCost, reasons: primary.reasons },
-      ...fallbacks.map((f) => ({ provider: f.provider, model: f.model, score: f.score, estimatedCost: 0, reasons: [f.rejectionReason ?? ""] })),
+      ...fallbacks.map((f) => ({
+        provider: f.provider,
+        model: f.model,
+        score: f.score,
+        estimatedCost: f.estimatedCost ?? 0,
+        reasons: [f.rejectionReason ?? "Fallback candidate"],
+      })),
     ];
 
     // Estimate total cost: primary + retries + repairs + possible fallback
@@ -254,9 +262,12 @@ export class ModelRouter {
     // Context fit score (0-100)
     const contextFit = this._computeContextFit(entry, req);
 
-    // Cost score (0-100) — lower cost = higher score
+    // Cost score (0-100) — lower cost = higher score. An unpriced model is not
+    // free: `estimateCost` returns 0 for an unknown model, and treating that as
+    // perfect cost efficiency made the router prefer models with no known price.
     const cost = this._estimateCost(entry);
-    const costEfficiency = cost === 0 ? 100 : Math.max(0, 100 - (cost * 2000));
+    const priced = hasPricing(entry.provider, entry.id);
+    const costEfficiency = !priced ? 0 : cost === 0 ? 100 : Math.max(0, 100 - (cost * 2000));
 
     if (req.maxCost && cost <= req.maxCost) reasons.push(`Within budget ($${cost.toFixed(4)} of $${req.maxCost})`);
     else if (req.budget) reasons.push(`Within ${req.budget} budget`);
@@ -288,7 +299,8 @@ export class ModelRouter {
     }
 
     // Weighted combination
-    const finalScore = (capabilityFit * (weights.reasoning + weights.tools + weights.structured) / 100)
+    const capabilityWeight = (weights.reasoning + weights.tools + weights.structured) / 100;
+    const rawScore = (capabilityFit * capabilityWeight)
           + (taskFit * 10 / 100)
           + (contextFit * 10 / 100)
           + (costEfficiency * weights.cost / 100)
@@ -297,6 +309,20 @@ export class ModelRouter {
           + providerPreference
           + structuredOutputFit
           + toolFit;
+
+    // Normalise against the maximum this task's weights can reach. The weighted
+    // sum alone runs to ~155, and clamping it at 100 made most models tie and
+    // dropped the ranking back to catalog order.
+    const maxScore = (100 * capabilityWeight)
+          + 10
+          + 10
+          + (100 * weights.cost / 100)
+          + (100 * weights.speed / 100)
+          + 10
+          + 5
+          + 10
+          + 10;
+    const finalScore = maxScore > 0 ? (rawScore / maxScore) * 100 : 0;
 
     const breakdown: ScoreBreakdown = {
       capabilityFit: Math.round(capabilityFit),

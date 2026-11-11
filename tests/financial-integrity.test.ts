@@ -30,7 +30,7 @@ function failingTransport(status = 500): Transport {
 
 const MODEL = "gpt-5.6-sol";
 function provider(name = "Test") {
-  return { name, baseUrl: `https://${name.toLowerCase()}.com/v1`, authentication: { type: "none" as const }, adapter: "openai" as const, models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }] };
+  return { name, baseUrl: `https://${name.toLowerCase()}.com/v1`, authentication: { type: "none" as const }, adapter: "openai" as const, models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }] };
 }
 
 function assertBudgetInvariant(t: BudgetTracker) {

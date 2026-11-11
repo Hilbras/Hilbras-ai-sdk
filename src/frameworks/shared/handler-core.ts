@@ -206,12 +206,17 @@ export function createFrameworkClientPool(options: {
       if (cached) return cached;
 
       const client = options.client ?? new HilbrasClient();
-      if (!options.client) owned.add(client);
 
-      // Use the returned canonical name. Registering under the catalog display
-      // name and then calling with the caller's id was the root cause of
-      // `ProviderNotFoundError` in every shipped framework handler.
+      // Register before retaining. `addProviderFromCatalog` throws for a model
+      // that is not in the catalog, and `owned` is drained only by dispose() —
+      // so retaining first left one unreachable client per failed request, an
+      // unbounded set any caller could grow.
+      //
+      // The returned canonical name is used because registering under the
+      // catalog display name and then calling with the caller's id was the root
+      // cause of `ProviderNotFoundError` in every shipped framework handler.
       providerName = client.addProviderFromCatalog(options.provider, model, apiKey);
+      if (!options.client) owned.add(client);
       cache.set(key, client);
       return client;
     },

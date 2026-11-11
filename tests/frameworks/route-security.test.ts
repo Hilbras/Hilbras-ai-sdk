@@ -23,6 +23,7 @@ import { createChatHandler, createCompletionHandler } from "../../src/frameworks
 import { createChatEndpoint, createCompletionEndpoint } from "../../src/frameworks/astro/endpoints.js";
 import { createChatAction, createCompletionAction } from "../../src/frameworks/remix/actions.js";
 import { RequestValidationError } from "../../src/errors/index.js";
+import type { Tool } from "../../src/types/tools.js";
 
 const COMPLETION = JSON.stringify({
   id: "cmpl-1",
@@ -70,9 +71,9 @@ async function outgoingBody(n = 0): Promise<Record<string, unknown>> {
   return JSON.parse(String(init?.body ?? "")) as Record<string, unknown>;
 }
 
-const tool = (name: string) => ({
+const tool = (name: string): Tool => ({
   type: "function",
-  function: { name, description: name, parameters: { type: "object", properties: {} } },
+  function: { name, description: name, parameters: { type: "object", properties: {}, required: [] } },
 });
 
 /** Tool names present in an outgoing payload. */

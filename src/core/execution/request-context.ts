@@ -81,38 +81,3 @@ export function createRequestContext(init: RequestContextInit): RequestContext {
     startedAt: init.startedAt ?? Date.now(),
   };
 }
-
-/** Derive an attempt context without mutating the logical request context. */
-export function deriveRequestContext(
-  context: RequestContext,
-  changes: Partial<Pick<RequestContext, "provider" | "model" | "executionSignal" | "routing" | "attempt" | "phase" | "metadata">>,
-): RequestContext {
-  return {
-    ...context,
-    ...changes,
-    metadata: changes.metadata
-      ? { ...context.metadata, ...changes.metadata }
-      : context.metadata,
-  };
-}
-
-/** Minimal, non-sensitive projection suitable for telemetry adapters. */
-export interface TelemetryRequestContext {
-  requestId: string;
-  operation: RequestOperation;
-  provider: string;
-  model: string;
-  attempt: number;
-  phase: RequestPhase;
-}
-
-export function toTelemetryContext(context: RequestContext): TelemetryRequestContext {
-  return {
-    requestId: context.requestId,
-    operation: context.operation,
-    provider: context.provider,
-    model: context.model,
-    attempt: context.attempt,
-    phase: context.phase,
-  };
-}

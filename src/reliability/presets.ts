@@ -56,7 +56,7 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
   cheap: {
     allowFallback: true,
     maxFallbackCost: null,
-    retry: { maxRetries: 10, retryableStatuses: new Set([429, 500, 502, 503, 504, 408, 429]), retryableNetworkErrors: true },
+    retry: { maxRetries: 10, retryableStatuses: new Set([408, 429, 500, 502, 503, 504]), retryableNetworkErrors: true },
     backoff: { baseDelayMs: 2_000, maxDelayMs: 120_000, jitter: 0.5 },
     timeout: { requestTimeoutMs: 300_000 },
     circuitBreaker: { enabled: false, failureThreshold: 10, successThreshold: 2, timeoutMs: 60_000, halfOpenMaxCalls: 5 },
@@ -69,7 +69,7 @@ const PRESETS: Record<PolicyPreset, ResolvedPolicy> = {
   maximum: {
     allowFallback: true,
     maxFallbackCost: null,
-    retry: { maxRetries: 10, retryableStatuses: new Set([429, 500, 502, 503, 504, 408, 413, 429, 507]), retryableNetworkErrors: true },
+    retry: { maxRetries: 10, retryableStatuses: new Set([408, 413, 429, 500, 502, 503, 504, 507]), retryableNetworkErrors: true },
     backoff: { baseDelayMs: 1_000, maxDelayMs: 60_000, jitter: 0.3 },
     timeout: { requestTimeoutMs: 300_000 },
     circuitBreaker: { enabled: true, failureThreshold: 10, successThreshold: 3, timeoutMs: 120_000, halfOpenMaxCalls: 5 },

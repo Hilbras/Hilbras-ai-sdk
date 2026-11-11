@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { zodSchema, jsonSchema } from "../src/output/schema-helpers.js";
+import type { SchemaValidator } from "../src/types/schema.js";
 
 describe("zodSchema", () => {
   it("wraps a schema validator with options", () => {
-    const schema = {
+    const schema: SchemaValidator = {
       safeParse: (data: unknown) => {
         if (typeof data === "object" && data !== null && "name" in data) {
           return { success: true, data };
@@ -23,7 +24,7 @@ describe("zodSchema", () => {
   });
 
   it("wraps a schema validator without options", () => {
-    const schema = {
+    const schema: SchemaValidator = {
       safeParse: (data: unknown) => ({ success: true, data }),
     };
 
@@ -114,5 +115,21 @@ describe("jsonSchema", () => {
       { maxRepairAttempts: 5 },
     );
     expect(config.maxRepairAttempts).toBe(5);
+  });
+
+  // B4: an object schema must reject non-objects, otherwise malformed model
+  // output passes validation and the repair loop never runs.
+  it("rejects a non-object for an object schema", () => {
+    const config = jsonSchema({
+      type: "object",
+      required: ["name"],
+      properties: { name: { type: "string" } },
+    });
+
+    expect(config.schema.safeParse("oops").success).toBe(false);
+    expect(config.schema.safeParse(42).success).toBe(false);
+    expect(config.schema.safeParse(null).success).toBe(false);
+    expect(config.schema.safeParse(["name"]).success).toBe(false);
+    expect(config.schema.safeParse({ name: "ok" }).success).toBe(true);
   });
 });

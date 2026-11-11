@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import { BudgetTracker } from "../src/cost/tracker.js";
 import { HilbrasClient } from "../src/client/client.js";
 import type { Transport } from "../src/transport/transport.js";
+import type { ProviderConfig } from "../src/types/providers.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -22,11 +23,11 @@ function successTransport(): Transport {
 
 const MODEL = "gpt-5.6-sol";
 
-function provider(name = "Test"): { name: string; baseUrl: string; authentication: { type: "none" }; adapter: "openai"; models: Array<{ id: string; contextWindow: number; capabilities: { streaming: boolean; tools: boolean; vision: boolean; reasoning: boolean; structuredOutput: boolean; parallelTools: boolean; systemPrompts: boolean } }> } {
+function provider(name = "Test"): ProviderConfig {
   return {
     name, baseUrl: `https://${name.toLowerCase()}.com/v1`,
     authentication: { type: "none" }, adapter: "openai",
-    models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+    models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
   };
 }
 
@@ -825,7 +826,7 @@ describe("v0.9.2: Duplicate Reservation ID Rejection", () => {
   });
 
   it("client-generated IDs are unique (requestId counter)", () => {
-    const provider = { name: "Test", baseUrl: "https://test.com/v1", authentication: { type: "none" } as const, adapter: "openai" as const, models: [{ id: "gpt-5.6-sol", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }] };
+    const provider = { name: "Test", baseUrl: "https://test.com/v1", authentication: { type: "none" } as const, adapter: "openai" as const, models: [{ id: "gpt-5.6-sol", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }] };
     const client = new HilbrasClient({ transport: successTransport(), budget: { sessionBudget: 100 } });
     client.addProvider(provider);
     const promises = Array.from({ length: 10 }, (_, i) =>

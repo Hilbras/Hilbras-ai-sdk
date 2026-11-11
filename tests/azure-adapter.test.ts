@@ -10,7 +10,7 @@ const provider: ProviderConfig = {
   baseUrl: "https://myinstance.openai.azure.com",
   authentication: { type: "bearer", apiKey: "test-key" },
   adapter: "azure",
-  models: [{ id: "gpt-4o", contextWindow: 128_000, maxOutputTokens: 16_384, capabilities: { streaming: true, tools: true, vision: true, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: "gpt-4o", contextWindow: 128_000, maxOutputTokens: 16_384, capabilities: { streaming: true, tools: true, vision: true, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 function sse(payload: Record<string, unknown>): string {

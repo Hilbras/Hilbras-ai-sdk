@@ -23,7 +23,14 @@ const DEFAULT_RETRY: RetryConfig = {
 };
 
 export function createRetryConfig(overrides?: Partial<RetryConfig>): RetryConfig {
-  return { ...DEFAULT_RETRY, ...overrides };
+  // Copy the status Set. Spreading DEFAULT_RETRY alone shares the reference, so
+  // `createRetryConfig().retryableStatuses.add(...)` mutated the module default
+  // and every other client with it.
+  return {
+    ...DEFAULT_RETRY,
+    ...overrides,
+    retryableStatuses: new Set(overrides?.retryableStatuses ?? DEFAULT_RETRY.retryableStatuses),
+  };
 }
 
 export function shouldRetry(status: number, attempt: number, config?: RetryConfig): boolean {

@@ -25,6 +25,15 @@ export interface SSEWriterOptions {
   includeData?: boolean;
   /** Whether to include annotation events in the stream (default: true) */
   includeAnnotations?: boolean;
+  /**
+   * Called when the stream fails after the response headers were already sent.
+   *
+   * A streaming provider call runs lazily *through* this iterable, so its
+   * failure surfaces here rather than at the route handler. The client gets a
+   * fixed message — a provider error body must not reach it — so this is the
+   * only place the real error can be reported.
+   */
+  onError?: (error: unknown) => void;
 }
 
 /**
@@ -141,11 +150,14 @@ export function createSSEStream(
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       } catch (err) {
-        // Write error event if stream is still writable
+        options?.onError?.(err);
+        // Write error event if stream is still writable. The client message is
+        // deliberately fixed: the raw error can carry provider response text
+        // (a 401 body, an upstream trace), which must not reach the browser.
         try {
           writeEvent(controller, encoder, {
             type: "error",
-            error: err instanceof Error ? err.message : String(err),
+            error: "The model stream failed. Check the server logs for details.",
           });
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         } catch {

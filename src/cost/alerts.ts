@@ -48,6 +48,11 @@ export interface CostAlertConfig {
   thresholds?: ThresholdConfig[];
   /** Default channel for thresholds that don't specify one */
   defaultChannel?: AlertChannel;
+  /**
+   * Called when a channel fails to deliver an alert. A failed delivery does
+   * not mark the threshold as fired, so the next check retries it.
+   */
+  onDispatchError?: (error: unknown, alert: CostAlert) => void;
 }
 
 /**
@@ -131,21 +136,17 @@ export class CostAlertMonitor {
       this._firedThresholds.add(100);
       const alert = this._buildAlert(100, report, "budget_exceeded");
       alerts.push(alert);
-      this._dispatch(alert);
+      this._dispatch(alert, undefined, 100);
     }
 
-    if (report.remainingBudget !== undefined && report.remainingBudget !== null) {
-      const sessionBudget = report.totalActual + report.remainingBudget;
-      if (sessionBudget > 0) {
-        const percent = (report.totalActual / sessionBudget) * 100;
-
-        for (const threshold of this._config.thresholds ?? []) {
-          if (percent >= threshold.percent && !this._firedThresholds.has(threshold.percent)) {
-            this._firedThresholds.add(threshold.percent);
-            const alert = this._buildAlert(threshold.percent, report, "threshold_reached");
-            alerts.push(alert);
-            this._dispatch(alert, threshold.channel);
-          }
+    const percent = this._percent(report);
+    if (percent !== null) {
+      for (const threshold of this._config.thresholds ?? []) {
+        if (percent >= threshold.percent && !this._firedThresholds.has(threshold.percent)) {
+          this._firedThresholds.add(threshold.percent);
+          const alert = this._buildAlert(threshold.percent, report, "threshold_reached");
+          alerts.push(alert);
+          this._dispatch(alert, threshold.channel, threshold.percent);
         }
       }
     }
@@ -161,15 +162,22 @@ export class CostAlertMonitor {
     this._firedExceeded = false;
   }
 
-  private _currentPercent(report: CostReport): number | null {
+  /**
+   * Percent of the session budget consumed, counted on committed cost
+   * (`totalActual + totalReserved`). The tracker's `remainingBudget` is
+   * already net of reservations, so `totalActual` is the wrong numerator:
+   * with $90 reserved and $0 spent it would report 0%.
+   */
+  private _percent(report: CostReport): number | null {
     if (report.remainingBudget === undefined || report.remainingBudget === null) return null;
-    const budget = report.totalActual + report.remainingBudget;
+    const committed = report.committedCost;
+    const budget = committed + report.remainingBudget;
     if (budget <= 0) return report.budgetExceeded ? 100 : null;
-    return Math.max(0, Math.min(100, (report.totalActual / budget) * 100));
+    return Math.max(0, Math.min(100, (committed / budget) * 100));
   }
 
   private _fireThresholds(report: CostReport, type: CostAlert["type"]): void {
-    const currentPercent = this._currentPercent(report);
+    const currentPercent = this._percent(report);
     if (currentPercent === null) return;
 
     const thresholds = type === "budget_exceeded"
@@ -180,7 +188,7 @@ export class CostAlertMonitor {
       if (threshold.percent > currentPercent || this._firedThresholds.has(threshold.percent)) continue;
       this._firedThresholds.add(threshold.percent);
       const alert = this._buildAlert(threshold.percent, report, type);
-      this._dispatch(alert, threshold.channel);
+      this._dispatch(alert, threshold.channel, threshold.percent);
     }
 
     if (type === "budget_exceeded") {
@@ -202,22 +210,56 @@ export class CostAlertMonitor {
     };
   }
 
-  private async _dispatch(alert: CostAlert, channel?: AlertChannel): Promise<void> {
+  /**
+   * Deliver an alert. `percent` is the threshold it belongs to: the caller has
+   * already marked it fired, and this releases it again if delivery fails, so
+   * the next check retries instead of losing the alert.
+   */
+  private _dispatch(alert: CostAlert, channel?: AlertChannel, percent?: number): void {
     const target = channel ?? this._config.defaultChannel;
-    if (!target) return;
-
-    try {
-      if (target.type === "webhook" && target.url) {
-        await fetch(target.url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(alert),
-        });
-      } else if (target.type === "callback" && target.callback) {
-        target.callback(alert);
-      }
-    } catch {
-      // Alert dispatch errors never break the SDK
+    if (!target) {
+      this._settle(percent, true);
+      return;
     }
+
+    const settle = (ok: boolean, error?: unknown) => {
+      this._settle(percent, ok);
+      if (!ok) this._config.onDispatchError?.(error, alert);
+    };
+
+    if (target.type === "webhook" && target.url) {
+      void fetch(target.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(alert),
+      })
+        .then((response) => {
+          if (response.ok) {
+            settle(true);
+          } else {
+            settle(false, new Error(`alert webhook returned HTTP ${response.status}`));
+          }
+        })
+        .catch((error: unknown) => settle(false, error));
+      return;
+    }
+
+    if (target.type === "callback" && target.callback) {
+      try {
+        target.callback(alert);
+        settle(true);
+      } catch (error) {
+        settle(false, error);
+      }
+      return;
+    }
+
+    settle(true);
+  }
+
+  private _settle(percent: number | undefined, delivered: boolean): void {
+    if (percent === undefined || delivered) return;
+    this._firedThresholds.delete(percent);
+    if (percent === 100) this._firedExceeded = false;
   }
 }

@@ -3,6 +3,7 @@ import { BudgetTracker } from "../../../src/cost/tracker.js";
 import { RequestExecutor } from "../../../src/core/execution/request-executor.js";
 import { RequestPipeline } from "../../../src/core/execution/request-pipeline.js";
 import type { AdapterPort } from "../../../src/core/execution/ports.js";
+import type { StreamChunk } from "../../../src/types/streams.js";
 import { ProviderRequestError, ValidationError } from "../../../src/errors/index.js";
 import type { ResolvedPolicy } from "../../../src/types/policy.js";
 import type { Message } from "../../../src/types/messages.js";
@@ -79,6 +80,7 @@ describe("RequestPipeline plain complete", () => {
       estimatedCost: 0.5,
       policy: {},
       fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
       getProviderTimeout: () => 0,
     });
 
@@ -109,6 +111,7 @@ describe("RequestPipeline plain complete", () => {
       estimatedCost: 0.5,
       policy: {},
       fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
       getProviderTimeout: () => 0,
     });
 
@@ -123,7 +126,7 @@ describe("RequestPipeline plain complete", () => {
     const streamAdapter = {
       id: "stream-adapter",
       complete: vi.fn(async () => "unused"),
-      stream: vi.fn(async function* () {
+      stream: vi.fn(async function* (): AsyncGenerator<StreamChunk> {
         yield { type: "text", text: "hello" };
         yield { type: "usage", inputTokens: 3, outputTokens: 2, totalTokens: 5 };
       }),
@@ -159,7 +162,7 @@ describe("RequestPipeline plain complete", () => {
     const streamAdapter = {
       id: "stream-adapter",
       complete: vi.fn(async () => "unused"),
-      stream: vi.fn(async function* () {
+      stream: vi.fn(async function* (): AsyncGenerator<StreamChunk> {
         yield { type: "text", text: "hello" };
         yield { type: "text", text: "world" };
       }),
@@ -191,14 +194,14 @@ describe("RequestPipeline plain complete", () => {
     const primary = {
       id: "primary",
       complete: vi.fn(async () => "unused"),
-      stream: vi.fn(async function* () {
+      stream: vi.fn(async function* (): AsyncGenerator<StreamChunk> {
         throw new ProviderRequestError(400, "bad request", "test");
       }),
     };
     const fallback = {
       id: "fallback",
       complete: vi.fn(async () => "unused"),
-      stream: vi.fn(async function* () {
+      stream: vi.fn(async function* (): AsyncGenerator<StreamChunk> {
         yield { type: "text", text: "fallback" };
       }),
     };
@@ -225,7 +228,9 @@ describe("RequestPipeline plain complete", () => {
     }
 
     expect(chunks).toEqual([{ type: "text", text: "fallback" }]);
-    expect(events).toEqual(["fallback.started", "request.completed"]);
+    // A fallback stream emits its own first-chunk event (C7): TTFT was missing
+    // entirely for fallback-served requests.
+    expect(events).toEqual(["fallback.started", "stream.first_chunk", "request.completed"]);
     expect(budget.report().activeReservations).toBe(0);
   });
 
@@ -446,6 +451,7 @@ describe("RequestPipeline plain complete", () => {
       estimatedCost: 0.5,
       policy: {},
       fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
       getProviderTimeout: () => 0,
     })).rejects.toBe(error);
 

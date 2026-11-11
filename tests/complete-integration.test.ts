@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HilbrasClient } from "../src/client/client.js";
+import { DEFAULT_CAPABILITIES } from "../src/types/models.js";
 
 describe("complete() integration", () => {
   let client: HilbrasClient;
@@ -14,7 +15,7 @@ describe("complete() integration", () => {
       baseUrl: "https://api.test.com/v1",
       authentication: { type: "bearer", apiKey: "test-key" },
       adapter: "openai",
-      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096 }],
+      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096, capabilities: { ...DEFAULT_CAPABILITIES } }],
     });
 
     const mockAdapter = {
@@ -41,7 +42,7 @@ describe("complete() integration", () => {
       baseUrl: "https://api.test.com/v1",
       authentication: { type: "bearer", apiKey: "test-key" },
       adapter: "openai",
-      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096 }],
+      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096, capabilities: { ...DEFAULT_CAPABILITIES } }],
     });
 
     const mockAdapter = {

@@ -69,6 +69,25 @@ import type { AdapterName } from "../types/providers.js";
 import type { ModelCapabilities } from "../types/models.js";
 import { PluginRegistry } from "../plugin/registry.js";
 import type { Plugin } from "../plugin/types.js";
+import { registerKnownSecret } from "../security/known-secrets.js";
+
+/**
+ * Credential material a provider config carries, so it can be registered for
+ * value-based redaction. Covers bearer keys, header auth values, and any extra
+ * header whose name looks credential-ish — Bedrock passes its access key id
+ * that way.
+ */
+function credentialsOf(provider: ProviderConfig): string[] {
+  const credentials: string[] = [];
+  const authentication = provider.authentication;
+  if (authentication.type === "bearer") credentials.push(authentication.apiKey);
+  if (authentication.type === "header") credentials.push(authentication.value);
+
+  for (const [name, value] of Object.entries(provider.extraHeaders ?? {})) {
+    if (/key|token|secret|auth/i.test(name)) credentials.push(value);
+  }
+  return credentials;
+}
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
@@ -385,6 +404,10 @@ export class HilbrasClient implements AsyncDisposable {
 
   addProvider(config: ProviderConfig): void {
     const ownedConfig = cloneProviderConfig(config);
+    // Remember the credentials so they can be scrubbed by exact value from any
+    // error or log line. Pattern matching alone misses short keys: `sk-` needs
+    // 20 characters after the prefix.
+    for (const secret of credentialsOf(ownedConfig)) registerKnownSecret(secret);
     // v0.9.3: SSRF guard. Per-provider `allowInsecure` overrides client-wide
     // `allowInsecureUrls`; local targets require explicit opt-in.
     const guard = validateBaseUrl(ownedConfig.baseUrl, {
@@ -946,14 +969,26 @@ export class HilbrasClient implements AsyncDisposable {
         return result;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
+
+        // Caller cancellation is not a provider failure: do not retry it, and
+        // do not count it against the circuit breaker.
+        if (userSignal?.aborted) {
+          this._emit({ type: "request.failed", requestId, timestamp: performance.now(), provider: providerName, model: modelId, durationMs: performance.now() - startTime, attempts: attempt + 1, error: lastError.message });
+          throw lastError;
+        }
+
         const status = (err as { status?: number }).status ?? 0;
-        const retryable = (status > 0 && shouldRetry(status, attempt, retryConfig)) || shouldRetryNetworkError(attempt, retryConfig);
+        // Gate on status when there is one. The network classifier ignores the
+        // status and defaults on, so `A || B` retried 401/403/404 as well.
+        const retryable = status > 0
+          ? shouldRetry(status, attempt, retryConfig)
+          : shouldRetryNetworkError(attempt, retryConfig);
         circuitBreaker?.recordFailure(lastError);
 
         if (retryable && attempt < maxAttempts - 1) {
           const delay = calculateBackoff(attempt, resolved.backoff);
           this._emit({ type: "request.retrying", requestId, timestamp: performance.now(), provider: providerName, attempt, delayMs: delay, reason: lastError.message });
-          await sleep(delay);
+          await sleep(delay, userSignal);
           continue;
         }
 

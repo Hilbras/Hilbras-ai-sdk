@@ -7,13 +7,10 @@
 export interface TimeoutConfig {
   /** Request timeout in ms (default: 60_000) */
   requestTimeoutMs: number;
-  /** Stream idle timeout in ms — max time without new chunks (default: 120_000) */
-  streamIdleTimeoutMs: number;
 }
 
 const DEFAULT_TIMEOUT: TimeoutConfig = {
   requestTimeoutMs: 60_000,
-  streamIdleTimeoutMs: 120_000,
 };
 
 export interface ScopedTimeout {
@@ -67,6 +64,10 @@ export function createScopedTimeout(
         }
         cleanup();
       }, cfg.requestTimeoutMs);
+      // Do not hold the process open for the timeout window: a caller that
+      // abandons the scope without calling cancel() would otherwise leave a
+      // live timer behind. unref() is Node-only and a no-op elsewhere.
+      (timer as unknown as { unref?: () => void }).unref?.();
     }
   }
 
@@ -79,7 +80,13 @@ export function createScopedTimeout(
   };
 }
 
-/** Backwards-compatible signal-only timeout API. */
+/** Backwards-compatible signal-only timeout API.
+ *
+ * @deprecated The returned signal carries no way to cancel, so the timer and
+ * the parent `abort` listener live until the timeout fires. Use
+ * {@link createScopedTimeout} and call its `cancel()` when the attempt
+ * completes.
+ */
 export function createTimeoutSignal(config?: Partial<TimeoutConfig>, parentSignal?: AbortSignal): AbortSignal {
   return createScopedTimeout(config, parentSignal).signal;
 }

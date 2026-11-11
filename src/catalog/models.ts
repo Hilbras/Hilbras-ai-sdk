@@ -6,6 +6,27 @@
  */
 
 import type { ModelCapabilities } from "../types/models.js";
+import catalog from "./provider-catalog.js";
+
+/**
+ * Context window and output limit published in the generated catalog, by model
+ * id. See `BUILTIN_MODELS` for why this table is consulted.
+ */
+const PUBLISHED_LIMITS = ((): Map<string, { contextWindow: number; maxOutput: number }> => {
+  const limits = new Map<string, { contextWindow: number; maxOutput: number }>();
+  const providers = (catalog as {
+    providers: Record<string, { models?: Array<{ id: string; contextWindow?: number; maxOutput?: number }> }>;
+  }).providers;
+
+  for (const provider of Object.values(providers)) {
+    for (const model of provider.models ?? []) {
+      if (typeof model.contextWindow === "number" && typeof model.maxOutput === "number") {
+        limits.set(model.id, { contextWindow: model.contextWindow, maxOutput: model.maxOutput });
+      }
+    }
+  }
+  return limits;
+})();
 
 const ALL_FALSE_CAPS: ModelCapabilities = {
   streaming: false, tools: false, vision: false, reasoning: false,
@@ -34,7 +55,7 @@ export interface ModelEntry {
   aliases?: string[];
 }
 
-export const BUILTIN_MODELS: ModelEntry[] = [
+const MODEL_DEFINITIONS: ModelEntry[] = [
   // ─── OpenAI ───────────────────────────────────────────────────────
   { id: "gpt-5.6-sol", name: "GPT-5.6 Sol", provider: "openai", contextWindow: 1_048_576, maxOutput: 131_072, capabilities: FULL_CAPS, aliases: ["5.6-sol", "gpt5.6"] },
   { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", provider: "openai", contextWindow: 1_048_576, maxOutput: 131_072, capabilities: FULL_CAPS, aliases: ["5.6-terra", "terra"] },
@@ -179,6 +200,21 @@ export const BUILTIN_MODELS: ModelEntry[] = [
   { id: "rerank-english-v3.0", name: "Cohere Rerank v3", provider: "cohere", contextWindow: 512, maxOutput: 0, capabilities: RERANK_CAPS, aliases: ["cohere-rerank"] },
   { id: "rerank-multilingual-v3.0", name: "Cohere Rerank Multilingual v3", provider: "cohere", contextWindow: 512, maxOutput: 0, capabilities: RERANK_CAPS, aliases: ["cohere-rerank-ml"] },
 ];
+
+/**
+ * The models the router enforces limits from.
+ *
+ * `provider-catalog.ts` is generated from upstream model metadata and is the
+ * data source; the array above is hand-written code. Both are published, and
+ * they had drifted — the catalog said 1050000/128000 where this table said
+ * 1048576/131072 — so a caller reading `getProviderCatalog()` could be told a
+ * different context window from the one the router applies. The generated
+ * figures win for every id it knows about; local-only entries keep their own.
+ */
+export const BUILTIN_MODELS: ModelEntry[] = MODEL_DEFINITIONS.map((entry) => {
+  const published = PUBLISHED_LIMITS.get(entry.id);
+  return published ? { ...entry, ...published } : entry;
+});
 
 export function findModel(query: string): ModelEntry | undefined {
   const q = query.toLowerCase();

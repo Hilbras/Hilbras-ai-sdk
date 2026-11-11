@@ -16,6 +16,7 @@
 import { describe, it, expect } from "vitest";
 
 import { hilbrasMiddleware, forwardedClientIp } from "../../src/frameworks/nextjs/edge/middleware.js";
+import type { HilbrasNextResponse } from "../../src/frameworks/nextjs/next-runtime.js";
 
 /** Build a request whose x-forwarded-for is `entries.join(", ")`. */
 function createRequest(path = "/api/chat", entries: string[] = ["1.1.1.1"], extra: Record<string, string> = {}) {
@@ -27,7 +28,19 @@ function createRequest(path = "/api/chat", entries: string[] = ["1.1.1.1"], extr
   } as any;
 }
 
-const blocked = (res: any) => res?.status === 429;
+/** What the middleware is declared to return. */
+type RouteResult = HilbrasNextResponse | Response;
+
+/**
+ * The middleware declares `HilbrasNextResponse | Response`, but outside Next it
+ * builds a real `Response` (the Next shim falls back to the Web constructor).
+ * Narrow once so assertions can read `status`/`headers`/`text`.
+ */
+function asResponse(res: RouteResult): Response {
+  return res as Response;
+}
+
+const blocked = (res: RouteResult) => asResponse(res).status === 429;
 
 describe("forwardedClientIp", () => {
   it("returns undefined when nothing is trusted — no entry is attributable", () => {
@@ -282,7 +295,7 @@ describe("hilbrasMiddleware — existing behaviour", () => {
     const req = createRequest("/api/chat", ["1.1.1.1"]);
 
     await mw(req);
-    const res = await mw(req);
+    const res = asResponse(await mw(req));
 
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBeTruthy();
@@ -298,7 +311,7 @@ describe("hilbrasMiddleware — existing behaviour", () => {
     const req = createRequest("/api/chat", ["1.1.1.1"]);
 
     await mw(req);
-    const res = await mw(req);
+    const res = asResponse(await mw(req));
 
     expect(res.status).toBe(503);
     expect(await res.text()).toBe("Rate limit exceeded");

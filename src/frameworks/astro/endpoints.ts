@@ -12,6 +12,7 @@ import {
   errorResponse,
   isRequestPhaseError,
   readJsonBody,
+  resolveCatalogProviderId,
   resolveChatFields,
   resolveCompletionFields,
   resolveLimits,
@@ -66,10 +67,14 @@ export function createChatEndpoint(options: EndpointOptions) {
         limits,
       });
 
+      // The hook decides before a client is built: `pool.get()` constructs one,
+      // so an unauthenticated caller could otherwise force that work on every
+      // request even when the hook was about to reject them.
+      const effective = { ...fields, provider: resolveCatalogProviderId(options.provider) };
+      await options.onRequest?.({ request, body, effective });
+
       const client = pool.get(fields.model);
       const providerName = pool.providerName;
-      const effective = { ...fields, provider: providerName };
-      await options.onRequest?.({ request, body, effective });
 
       const allMessages = options.systemPrompt
         ? [{ role: "system" as const, content: options.systemPrompt }, ...(fields.messages as ChatMessage[])]
@@ -147,9 +152,10 @@ export function createCompletionEndpoint(options: EndpointOptions) {
         limits,
       });
 
-      const client = pool.get(fields.model);
-      const effective = { ...fields, provider: pool.providerName };
+      const effective = { ...fields, provider: resolveCatalogProviderId(options.provider) };
       await options.onRequest?.({ request, body, effective });
+
+      const client = pool.get(fields.model);
 
       const result = await client.complete({
         provider: pool.providerName,

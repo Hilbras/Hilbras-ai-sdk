@@ -56,7 +56,10 @@ export async function* parseSSEStream(
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split("\n\n");
+      // Accept CRLF framing as well as LF: `split("\n\n")` never matches a
+      // `\r\n\r\n` boundary, so a CRLF upstream yielded no events at all while
+      // the buffer grew for the whole response.
+      const parts = buffer.split(/\r?\n\r?\n/);
       buffer = parts.pop() ?? "";
 
       for (const part of parts) {
@@ -86,16 +89,21 @@ function parseSSEBlock(block: string): SSEEvent | null {
   let id: string | undefined;
   let retry: number | undefined;
 
-  for (const line of lines) {
-    if (line.startsWith("data: ")) {
-      const value = line.slice(6);
+  for (const rawLine of lines) {
+    // Strip a trailing CR so CRLF streams parse the same as LF.
+    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    const field = line.split(":", 1)[0];
+    // The spec makes the space after the colon optional.
+    const value = line.slice(field.length + 1).replace(/^ /, "");
+
+    if (field === "data") {
       data += (data ? "\n" : "") + value;
-    } else if (line.startsWith("event: ")) {
-      event = line.slice(7).trim();
-    } else if (line.startsWith("id: ")) {
-      id = line.slice(4).trim();
-    } else if (line.startsWith("retry: ")) {
-      const n = parseInt(line.slice(7).trim(), 10);
+    } else if (field === "event") {
+      event = value.trim();
+    } else if (field === "id") {
+      id = value.trim();
+    } else if (field === "retry") {
+      const n = parseInt(value.trim(), 10);
       if (!isNaN(n)) retry = n;
     }
   }
@@ -104,6 +112,56 @@ function parseSSEBlock(block: string): SSEEvent | null {
   if (!data && !id) return null;
 
   return { event, data, id, retry };
+}
+
+/** One complete SSE event, in the shape the adapters consume. */
+export interface SseFrame {
+  /** Concatenated `data:` payload, with the `data:` prefix removed. */
+  data: string;
+  /** `event:` field value, or "" when the event carried none. */
+  event: string;
+}
+
+function splitFrame(block: string): SseFrame {
+  let data = "";
+  let event = "";
+
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    if (line.startsWith("data:")) {
+      const value = line.slice(5).replace(/^ /, "");
+      data += (data ? "\n" : "") + value;
+    } else if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    }
+  }
+
+  return { data, event };
+}
+
+/**
+ * Append a decoded chunk to `buffer` and return the SSE events it completes,
+ * advancing `buffer` past them.
+ *
+ * Shared by the adapters, which each hand-rolled this loop. Their copies shared
+ * three defects: CRLF framing never matched (a CRLF upstream produced nothing
+ * and grew the buffer for the whole response), `data:` without a space was
+ * rejected, and a `data:` payload split over several lines kept only the last.
+ */
+export function splitSseFrames(
+  buffer: string,
+  chunk: string,
+): { buffer: string; frames: SseFrame[] } {
+  const parts = (buffer + chunk).split(/\r?\n\r?\n/);
+  const rest = parts.pop() ?? "";
+  const frames: SseFrame[] = [];
+
+  for (const part of parts) {
+    if (!part.trim()) continue;
+    frames.push(splitFrame(part));
+  }
+
+  return { buffer: rest, frames };
 }
 
 /**

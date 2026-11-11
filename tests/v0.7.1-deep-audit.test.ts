@@ -20,6 +20,8 @@ import type { TaskRequirement } from "../src/types/router.js";
 import type { ExecutionPolicy } from "../src/types/policy.js";
 import type { Transport } from "../src/transport/transport.js";
 import type { ProviderConfig } from "../src/types/providers.js";
+import { DEFAULT_CAPABILITIES } from "../src/types/models.js";
+import type { ModelCapabilities } from "../src/types/models.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -47,17 +49,31 @@ function failingTransport(status: number): Transport {
   };
 }
 
+/**
+ * Capabilities of the mock text-only providers below: chat completions with
+ * streaming and system prompts, no tools, no vision, no audio/embeddings.
+ */
+const TEXT_ONLY_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_CAPABILITIES,
+  tools: false,
+};
+/** Same as above plus structured output support. */
+const STRUCTURED_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_CAPABILITIES,
+  structuredOutput: true,
+};
+
 const MINIMAL_PROVIDER: ProviderConfig = {
   name: "MockProvider",
   baseUrl: "https://mock.test/v1",
   authentication: { type: "none" },
   adapter: "openai",
-  models: [{ id: "mock-model", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: "mock-model", contextWindow: 128_000, capabilities: STRUCTURED_CAPABILITIES }],
 };
 
 function makeClient(transport?: Transport): HilbrasClient {
   const client = new HilbrasClient({ transport, policy: { preset: "fast", circuitBreaker: { enabled: false } } });
-  client.addProvider({ ...MINIMAL_PROVIDER, transport });
+  client.addProvider(MINIMAL_PROVIDER);
   return client;
 }
 
@@ -291,7 +307,7 @@ describe("Phase 7: Retry vs Fallback Audit", () => {
       baseUrl: "https://fallback.test/v1",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "fallback-model", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "fallback-model", contextWindow: 128_000, capabilities: STRUCTURED_CAPABILITIES }],
     });
 
     // This should fail after retries + fallback attempts
@@ -312,7 +328,7 @@ describe("Phase 7: Retry vs Fallback Audit", () => {
 describe("Phase 8: Infinite Loop Defense", () => {
   it("router with only custom models returns those models", () => {
     const router = new ModelRouter([]);
-    router.addModels([{ id: "solo", name: "Solo", provider: "test", contextWindow: 1000, maxOutput: 500, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }]);
+    router.addModels([{ id: "solo", name: "Solo", provider: "test", contextWindow: 1000, maxOutput: 500, capabilities: DEFAULT_CAPABILITIES }]);
     const results = router.evaluate({});
     // With no registered providers, all models (BUILTIN + custom) are returned
     // but "solo" should be in the results
@@ -613,18 +629,28 @@ describe("Phase 16: Observability Integrity", () => {
 
 describe("Phase 17: Security Audit", () => {
   it("API key not in error messages", async () => {
-    const client = new HilbrasClient();
+    // Hermetic: a stub transport rather than a real request to test.com, and a
+    // real assertion — the old form passed vacuously if no error was thrown.
+    const client = new HilbrasClient({
+      transport: {
+        async request() { return new Response('{"error":"boom"}', { status: 401 }); },
+        async stream() { throw new Error("unused"); },
+        abort() {},
+      },
+    });
     client.addProvider({
       name: "Secret", baseUrl: "https://test.com",
       authentication: { type: "bearer", apiKey: "sk-secret-12345" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
-    try {
-      await client.complete({ provider: "Secret", model: "m", messages: [{ role: "user", content: "hi" }] });
-    } catch (err) {
-      expect(String(err)).not.toContain("sk-secret-12345");
-    }
+
+    const err = await client
+      .complete({ provider: "Secret", model: "m", messages: [{ role: "user", content: "hi" }] })
+      .then(() => null, (error: unknown) => error);
+
+    expect(err).not.toBeNull();
+    expect(String(err)).not.toContain("sk-secret-12345");
   });
 
   it("API key not in routing reasons", () => {

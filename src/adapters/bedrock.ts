@@ -26,6 +26,7 @@ import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import type { EmbeddingParams, EmbeddingResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
+import { splitSseFrames } from "../utils/sse.js";
 
 export interface BedrockAdapterConfig extends AdapterConfig {
   /** AWS region (default: extracted from baseUrl or us-east-1) */
@@ -328,22 +329,21 @@ export class BedrockAdapter implements AIProvider {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    // Tool-use blocks, keyed by content block index. Only the start event
+    // carries the real toolUseId and name; the delta and stop events must look
+    // them up rather than synthesise `call_<index>` with an empty name.
+    const toolBlocks = new Map<number, { id: string; name: string }>();
 
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+        const decoded = splitSseFrames(buffer, decoder.decode(value, { stream: true }));
+        buffer = decoded.buffer;
 
-        for (const part of parts) {
-          const lines = part.split("\n");
-          let rawData = "";
-          for (const line of lines) {
-            if (line.startsWith("data: ")) rawData = line.slice(6).trim();
-          }
+        for (const frame of decoded.frames) {
+          const rawData = frame.data.trim();
           if (!rawData || rawData === "[DONE]") continue;
 
           let data: Record<string, unknown>;
@@ -357,10 +357,13 @@ export class BedrockAdapter implements AIProvider {
             const start = data.start as Record<string, unknown> | undefined;
             if (start?.toolUse) {
               const toolUse = start.toolUse as Record<string, unknown>;
+              const id = (toolUse.toolUseId as string) ?? `call_${contentBlock}`;
+              const name = (toolUse.name as string) ?? "";
+              toolBlocks.set(contentBlock, { id, name });
               yield {
                 type: "tool_call",
-                id: (toolUse.toolUseId as string) ?? `call_${contentBlock}`,
-                name: (toolUse.name as string) ?? "",
+                id,
+                name,
                 argumentsDelta: "",
                 index: contentBlock,
                 done: false,
@@ -372,9 +375,10 @@ export class BedrockAdapter implements AIProvider {
 
             if (delta.text) {
               const text = delta.text as string;
-              const reasoning = reasoningNormalizer.feedText(text);
-              if (reasoning) yield reasoning;
-              else if (!ReasoningNormalizer.looksLikeReasoningTag(text)) {
+              const reasoningParts = reasoningNormalizer.feedText(text);
+              if (reasoningParts.length > 0) {
+                for (const part of reasoningParts) yield part;
+              } else if (!ReasoningNormalizer.looksLikeReasoningTag(text)) {
                 yield { type: "text", text };
               }
             } else if (delta.reasoningContent) {
@@ -383,25 +387,36 @@ export class BedrockAdapter implements AIProvider {
             } else if (delta.toolUse) {
               const toolUse = delta.toolUse as Record<string, unknown>;
               const contentBlock = data.contentBlockIndex as number;
+              const block = toolBlocks.get(contentBlock);
+              // `input` arrives as a partial-JSON string fragment and must be
+              // passed through as-is: re-stringifying it produced doubly-quoted
+              // fragments that concatenated into invalid JSON.
+              const fragment = toolUse.input;
               yield {
                 type: "tool_call",
-                id: `call_${contentBlock}`,
-                name: "",
-                argumentsDelta: JSON.stringify(toolUse.input ?? {}),
+                id: block?.id ?? `call_${contentBlock}`,
+                name: block?.name ?? "",
+                argumentsDelta: typeof fragment === "string" ? fragment : JSON.stringify(fragment ?? {}),
                 index: contentBlock,
                 done: false,
               };
             }
           } else if (eventType === "contentBlockStop") {
             const contentBlock = data.contentBlockIndex as number;
-            yield {
-              type: "tool_call",
-              id: `call_${contentBlock}`,
-              name: "",
-              argumentsDelta: "",
-              index: contentBlock,
-              done: true,
-            };
+            const block = toolBlocks.get(contentBlock);
+            // Only tool-use blocks produce a call. Emitting unconditionally made
+            // every plain text reply end with a phantom tool call named "".
+            if (block) {
+              toolBlocks.delete(contentBlock);
+              yield {
+                type: "tool_call",
+                id: block.id,
+                name: block.name,
+                argumentsDelta: "",
+                index: contentBlock,
+                done: true,
+              };
+            }
           } else if (eventType === "messageStop") {
             yield { type: "finish", reason: "end_turn" } as any;
           } else if (eventType === "metadata") {

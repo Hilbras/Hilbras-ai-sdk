@@ -3,6 +3,12 @@ import { ElevenLabsAdapter } from "../src/adapters/elevenlabs.js";
 import { ProviderRequestError } from "../src/errors/index.js";
 import type { Transport } from "../src/transport/transport.js";
 import type { ProviderConfig } from "../src/types/providers.js";
+import type { SpeechParams, SpeechVoice } from "../src/types/multi-modal.js";
+
+// ElevenLabs voice IDs are arbitrary strings, while `SpeechParams.voice` is
+// declared as the narrower OpenAI-style `SpeechVoice` union — pin the real
+// ElevenLabs ID through that union so the fixture stays type-correct.
+const VOICE_ID = "21m00Tcm4TlvDq8ikWAM" as SpeechVoice;
 
 const provider: ProviderConfig = {
   name: "elevenlabs",
@@ -30,7 +36,7 @@ describe("ElevenLabsAdapter", () => {
     };
 
     const adapter = new ElevenLabsAdapter({ provider, transport });
-    const result = await adapter.generateSpeech({ model: "eleven_monolingual_v1", input: "Hello world", voice: "21m00Tcm4TlvDq8ikWAM" });
+    const result = await adapter.generateSpeech({ model: "eleven_monolingual_v1", input: "Hello world", voice: VOICE_ID });
 
     expect(capturedUrl).toContain("/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM");
     expect(capturedHeaders["xi-api-key"]).toBe("el_test_key");
@@ -53,7 +59,10 @@ describe("ElevenLabsAdapter", () => {
     };
 
     const adapter = new ElevenLabsAdapter({ provider, transport });
-    await adapter.generateSpeech({ model: "eleven_monolingual_v1", input: "Hi" });
+    // `voice` is deliberately omitted so the adapter's default voice applies.
+    // `SpeechParams.voice` is declared required, so assert the intentional gap.
+    const params = { model: "eleven_monolingual_v1", input: "Hi" } as SpeechParams;
+    await adapter.generateSpeech(params);
 
     expect(capturedUrl).toContain("/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM");
   });
@@ -70,7 +79,7 @@ describe("ElevenLabsAdapter", () => {
     };
 
     const adapter = new ElevenLabsAdapter({ provider, transport });
-    await adapter.generateSpeech({ model: "eleven_monolingual_v1", input: "Hi", speed: 1.2 });
+    await adapter.generateSpeech({ model: "eleven_monolingual_v1", input: "Hi", voice: VOICE_ID, speed: 1.2 });
 
     const body = JSON.parse(capturedBody);
     expect(body.voice_settings.speed).toBe(1.2);
@@ -86,12 +95,12 @@ describe("ElevenLabsAdapter", () => {
     };
 
     const adapter = new ElevenLabsAdapter({ provider, transport });
-    await expect(adapter.generateSpeech({ model: "eleven_monolingual_v1", input: "Hi" })).rejects.toThrow(ProviderRequestError);
+    await expect(adapter.generateSpeech({ model: "eleven_monolingual_v1", input: "Hi", voice: VOICE_ID })).rejects.toThrow(ProviderRequestError);
   });
 
   it("throws on embed/complete/stream calls", async () => {
     const adapter = new ElevenLabsAdapter({ provider, transport: {} as Transport });
-    await expect(adapter.embed({ model: "x", input: "x" })).rejects.toThrow("does not support embeddings");
-    await expect(adapter.complete({ model: "x", messages: [] })).rejects.toThrow("does not support chat");
+    await expect(adapter.embed()).rejects.toThrow("does not support embeddings");
+    await expect(adapter.complete()).rejects.toThrow("does not support chat");
   });
 });

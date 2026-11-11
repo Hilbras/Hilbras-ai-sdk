@@ -6,7 +6,7 @@
  * optimistic updates, reload, and step-level callbacks.
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type {
   UIMessage,
   UIToolInvocation,
@@ -70,6 +70,14 @@ export function useChat(options: UseChatToolOptions): UseChatReturn {
     abortRef.current?.abort();
     abortRef.current = null;
     setIsLoading(false);
+  }, []);
+
+  // Abort an in-flight stream on unmount. Without this the reader keeps running
+  // and writing state into a component that no longer exists. `react-client`
+  // already did this; the other hooks did not.
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
   }, []);
 
   const sendRequest = useCallback(async (

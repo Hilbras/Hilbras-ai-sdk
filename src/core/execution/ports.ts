@@ -41,15 +41,9 @@ export interface BudgetPort {
   report(): { remainingBudget: number | null };
 }
 
-export interface ClockPort {
-  now(): number;
-  sleep(ms: number, signal?: AbortSignal): Promise<void>;
-}
-
 export interface ExecutionPorts {
   policy: PolicyPort;
   circuitBreakers: CircuitBreakerRegistryPort;
   adapters: AdapterRegistryPort;
   budget?: BudgetPort;
-  clock?: ClockPort;
 }

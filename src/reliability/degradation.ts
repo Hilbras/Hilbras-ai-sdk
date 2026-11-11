@@ -102,11 +102,11 @@ export async function withDegradation(
       if (response.ok) {
         return { response, level: level.name };
       }
-      // If the response is not ok but not a degradation-recoverable error, throw
-      if (response.status !== 413 && response.status !== 400) {
-        lastError = new Error(`HTTP ${response.status}`);
-        break;
-      }
+      // Remember the status either way. A degradation-recoverable status
+      // (413/400) still means this level failed, and when every level fails the
+      // caller needs the real cause instead of a generic message.
+      lastError = new Error(`HTTP ${response.status}`);
+      if (response.status !== 413 && response.status !== 400) break;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
     }

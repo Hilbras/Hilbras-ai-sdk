@@ -5,6 +5,8 @@
  * telemetry, or logs.
  */
 
+import { redactKnownSecrets } from "../security/known-secrets.js";
+
 const SENSITIVE_PATTERNS: RegExp[] = [
   /api[_-]?key\s*[=:]\s*["']?[A-Za-z0-9\-_]{20,}["']?/gi,
   /bearer\s+[A-Za-z0-9\-_.]{20,}/gi,
@@ -20,7 +22,9 @@ const SENSITIVE_PATTERNS: RegExp[] = [
 /** Redact common credentials from arbitrary text. */
 export function redact(text: string): string {
   if (!text) return text;
-  let result = text;
+  // Registered credentials first: exact-value matching has no length floor, so
+  // it catches the keys the patterns below are too specific to see.
+  let result = redactKnownSecrets(text);
   for (const pattern of SENSITIVE_PATTERNS) {
     result = result.replace(pattern, (match) => {
       if (match.startsWith('"')) {

@@ -51,6 +51,27 @@ function isNetworkFailure(error: unknown): boolean {
   return false;
 }
 
+type RetryPolicy = Parameters<typeof shouldRetry>[2];
+
+/**
+ * One retry classifier shared by the complete, stream and structured loops.
+ * The structured loop omitted `isNetworkFailure`, so a socket ECONNRESET never
+ * retried there while the same error did on `complete()`.
+ */
+function classifyRetryableFailure(
+  error: unknown,
+  attempt: number,
+  retryConfig: RetryPolicy,
+): { retryable: boolean; isNetworkError: boolean; status?: number } {
+  const status = (error as { status?: number }).status;
+  const isNetworkError = error instanceof TypeError
+    || (error instanceof Error && error.name === "AbortError")
+    || isNetworkFailure(error);
+  const retryable = (isNetworkError && shouldRetryNetworkError(attempt, retryConfig))
+    || (typeof status === "number" && shouldRetry(status, attempt, retryConfig));
+  return { retryable, isNetworkError, status };
+}
+
 export interface PipelinePluginPort {
   fireRequest(context: PluginRequestContext): Promise<void>;
   fireResponse(context: PluginResponseContext): Promise<void>;
@@ -163,13 +184,10 @@ export class RequestPipeline {
           break;
         }
 
-        const status = (primaryError as { status?: number }).status;
-        const isNetworkError =
-          primaryError instanceof TypeError
-          || (primaryError instanceof Error && primaryError.name === "AbortError")
-          || isNetworkFailure(primaryError);
-        const canRetry = (isNetworkError && shouldRetryNetworkError(attempt, prepared.retryConfig))
-          || (typeof status === "number" && shouldRetry(status, attempt, prepared.retryConfig));
+        const failure = classifyRetryableFailure(primaryError, attempt, prepared.retryConfig);
+        const status = failure.status;
+        const isNetworkError = failure.isNetworkError;
+        const canRetry = failure.retryable;
 
         if (canRetry) {
           const delay = calculateBackoff(attempt, prepared.context.policy.backoff);
@@ -212,7 +230,7 @@ export class RequestPipeline {
                 provider: fallback.provider,
                 model: fallback.model,
                 params: { ...input.params, model: fallback.model },
-                callerSignal: prepared.signal,
+                callerSignal: input.callerSignal,
                 providerTimeoutMs: 0,
               });
               const fallbackResult = await this.ports.executor.executeComplete(
@@ -333,7 +351,7 @@ export class RequestPipeline {
                 type: "stream.first_chunk",
                 requestId: input.requestId,
                 timestamp: this.ports.now(),
-                latencyMs: 0,
+                latencyMs: this.ports.now() - input.startTime,
               });
             }
             if (chunk.type === "usage") {
@@ -421,13 +439,10 @@ export class RequestPipeline {
             throw error;
           }
 
-          const status = (error as { status?: number }).status;
-          const isNetworkError =
-            error instanceof TypeError
-            || (error instanceof Error && error.name === "AbortError")
-            || isNetworkFailure(error);
-          const canRetry = (isNetworkError && shouldRetryNetworkError(attempt, prepared.retryConfig))
-            || (typeof status === "number" && shouldRetry(status, attempt, prepared.retryConfig));
+          const failure = classifyRetryableFailure(error, attempt, prepared.retryConfig);
+          const status = failure.status;
+          const isNetworkError = failure.isNetworkError;
+          const canRetry = failure.retryable;
           if (!canRetry) {
             if (prepared.context.policy.allowFallback) {
               releaseMainBudget();
@@ -454,13 +469,14 @@ export class RequestPipeline {
                 let fallbackInputTokens: number | undefined;
                 let fallbackOutputTokens: number | undefined;
                 let fallbackReservationActive = true;
+                let fallbackFirstChunk = false;
                 try {
                   fallbackPrepared = this.prepare({
                     ...input,
                     provider: fallback.provider,
                     model: fallback.model,
                     params: { ...input.params, model: fallback.model },
-                    callerSignal: prepared.signal,
+                    callerSignal: input.callerSignal,
                     providerTimeoutMs: 0,
                   }, "stream");
                   for await (const chunk of this.ports.executor.executeStream(
@@ -485,6 +501,15 @@ export class RequestPipeline {
                         });
                         fallbackReservationActive = false;
                       }
+                    }
+                    if (!fallbackFirstChunk) {
+                      fallbackFirstChunk = true;
+                      this.ports.emit({
+                        type: "stream.first_chunk",
+                        requestId: input.requestId,
+                        timestamp: this.ports.now(),
+                        latencyMs: this.ports.now() - input.startTime,
+                      });
                     }
                     yield chunk;
                   }
@@ -742,11 +767,10 @@ export class RequestPipeline {
         primaryError = result.error;
         if (input.callerSignal?.aborted) break;
 
-        const status = (primaryError as { status?: number }).status;
-        const isNetworkError = primaryError instanceof TypeError
-          || (primaryError instanceof Error && primaryError.name === "AbortError");
-        const canRetry = (isNetworkError && shouldRetryNetworkError(attempt, prepared.retryConfig))
-          || (typeof status === "number" && shouldRetry(status, attempt, prepared.retryConfig));
+        const failure = classifyRetryableFailure(primaryError, attempt, prepared.retryConfig);
+        const status = failure.status;
+        const isNetworkError = failure.isNetworkError;
+        const canRetry = failure.retryable;
         if (canRetry) {
           const delay = calculateBackoff(attempt, prepared.context.policy.backoff);
           this.ports.emit({
@@ -769,7 +793,10 @@ export class RequestPipeline {
         }
 
         if (prepared.context.policy.allowFallback) {
-          this.ports.budget.release(input.requestId);
+          // releaseBudget(), not a bare release: the guarded helper marks the
+          // reservation released so the trailing cleanup does not release the
+          // same id twice.
+          releaseBudget();
           const attemptedModels = [input.model];
           const fallbacks = input.fallbackCandidates(attemptedModels);
           for (const fallback of fallbacks) {
@@ -788,7 +815,7 @@ export class RequestPipeline {
                 provider: fallback.provider,
                 model: fallback.model,
                 params: { ...input.params, model: fallback.model },
-                callerSignal: prepared.signal,
+                callerSignal: input.callerSignal,
                 providerTimeoutMs: 0,
               });
               const fallbackResult = await this.ports.executor.executeComplete(fallbackPrepared, {

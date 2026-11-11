@@ -181,7 +181,7 @@ describe("StructuredLogger", () => {
       destination: (e) => entries.push(e),
     });
 
-    logger.logRequest(completedEvent({ error: undefined }));
+    logger.logRequest(completedEvent());
     logger.logError(failedEvent({ error: "sk-proj-abc123def456ghi789jkl012mno" }));
 
     const errorEntry = entries.find((e) => e.level === "error");

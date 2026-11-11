@@ -101,7 +101,7 @@ function emptyResponseTransport(): Transport {
 const BASE_PROVIDER = {
   baseUrl: "https://mock.test/v1",
   authentication: { type: "none" as const },
-  models: [{ id: "test-model", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: true, reasoning: true, structuredOutput: true, parallelTools: true, systemPrompts: true } }],
+  models: [{ id: "test-model", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: true, reasoning: true, structuredOutput: true, parallelTools: true, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 const PROVIDER_CONFIGS: Array<{ name: string; adapter: string; provider: ProviderConfig }> = [

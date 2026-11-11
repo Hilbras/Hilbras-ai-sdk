@@ -20,7 +20,7 @@ function testProvider(name = "Test"): ProviderConfig {
     baseUrl: `https://${name.toLowerCase()}.com/v1`,
     authentication: { type: "none" },
     adapter: "openai",
-    models: [{ id: MODEL_ID, contextWindow: 128_000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+    models: [{ id: MODEL_ID, contextWindow: 128_000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
   };
 }
 
@@ -50,14 +50,14 @@ describe("PR-4: _prepareRequest shared pre-flight (v0.10.0)", () => {
     const provider = testProvider();
     const result = callPrepare(client, provider, {
       retry: { maxRetries: 7, retryableStatuses: [500], retryableNetworkErrors: ["ECONNRESET"] },
-      timeout: { requestTimeoutMs: 0, streamIdleTimeoutMs: 0 },
+      timeout: { requestTimeoutMs: 0 },
     });
     expect(result.resolved.retry.maxRetries).toBe(7);
     expect(result.resolved.timeout.requestTimeoutMs).toBe(0);
   });
 
   it("falls back to the client default policy when none is provided", () => {
-    const client = new HilbrasClient({ policy: { retry: { maxRetries: 4, retryableStatuses: [502], retryableNetworkErrors: ["ETIMEDOUT"] } } });
+    const client = new HilbrasClient({ policy: { retry: { maxRetries: 4, retryableStatuses: [502], retryableNetworkErrors: true } } });
     const provider = testProvider();
     const result = callPrepare(client, provider);
     expect(result.resolved.retry.maxRetries).toBe(4);
@@ -87,7 +87,7 @@ describe("PR-4: _prepareRequest shared pre-flight (v0.10.0)", () => {
       "req_test",
       provider.name,
       provider,
-      { retry: { maxRetries: 0, retryableStatuses: [], retryableNetworkErrors: [] }, timeout: { requestTimeoutMs: 0, streamIdleTimeoutMs: 0 } },
+      { retry: { maxRetries: 0, retryableStatuses: [], retryableNetworkErrors: [] }, timeout: { requestTimeoutMs: 0 } },
       userSignal,
     );
     expect(result.signal).toBe(userSignal);

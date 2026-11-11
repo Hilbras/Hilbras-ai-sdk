@@ -36,7 +36,6 @@ describe("request-local reasoning normalization", () => {
     for await (const chunk of adapter.stream({
       model: "test",
       messages: [{ role: "user", content: "first" }],
-      stream: true,
     })) first.push(chunk);
     expect(first.some((chunk) => chunk.type === "reasoning" && chunk.text === "secret")).toBe(true);
 
@@ -44,7 +43,6 @@ describe("request-local reasoning normalization", () => {
     for await (const chunk of adapter.stream({
       model: "test",
       messages: [{ role: "user", content: "second" }],
-      stream: true,
     })) second.push(chunk);
 
     expect(second.some((chunk) => chunk.type === "text" && chunk.text === "ordinary")).toBe(true);

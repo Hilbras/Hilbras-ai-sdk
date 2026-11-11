@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-1939%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-2070%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
@@ -49,7 +49,14 @@ Application
         Groq         Ollama       Azure
 ```
 
-**Zero runtime dependencies.** Runs everywhere: Node 18+, Bun, Deno, browsers, VS Code extensions, CLIs, edge runtimes.
+**Zero runtime dependencies.** Runs on Node 18+, Bun, Deno, VS Code extensions, and CLIs.
+
+The root entry re-exports config loading and request signing, which import
+`node:fs` and `node:crypto`, so `import "@hilbras/sdk"` does not load in a
+browser bundle or an edge runtime without shimming those built-ins. Import the
+subpath entries (for example `@hilbras/sdk/adapters/openai`) where the root
+entry is too broad. Making the root entry portable is tracked as item 8 in
+[`ROADMAP-v4.0.0.md`](./ROADMAP-v4.0.0.md).
 
 ---
 
@@ -528,11 +535,12 @@ import { exportTrainingData } from "@hilbras/sdk/fine-tune";
 
 ```bash
 npm install
-npm run build        # Compile TypeScript
-npm test             # Run the root test suite (1611 tests)
-npm run test:packages # Build and test companion packages
-npm run test:watch   # Watch mode
-npm run lint         # Lint with oxlint
+npm run build           # Compile TypeScript
+npm test                # Run the root test suite (2077 tests)
+npm run typecheck:tests # Typecheck the tests (`tsc --noEmit` covers src only)
+npm run test:packages   # Build and test companion packages
+npm run test:watch      # Watch mode
+npm run lint            # Lint with oxlint
 ```
 
 ## License

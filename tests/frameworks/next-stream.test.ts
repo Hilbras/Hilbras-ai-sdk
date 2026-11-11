@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 
 import { createStreamHandler, createStreamCompletionHandler } from "../../src/frameworks/nextjs/api/stream.js";
+import type { HilbrasNextResponse } from "../../src/frameworks/nextjs/next-runtime.js";
 
 const originalEnv = { ...process.env };
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -37,9 +38,23 @@ function makeRequest(body: unknown, signal?: AbortSignal) {
   } as any;
 }
 
+/** What the route handlers are declared to return. */
+type RouteResult = HilbrasNextResponse | Response;
+
+/**
+ * The handlers are declared as returning `HilbrasNextResponse | Response`, but
+ * every branch reaches the Web `Response`: the Next shim only returns the
+ * nominal `NextResponse` inside a Next app, and it falls back to the standard
+ * constructor otherwise. Narrow once here so the assertions below read the real
+ * response surface (`status`, `headers`, `text`).
+ */
+function asResponse(res: RouteResult): Response {
+  return res as Response;
+}
+
 /** Collect an NDJSON/text response body into a string. */
-async function drain(res: Response): Promise<string> {
-  return (await res.text()) as string;
+async function drain(res: RouteResult): Promise<string> {
+  return (await asResponse(res).text()) as string;
 }
 
 /** Parse NDJSON `0:`/`1:`/`2:`/`3:` lines into typed parts. */
@@ -82,7 +97,7 @@ describe("createStreamHandler — validation", () => {
       model: "gpt-4o",
     });
 
-    const res = await POST(makeRequest({}));
+    const res = asResponse(await POST(makeRequest({})));
 
     expect(res.status).toBe(400);
     expect(JSON.parse(await res.text()).error).toBe("Request failed");
@@ -95,7 +110,7 @@ describe("createStreamHandler — validation", () => {
       model: "gpt-4o",
     });
 
-    const res = await POST(makeRequest({ messages: [{ role: "wizard", content: "hi" }] }));
+    const res = asResponse(await POST(makeRequest({ messages: [{ role: "wizard", content: "hi" }] })));
 
     expect(res.status).toBe(400);
   });
@@ -107,7 +122,7 @@ describe("createStreamHandler — validation", () => {
       model: "gpt-4o",
     });
 
-    const res = await POST(makeRequest({ messages: ["hi"] }));
+    const res = asResponse(await POST(makeRequest({ messages: ["hi"] })));
 
     expect(res.status).toBe(400);
   });
@@ -119,7 +134,7 @@ describe("createStreamHandler — validation", () => {
       model: "gpt-4o",
     });
 
-    const res = await POST(makeRequest({ messages: [{ role: "user", content: 42 }] }));
+    const res = asResponse(await POST(makeRequest({ messages: [{ role: "user", content: 42 }] })));
 
     expect(res.status).toBe(400);
   });
@@ -128,7 +143,7 @@ describe("createStreamHandler — validation", () => {
     for (const role of ["system", "user", "assistant", "tool"]) {
       const stream = clientWith([{ type: "text", text: "ok" }]);
       const { POST } = createStreamHandler({ client: stream, provider: "openai", model: "gpt-4o" });
-      const res = await POST(makeRequest({ messages: [{ role, content: "x" }] }));
+      const res = asResponse(await POST(makeRequest({ messages: [{ role, content: "x" }] })));
       expect(res.status).toBe(200);
     }
   });
@@ -137,10 +152,12 @@ describe("createStreamHandler — validation", () => {
     const stream = clientWith([{ type: "text", text: "ok" }]);
     const { POST } = createStreamHandler({ client: stream, provider: "openai", model: "gpt-4o" });
 
-    const res = await POST(
-      makeRequest({
-        messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
-      }),
+    const res = asResponse(
+      await POST(
+        makeRequest({
+          messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        }),
+      ),
     );
 
     expect(res.status).toBe(200);
@@ -154,7 +171,7 @@ describe("createStreamHandler — validation", () => {
       onError: () => new Response("custom", { status: 418 }),
     });
 
-    const res = await POST(makeRequest({}));
+    const res = asResponse(await POST(makeRequest({})));
 
     expect(res.status).toBe(418);
     expect(await res.text()).toBe("custom");
@@ -171,7 +188,7 @@ describe("createStreamHandler — NDJSON protocol", () => {
     ]);
     const { POST } = createStreamHandler({ client: stream, provider: "openai", model: "gpt-4o" });
 
-    const res = await POST(makeRequest({ messages: [{ role: "user", content: "hi" }] }));
+    const res = asResponse(await POST(makeRequest({ messages: [{ role: "user", content: "hi" }] })));
     const parts = parseNdjson(await drain(res));
 
     expect(parts.text).toEqual(["Hello ", "world"]);
@@ -491,7 +508,7 @@ describe("createStreamCompletionHandler", () => {
       model: "gpt-4o",
     });
 
-    const res = await POST(makeRequest({ prompt: "hi" }));
+    const res = asResponse(await POST(makeRequest({ prompt: "hi" })));
 
     expect(await drain(res)).toBe("Hello there");
     expect(res.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
@@ -504,7 +521,7 @@ describe("createStreamCompletionHandler", () => {
       model: "gpt-4o",
     });
 
-    const res = await POST(makeRequest({}));
+    const res = asResponse(await POST(makeRequest({})));
 
     expect(res.status).toBe(400);
   });
@@ -516,7 +533,7 @@ describe("createStreamCompletionHandler", () => {
       model: "gpt-4o",
     });
 
-    const res = await POST(makeRequest({ prompt: "   " }));
+    const res = asResponse(await POST(makeRequest({ prompt: "   " })));
 
     expect(res.status).toBe(400);
   });

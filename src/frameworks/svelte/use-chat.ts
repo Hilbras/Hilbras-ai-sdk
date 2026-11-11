@@ -313,6 +313,20 @@ export function useChat(options: UseChatToolOptions) {
     notify();
   }
 
+  /**
+   * Abort an in-flight stream. Call this from `onDestroy`.
+   *
+   * This hook deliberately imports nothing from `svelte` so the module stays
+   * loadable without the peer dependency, which means the destroy lifecycle
+   * cannot be registered from inside it.
+   */
+  function dispose() {
+    abortController?.abort();
+    abortController = null;
+    state.isLoading = false;
+    notify();
+  }
+
   return {
     get messages() { return state.messages; },
     get input() { return state.input; },
@@ -325,6 +339,7 @@ export function useChat(options: UseChatToolOptions) {
     setMessages,
     stop,
     clear,
+    dispose,
     subscribe,
   };
 }

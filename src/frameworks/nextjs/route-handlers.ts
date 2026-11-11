@@ -12,6 +12,7 @@ import {
   errorResponse,
   isRequestPhaseError,
   readJsonBody,
+  resolveCatalogProviderId,
   resolveChatFields,
   resolveCompletionFields,
   resolveLimits,
@@ -87,14 +88,17 @@ export function createChatHandler(options: ChatHandlerOptions) {
         limits,
       });
 
+      // Run the request hook before building a client. `pool.get()` constructs
+      // one, so doing it first let any unauthenticated caller force a client
+      // construction even when the hook was about to reject them.
+      const effective = { ...fields, provider: resolveCatalogProviderId(options.provider) };
+      await options.onRequest?.({ request: req, body, effective });
+
       // Resolving the client before responding means a bad provider or model
       // produces a real error status instead of an HTTP 200 whose body carries
       // the failure.
       const client = pool.get(fields.model);
       const providerName = pool.providerName;
-
-      const effective = { ...fields, provider: providerName };
-      await options.onRequest?.({ request: req, body, effective });
 
       const allMessages = [
         ...(options.systemPrompt ? [{ role: "system" as const, content: options.systemPrompt }] : []),
@@ -127,7 +131,14 @@ export function createChatHandler(options: ChatHandlerOptions) {
         signal: req.signal,
       });
 
-      return createSSEResponse(chunks);
+      return createSSEResponse(chunks, {
+        onError: (streamError) => {
+          // The provider call happens lazily inside the stream, after this
+          // handler has already returned 200, so this is the only place a
+          // streaming failure can reach the operator.
+          void options.onError?.(streamError, { request: req, phase: "provider" });
+        },
+      });
     } catch (error) {
       if (options.onError) {
         await options.onError(error, {
@@ -179,9 +190,12 @@ export function createCompletionHandler(options: CompletionHandlerOptions) {
         limits,
       });
 
-      const client = pool.get(fields.model);
-      const effective = { ...fields, provider: pool.providerName };
+      // Same ordering as the chat handler: the hook decides before a client is
+      // built.
+      const effective = { ...fields, provider: resolveCatalogProviderId(options.provider) };
       await options.onRequest?.({ request: req, body, effective });
+
+      const client = pool.get(fields.model);
 
       const result = await client.complete({
         provider: pool.providerName,

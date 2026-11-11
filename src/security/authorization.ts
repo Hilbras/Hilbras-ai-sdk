@@ -142,9 +142,9 @@ export interface AuthorizationDiagnostic {
 /** Result of evaluating a single request against a single role. */
 export interface AuthorizationVerdict {
   allow: boolean;
-  status?: 403 | 429;
+  /** 403 only: a rate-limit rejection answers directly and never becomes a verdict. */
+  status?: 403;
   reason?: string;
-  retryAfterMs?: number;
   role?: string;
   /**
    * True when the verdict came from a context the middleware could not fully

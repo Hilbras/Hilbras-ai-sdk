@@ -8,7 +8,7 @@
  * - Uses Authorization: Bearer (like OpenAI)
  * - Has its own model names (llama-3.3-70b-versatile, mixtral-8x7b, etc.)
  * - Stricter rate limits
- * - No native tool calling support (text-embedded only)
+ * - Native tool calling via the OpenAI `tools` field
  */
 
 import type { Transport } from "../transport/transport.js";
@@ -20,15 +20,15 @@ import type { AIProvider, AdapterConfig } from "../types/adapter.js";
 import type { TranscriptionParams, TranscriptionResult } from "../types/multi-modal.js";
 import { ProviderRequestError } from "../errors/index.js";
 import { ReasoningNormalizer } from "../reasoning/normalizer.js";
+import { splitSseFrames } from "../utils/sse.js";
 import { mergeExtraParams } from "./extra.js";
 
 export type GroqAdapterConfig = AdapterConfig;
 
 /**
  * GroqAdapter — OpenAI-compatible adapter for Groq's fast inference.
- * Since Groq doesn't support native tool calling, models will use
- * text-embedded tool calls (e.g., <tool_call>), which the SDK's
- * text-tool-call-parser handles automatically.
+ * Tool calling is native: `tools` goes out in the OpenAI shape and the model
+ * replies with `tool_calls`.
  */
 export class GroqAdapter implements AIProvider {
   readonly id = "groq";
@@ -81,6 +81,20 @@ export class GroqAdapter implements AIProvider {
 
     if (params.stream) {
       body.stream_options = { include_usage: true };
+    }
+
+    // Groq speaks the OpenAI wire format and supports native tool calling, but
+    // the field was never sent — so `tools` reached the model not at all, while
+    // the stream loop's native `tool_calls` branch sat unreachable.
+    if (params.tools?.length) {
+      body.tools = params.tools.map((t) => ({
+        type: "function",
+        function: {
+          name: t.function.name,
+          description: t.function.description,
+          parameters: t.function.parameters,
+        },
+      }));
     }
 
     if (params.extra) {
@@ -137,16 +151,11 @@ export class GroqAdapter implements AIProvider {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+        const decoded = splitSseFrames(buffer, decoder.decode(value, { stream: true }));
+        buffer = decoded.buffer;
 
-        for (const part of parts) {
-          const lines = part.split("\n");
-          let rawData = "";
-          for (const line of lines) {
-            if (line.startsWith("data: ")) rawData = line.slice(6).trim();
-          }
+        for (const frame of decoded.frames) {
+          const rawData = frame.data.trim();
           if (!rawData || rawData === "[DONE]") continue;
 
           let data: Record<string, unknown>;
@@ -165,20 +174,26 @@ export class GroqAdapter implements AIProvider {
           const choices = data.choices as Array<Record<string, unknown>> | undefined;
           if (!choices?.length) continue;
           const choice = choices[0];
+
+          const finishReason = choice.finish_reason as string | undefined;
+          if (finishReason) {
+            yield { type: "finish", reason: finishReason };
+          }
+
           const delta = choice.delta as Record<string, unknown> | undefined;
           if (!delta) continue;
 
           const content = delta.content as string | undefined;
           if (content) {
-            const reasoning = reasoningNormalizer.feedText(content);
-            if (reasoning) yield reasoning;
-            else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {
+            const reasoningParts = reasoningNormalizer.feedText(content);
+            if (reasoningParts.length > 0) {
+              for (const part of reasoningParts) yield part;
+            } else if (!ReasoningNormalizer.looksLikeReasoningTag(content)) {
               yield { type: "text", text: content };
             }
             continue;
           }
 
-          // Groq may support tool calls in the future
           const toolCalls = delta.tool_calls as Array<Record<string, unknown>> | undefined;
           if (toolCalls) {
             for (const tc of toolCalls) {

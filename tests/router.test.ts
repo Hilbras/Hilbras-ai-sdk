@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { ModelRouter } from "../src/router/model-router.js";
 import { BUILTIN_MODELS } from "../src/catalog/models.js";
+import type { RejectedCandidate } from "../src/types/router.js";
 
 describe("ModelRouter", () => {
   const router = new ModelRouter(["openai", "anthropic", "google-genai", "groq", "ollama"]);
@@ -122,7 +123,9 @@ describe("ModelRouter", () => {
     const best = results[0];
     // Should have candidates array with rejected models
     expect(Array.isArray(best.candidates)).toBe(true);
-    const rejected = best.candidates!.filter((c) => c.rejectionReason);
+    const rejected = best.candidates!.filter(
+      (c): c is RejectedCandidate & { rejectionReason: string } => Boolean(c.rejectionReason),
+    );
     expect(rejected.length).toBeGreaterThan(0);
     // Each rejection has a reason
     for (const r of rejected) {

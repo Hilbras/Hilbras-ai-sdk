@@ -59,7 +59,10 @@ export interface RejectedCandidate {
   provider: string;
   model: string;
   score: number;
+  /** Why this candidate was not selected, or why it is a viable fallback */
   rejectionReason?: string;
+  /** Estimated cost per request in USD */
+  estimatedCost?: number;
 }
 
 /** A routing decision — explainable, with full audit trail */

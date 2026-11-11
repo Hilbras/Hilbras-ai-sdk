@@ -13,6 +13,7 @@ import type { Transport } from "../transport/transport.js";
 import type { ProviderConfig } from "../types/providers.js";
 import type { Message } from "../types/messages.js";
 import { extractText } from "../types/messages.js";
+import { splitSseFrames } from "../utils/sse.js";
 import type { Tool } from "../types/tools.js";
 import type { StreamChunk } from "../types/streams.js";
 import type { AIProvider, AdapterConfig } from "../types/adapter.js";
@@ -55,30 +56,28 @@ export class CohereAdapter implements AIProvider {
     stream: boolean;
     extra?: Record<string, unknown>;
   }): Record<string, unknown> {
-    let preamble = "";
-    const chatHistory: Array<{ role: string; message: string }> = [];
-
-    for (const m of params.messages) {
-      if (m.role === "system") {
-        preamble += (preamble ? "\n\n" : "") + extractText(m.content);
-      } else if (m.role === "user") {
-        chatHistory.push({ role: "USER", message: extractText(m.content) });
-      } else if (m.role === "assistant") {
-        chatHistory.push({ role: "CHATBOT", message: extractText(m.content) });
-      }
-    }
-
-    const lastUserMsg = params.messages.filter((m) => m.role === "user").pop();
-    const message = lastUserMsg?.content ?? "";
+    // Cohere's `/v2/chat` takes one chronological `messages` array covering the
+    // user, assistant, tool and system roles, and OpenAI-style tools. The
+    // previous body was the v1 shape — a `chat_history` of USER/CHATBOT turns
+    // plus a separate top-level `message` — sent to a v2 endpoint, which meant
+    // the last user turn was sent twice, `role: "tool"` results were dropped
+    // entirely, and the v1 `parameter_definitions` tool schema was used.
+    const messages = params.messages.map((m) => {
+      const entry: Record<string, unknown> = {
+        role: m.role,
+        content: extractText(m.content),
+      };
+      if (m.role === "tool" && m.tool_call_id) entry.tool_call_id = m.tool_call_id;
+      if (m.tool_calls?.length) entry.tool_calls = m.tool_calls;
+      return entry;
+    });
 
     const body: Record<string, unknown> = {
       model: params.model,
-      messages: chatHistory,
-      message,
+      messages,
       stream: params.stream,
     };
 
-    if (preamble) body.preamble = preamble;
     if (params.temperature != null) body.temperature = params.temperature;
     if (params.maxTokens != null && params.maxTokens > 0) body.max_tokens = params.maxTokens;
 
@@ -88,18 +87,7 @@ export class CohereAdapter implements AIProvider {
         function: {
           name: t.function.name,
           description: t.function.description,
-          parameter_definitions: t.function.parameters.properties
-            ? Object.fromEntries(
-                Object.entries(t.function.parameters.properties).map(([k, v]) => {
-                  const param = v as unknown as Record<string, unknown>;
-                  return [k, {
-                    description: param.description ?? "",
-                    type: param.type ?? "string",
-                    required: (t.function.parameters.required ?? []).includes(k),
-                  }];
-                })
-              )
-            : {},
+          parameters: t.function.parameters,
         },
       }));
     }
@@ -156,18 +144,12 @@ export class CohereAdapter implements AIProvider {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+        const decoded = splitSseFrames(buffer, decoder.decode(value, { stream: true }));
+        buffer = decoded.buffer;
 
-        for (const part of parts) {
-          const lines = part.split("\n");
-          let eventType = "";
-          let rawData = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-            if (line.startsWith("data: ")) rawData = line.slice(6).trim();
-          }
+        for (const frame of decoded.frames) {
+          const eventType = frame.event;
+          const rawData = frame.data.trim();
           if (!rawData || rawData === "[DONE]") continue;
 
           let data: Record<string, unknown>;
@@ -284,7 +266,9 @@ export class CohereAdapter implements AIProvider {
       texts,
       input_type: "search_document",
     };
-    if (params.dimensions) body.embedding_types = ["float"];
+    // `output_dimension` is the Cohere v3 embed field; `embedding_types`
+    // selects the encoding format and silently ignored the requested width.
+    if (params.dimensions) body.output_dimension = params.dimensions;
 
     const res = await this._transport.request(url, {
       method: "POST",

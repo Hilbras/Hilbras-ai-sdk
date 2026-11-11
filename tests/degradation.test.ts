@@ -124,6 +124,9 @@ describe("withDegradation", () => {
       "https://api.example.com",
       msgs,
       (m) => ({ method: "POST", body: JSON.stringify(m) }),
-    )).rejects.toThrow("All degradation levels failed");
+    // The real cause, not a generic message: every level answered 413, and that
+    // status is what the caller needs. This previously threw "All degradation
+    // levels failed" and discarded it.
+    )).rejects.toThrow("HTTP 413");
   });
 });

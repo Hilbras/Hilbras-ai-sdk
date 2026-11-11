@@ -11,6 +11,17 @@ import { ModelRouter } from "../src/router/model-router.js";
 import { resolvePolicy } from "../src/reliability/presets.js";
 import type { TaskRequirement } from "../src/types/router.js";
 import type { ExecutionPolicy } from "../src/types/policy.js";
+import { DEFAULT_CAPABILITIES } from "../src/types/models.js";
+import type { ModelCapabilities } from "../src/types/models.js";
+
+/**
+ * Capabilities of the mock text-only providers below: chat completions with
+ * streaming and system prompts, no tools, no vision, no audio/embeddings.
+ */
+const TEXT_ONLY_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_CAPABILITIES,
+  tools: false,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 3: Execution Plan
@@ -269,7 +280,7 @@ describe("Concurrency", () => {
     const c2 = new HilbrasClient();
     c1.addProvider({
       name: "P1", baseUrl: "https://a.com", authentication: { type: "none" },
-      adapter: "openai", models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      adapter: "openai", models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
     expect(c1.listProviders()).toHaveLength(1);
     expect(c2.listProviders()).toHaveLength(0);
@@ -292,17 +303,32 @@ describe("Security", () => {
   });
 
   it("API keys not exposed in errors", async () => {
-    const client = new HilbrasClient();
+    // Hermetic. The stub body echoes the key, so this now covers redaction of
+    // upward error text rather than passing vacuously when no error was thrown.
+    //
+    // The key is >= 20 characters after `sk-` because that is the floor the
+    // credential pattern matches on; shorter `sk-` values are not redacted (see
+    // the note in SPEC-v3.8.0-audit-fixes.md).
+    const key = "sk-super-secret-key-12345";
+    const client = new HilbrasClient({
+      transport: {
+        async request() { return new Response(`{"error":{"message":"bad key ${key}"}}`, { status: 401 }); },
+        async stream() { throw new Error("unused"); },
+        abort() {},
+      },
+    });
     client.addProvider({
       name: "Test", baseUrl: "https://test.com",
-      authentication: { type: "bearer", apiKey: "sk-super-secret-12345" },
+      authentication: { type: "bearer", apiKey: key },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
-    try {
-      await client.complete({ provider: "Test", model: "m", messages: [{ role: "user", content: "hi" }] });
-    } catch (err) {
-      expect(String(err)).not.toContain("sk-super-secret-12345");
-    }
+
+    const err = await client
+      .complete({ provider: "Test", model: "m", messages: [{ role: "user", content: "hi" }] })
+      .then(() => null, (error: unknown) => error);
+
+    expect(err).not.toBeNull();
+    expect(String(err)).not.toContain(key);
   });
 });

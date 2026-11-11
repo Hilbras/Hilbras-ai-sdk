@@ -5,7 +5,7 @@
  * Returns Vue reactive refs for state and functions for actions.
  */
 
-import { ref, readonly } from "vue";
+import { ref, readonly, onUnmounted } from "vue";
 import type { UIMessage, UIToolInvocation, UseChatOptions } from "../../index.js";
 import { parseUIStream } from "./stream-parser.js";
 
@@ -46,6 +46,14 @@ export function useChat(options: UseChatToolOptions) {
     abortController = null;
     isLoading.value = false;
   }
+
+  // Abort an in-flight stream when the component unmounts; otherwise the reader
+  // keeps writing into reactive state that no one is rendering any more.
+  // `react-client` already did this; the other hooks did not.
+  onUnmounted(() => {
+    abortController?.abort();
+    abortController = null;
+  });
 
   function updateAssistantMessage(id: string, updater: (m: UIMessage) => UIMessage) {
     messages.value = messages.value.map((m) =>

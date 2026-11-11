@@ -80,12 +80,18 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }
 
   async function append(message: Message) {
+    // One stream at a time. Without this, two overlapping calls each appended
+    // an assistant placeholder and both wrote into the last array slot, so the
+    // text interleaved — and `abortController` was overwritten, leaving only
+    // the second request abortable.
+    if (isLoading.value) return;
     const newMessages = [...messages.value, message];
     messages.value = newMessages;
     await sendRequest(newMessages);
   }
 
   async function reload() {
+    if (isLoading.value) return;
     const msgs = messages.value;
     if (msgs.length === 0) return;
     const userMsgs = msgs.slice(0, -1);

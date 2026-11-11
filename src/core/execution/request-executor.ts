@@ -34,8 +34,19 @@ export interface PreparedRequest {
   context: RequestContext;
   retryConfig: RetryConfig;
   circuitBreaker?: CircuitBreakerPort;
-  signal?: AbortSignal;
-  timeout?: ScopedTimeout;
+  /**
+   * Signal for the current attempt: the internal timeout signal when a timeout
+   * is configured, otherwise the caller signal. Replaced by `beginAttempt()`.
+   */
+  readonly signal?: AbortSignal;
+  /**
+   * Start a fresh timeout window for one attempt and return its signal.
+   *
+   * The timeout must not be created once per logical request: it aborts once
+   * and never resets, so after a primary timeout every retry and every fallback
+   * would abort instantly on arrival.
+   */
+  beginAttempt(): AbortSignal | undefined;
   dispose(): void;
 }
 
@@ -68,9 +79,7 @@ export class RequestExecutor {
     }
 
     const timeoutMs = resolved.timeout.requestTimeoutMs || input.providerTimeoutMs || 0;
-    const timeout = timeoutMs > 0
-      ? createScopedTimeout({ requestTimeoutMs: timeoutMs }, input.callerSignal)
-      : undefined;
+    let timeout: ScopedTimeout | undefined;
     const retryConfig = createRetryConfig({
       maxRetries: resolved.retry.maxRetries,
       retryableStatuses: resolved.retry.retryableStatuses,
@@ -81,8 +90,16 @@ export class RequestExecutor {
       context,
       retryConfig,
       circuitBreaker,
-      signal: timeout?.signal ?? input.callerSignal,
-      timeout,
+      beginAttempt: () => {
+        timeout?.cancel();
+        timeout = timeoutMs > 0
+          ? createScopedTimeout({ requestTimeoutMs: timeoutMs }, input.callerSignal)
+          : undefined;
+        return timeout?.signal ?? input.callerSignal;
+      },
+      get signal() {
+        return timeout?.signal ?? input.callerSignal;
+      },
       dispose: () => timeout?.cancel(),
     };
   }
@@ -92,14 +109,16 @@ export class RequestExecutor {
     params: Omit<GenerateParams, "signal">,
     options: { dispose?: boolean; recordCircuitFailure?: boolean } = {},
   ): AsyncGenerator<StreamChunk> {
+    const signal = prepared.beginAttempt();
+
     const adapter = this.ports.adapters.get(prepared.context.provider);
     if (!adapter) {
       throw new ProviderNotFoundError(prepared.context.provider);
     }
 
     try {
-      for await (const chunk of adapter.stream({ ...params, signal: prepared.signal })) {
-        if (prepared.signal?.aborted) {
+      for await (const chunk of adapter.stream({ ...params, signal })) {
+        if (signal?.aborted) {
           throw new DOMException("The operation was aborted", "AbortError");
         }
         yield chunk;
@@ -120,6 +139,8 @@ export class RequestExecutor {
     params: Omit<GenerateParams, "signal">,
     options: { dispose?: boolean; recordCircuitFailure?: boolean } = {},
   ): Promise<ExecutionResult<string>> {
+    const signal = prepared.beginAttempt();
+
     if (prepared.context.callerSignal?.aborted) {
       return executionFailure(new DOMException("The operation was aborted", "AbortError"), prepared.context);
     }
@@ -133,7 +154,7 @@ export class RequestExecutor {
     }
 
     try {
-      const value = await adapter.complete({ ...params, signal: prepared.signal });
+      const value = await adapter.complete({ ...params, signal });
       prepared.circuitBreaker?.recordSuccess();
       return executionSuccess(value, prepared.context);
     } catch (error) {

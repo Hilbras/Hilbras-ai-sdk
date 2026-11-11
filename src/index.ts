@@ -256,8 +256,10 @@ export { CohereRerankAdapter } from "./adapters/cohere-rerank.js";
 export type { CohereRerankAdapterConfig } from "./adapters/cohere-rerank.js";
 
 // ─── MCP ────────────────────────────────────────────────────────────────────
-export { MCPClient, createMCPToolExecution } from "./mcp/index.js";
-export type { MCPServerConfig, MCPTool, MCPResource, MCPPrompt, MCPConnection } from "./mcp/index.js";
+// MCP removed in 3.8.0: the client was a stub returning fabricated tool
+// results (`callTool` replied `{result: "Called X on Y"}` without opening a
+// transport). Shipping nothing is better than shipping fake output; the
+// `./mcp` subpath went with it.
 
 // ─── Realtime ───────────────────────────────────────────────────────────────
 export { RealtimeSession } from "./realtime/index.js";

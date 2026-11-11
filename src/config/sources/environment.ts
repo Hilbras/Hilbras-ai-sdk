@@ -106,7 +106,8 @@ export function createEnvironmentSource(env: Env = defaultEnv()): ConfigSource {
       } else if (providerUrl && providerKey) {
         const guard = validateBaseUrl(providerUrl, { allowInsecure: true });
         if (!guard.ok) {
-          diagnostics.push(diagnostic("environment", "CONFIG_UNSAFE_PROVIDER_URL", "providers[0].baseUrl", `provider URL rejected by security policy: ${guard.reason}`));
+          const reason = guard.reason.split(providerUrl).join("[URL]");
+          diagnostics.push(diagnostic("environment", "CONFIG_UNSAFE_PROVIDER_URL", "providers[0].baseUrl", `provider URL rejected by security policy: ${reason}`));
         } else {
           values.providers = [{
             name: providerName || "default",
