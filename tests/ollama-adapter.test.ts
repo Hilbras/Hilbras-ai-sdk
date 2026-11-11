@@ -10,7 +10,7 @@ const provider: ProviderConfig = {
   baseUrl: "http://localhost:11434/v1",
   authentication: { type: "none" },
   adapter: "ollama",
-  models: [{ id: "llama3.1", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: "llama3.1", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 function sse(payload: Record<string, unknown>): string {

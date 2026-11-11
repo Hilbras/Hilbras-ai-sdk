@@ -32,7 +32,7 @@ import { PerplexityAdapter } from "../../src/adapters/perplexity.js";
 import { TogetherAdapter } from "../../src/adapters/together.js";
 import { XAIAdapter } from "../../src/adapters/xai.js";
 import { ProviderRequestError } from "../../src/errors/index.js";
-import type { Transport } from "../../src/transport/transport.js";
+import type { Transport, TransportRequestInit } from "../../src/transport/transport.js";
 import type { ProviderConfig } from "../../src/types/providers.js";
 import type { StreamChunk } from "../../src/types/streams.js";
 
@@ -82,7 +82,7 @@ function scripted(responses: Array<{ status: number; body: string }>): Transport
   const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
   return {
     calls,
-    async request(url: string, init?: RequestInit) {
+    async request(url: string, init: TransportRequestInit) {
       calls.push({ url, body: JSON.parse(String(init?.body ?? "{}")) });
       const r = responses[Math.min(i, responses.length - 1)];
       i++;

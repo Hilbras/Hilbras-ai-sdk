@@ -22,6 +22,11 @@ function makeClient(chunks: StreamChunk[]): HilbrasClient {
         structuredOutput: true,
         parallelTools: false,
         systemPrompts: true,
+        embeddings: false,
+        imageGeneration: false,
+        speech: false,
+        transcription: false,
+        reranking: false,
       },
     }],
   });

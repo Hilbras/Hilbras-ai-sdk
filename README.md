@@ -535,11 +535,12 @@ import { exportTrainingData } from "@hilbras/sdk/fine-tune";
 
 ```bash
 npm install
-npm run build        # Compile TypeScript
-npm test             # Run the root test suite (2070 tests)
-npm run test:packages # Build and test companion packages
-npm run test:watch   # Watch mode
-npm run lint         # Lint with oxlint
+npm run build           # Compile TypeScript
+npm test                # Run the root test suite (2077 tests)
+npm run typecheck:tests # Typecheck the tests (`tsc --noEmit` covers src only)
+npm run test:packages   # Build and test companion packages
+npm run test:watch      # Watch mode
+npm run lint            # Lint with oxlint
 ```
 
 ## License

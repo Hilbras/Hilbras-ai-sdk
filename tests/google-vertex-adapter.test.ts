@@ -10,7 +10,7 @@ const provider: ProviderConfig = {
   authentication: { type: "bearer", apiKey: "ya29.c.b0AXv0zTPz..." },
   adapter: "google-vertex",
   models: [
-    { id: "google/gemini-2.5-flash", contextWindow: 1_048_576, maxOutputTokens: 65_536, capabilities: { streaming: true, tools: true, vision: true, reasoning: true, structuredOutput: false, parallelTools: false, systemPrompts: true } },
+    { id: "google/gemini-2.5-flash", contextWindow: 1_048_576, maxOutputTokens: 65_536, capabilities: { streaming: true, tools: true, vision: true, reasoning: true, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } },
   ],
 };
 
@@ -222,7 +222,7 @@ describe("VertexAIAdapter", () => {
         function: {
           name: "get_weather",
           description: "Get weather",
-          parameters: { type: "object", properties: { city: { type: "string" } } },
+          parameters: { type: "object", properties: { city: { type: "string" } }, required: ["city"] },
         },
       }],
     });
@@ -233,6 +233,7 @@ describe("VertexAIAdapter", () => {
     expect(body.tools[0].functionDeclarations[0].parameters).toEqual({
       type: "object",
       properties: { city: { type: "string" } },
+      required: ["city"],
     });
   });
 

@@ -14,7 +14,7 @@ const provider: ProviderConfig = {
   },
   adapter: "bedrock",
   models: [
-    { id: "anthropic.claude-3-5-sonnet-20241022-v2:0", contextWindow: 200_000, maxOutputTokens: 8_192, capabilities: { streaming: true, tools: true, vision: true, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } },
+    { id: "anthropic.claude-3-5-sonnet-20241022-v2:0", contextWindow: 200_000, maxOutputTokens: 8_192, capabilities: { streaming: true, tools: true, vision: true, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } },
   ],
 };
 
@@ -282,7 +282,7 @@ describe("BedrockAdapter", () => {
         function: {
           name: "get_weather",
           description: "Get weather",
-          parameters: { type: "object", properties: { city: { type: "string" } } },
+          parameters: { type: "object", properties: { city: { type: "string" } }, required: ["city"] },
         },
       }],
     });
@@ -293,6 +293,7 @@ describe("BedrockAdapter", () => {
     expect(body.tools[0].toolSpec.inputSchema.json).toEqual({
       type: "object",
       properties: { city: { type: "string" } },
+      required: ["city"],
     });
   });
 

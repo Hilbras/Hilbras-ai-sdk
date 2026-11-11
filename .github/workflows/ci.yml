@@ -23,6 +23,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck:examples
       - run: npm run build
+      - run: npm run typecheck:tests
       - run: npm run check:package
       - run: npm run size
       - run: bash tools/check-doc-examples.sh

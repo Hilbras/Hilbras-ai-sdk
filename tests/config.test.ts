@@ -180,8 +180,8 @@ describe("PR-2: loadConfig security hardening", () => {
   });
 
   describe("ProviderConfig type unification (PR-2)", () => {
-    it("ProviderConfig imported from @hilbras/sdk matches the canonical shape", async () => {
-      const { ProviderConfig } = await import("../src/index.js");
+    it("ProviderConfig imported from @hilbras/sdk matches the canonical shape", () => {
+      type ProviderConfig = import("../src/index.js").ProviderConfig;
       const sample: ProviderConfig = {
         name: "openai",
         baseUrl: "https://api.openai.com/v1",
@@ -191,7 +191,7 @@ describe("PR-2: loadConfig security hardening", () => {
       };
       expect(sample.adapter).toBe("openai");
       expect(sample.authentication.type).toBe("bearer");
-    }, 15_000);
+    });
   });
 
   describe("validateConfig now checks provider URLs (PR-2)", () => {

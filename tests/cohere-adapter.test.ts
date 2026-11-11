@@ -9,7 +9,7 @@ const provider: ProviderConfig = {
   baseUrl: "https://api.cohere.com",
   authentication: { type: "bearer", apiKey: "test-key" },
   adapter: "cohere",
-  models: [{ id: "command-r-plus", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: "command-r-plus", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 function mockJsonTransport(body: Record<string, unknown>): Transport {

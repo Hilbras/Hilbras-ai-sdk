@@ -27,7 +27,7 @@ function makeProvider(name: string, adapter: string = "openai"): ProviderConfig 
     authentication: { type: "none" },
     adapter: adapter as ProviderConfig["adapter"],
     models: [
-      { id: "test-model", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } },
+      { id: "test-model", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } },
     ],
   };
 }

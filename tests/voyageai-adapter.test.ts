@@ -87,6 +87,6 @@ describe("VoyageAIAdapter", () => {
 
   it("throws on complete/stream calls", async () => {
     const adapter = new VoyageAIAdapter({ provider, transport: {} as Transport });
-    await expect(adapter.complete({ model: "x", messages: [] })).rejects.toThrow("does not support chat");
+    await expect(adapter.complete()).rejects.toThrow("does not support chat");
   });
 });

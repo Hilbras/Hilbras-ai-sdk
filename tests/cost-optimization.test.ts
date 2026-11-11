@@ -29,7 +29,7 @@ const PROVIDER: ProviderConfig = {
   baseUrl: "https://test.com/v1",
   authentication: { type: "none" },
   adapter: "openai",
-  models: [{ id: "m", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: "m", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -182,7 +182,7 @@ describe("Client Cost Integration", () => {
   it("per-request budget exceeded throws before execution", async () => {
     const expensiveProvider: ProviderConfig = {
       ...PROVIDER,
-      models: [{ id: "gpt-5.6-sol", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "gpt-5.6-sol", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
     };
     const client = new HilbrasClient({
       transport: successTransport(),

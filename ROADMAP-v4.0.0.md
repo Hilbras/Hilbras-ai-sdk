@@ -315,7 +315,12 @@ six breaking changes arriving at once would be least reviewable.
   hook that cannot self-register a destroy handler — it imports nothing from
   `svelte` so the module stays loadable without the peer dependency — and
   exposes `dispose()` for `onDestroy` instead.
-- **New: `tests/` is not typechecked.** `tsconfig.json` includes `src` only, so
-  `npx tsc --noEmit` silently skips the test suite. Compiling it for the first
-  time surfaces 283 errors, mostly loose mock fixtures. Worth its own pass —
-  it is the kind of gap that hides real breakage in test-only code.
+- **Resolved: `tests/` was not typechecked.** `tsconfig.json` includes `src`
+  only, so `npx tsc --noEmit` silently skipped the test suite. A new
+  `tsconfig.tests.json` covers it, wired as `npm run typecheck:tests` and run in
+  CI. That surfaced 285 errors across 65 files — almost entirely fixture drift
+  (capabilities literals that predate five new flags, widened string literals,
+  mocks built against since-changed APIs) rather than product defects, which is
+  exactly why nobody had noticed. Now zero, with no suppressions and no test
+  lost. If you add a source API, expect the test fixtures to complain — that is
+  the point.

@@ -35,21 +35,21 @@ describe("useChat", () => {
   });
 
   it("initializes with provided messages", () => {
-    const initial = [{ role: "user" as const, content: "Hi" }];
+    const initial = [{ id: "msg_1", role: "user" as const, content: "Hi" }];
     const chat = useChat({ initialMessages: initial });
     expect(chat.messages()).toHaveLength(1);
     expect(chat.messages()[0].content).toBe("Hi");
   });
 
   it("clears messages", () => {
-    const chat = useChat({ initialMessages: [{ role: "user", content: "Hi" }] });
+    const chat = useChat({ initialMessages: [{ id: "msg_1", role: "user", content: "Hi" }] });
     chat.clear();
     expect(chat.messages()).toEqual([]);
   });
 
   it("setMessages updates messages", () => {
     const chat = useChat();
-    chat.setMessages([{ role: "assistant", content: "Hello" }]);
+    chat.setMessages([{ id: "msg_1", role: "assistant", content: "Hello" }]);
     expect(chat.messages()).toHaveLength(1);
   });
 });

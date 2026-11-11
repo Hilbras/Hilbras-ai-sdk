@@ -46,7 +46,7 @@ describe("FetchTransport idle timer is lazy", () => {
   it("leaves no timer behind when a client constructor throws", async () => {
     const before = process.getActiveResourcesInfo?.().filter((r) => r === "Timeout").length ?? 0;
     expect(() => new HilbrasClient({
-      config: { rbac: { roles: { v: { name: "v", allowedModels: "gpt-4o" } } } },
+      config: { rbac: { roles: { v: { name: "v", allowedModels: "gpt-4o" as never } } } },
     })).toThrow();
     // Give any stray interval a chance to appear.
     await new Promise((resolve) => setImmediate(resolve));
@@ -183,7 +183,7 @@ describe("retry re-entry (S4)", () => {
     const inner = transportOf(flaky(2, counter));
     const transport = new MiddlewareTransport(
       inner,
-      composeMiddlewares(retryMiddleware(2, 0), rateLimitMiddleware({ max: 10, windowMs: 60_000 })),
+      composeMiddlewares(retryMiddleware(2, 0), rateLimitMiddleware(0)),
     );
     // Three attempts against a bucket of ten all succeed.
     await expect(transport.request(URL_, { method: "POST", headers: {} })).resolves.toBeDefined();

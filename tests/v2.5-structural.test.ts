@@ -11,8 +11,19 @@ import type { Transport, TransportRequestInit } from "../src/transport/transport
 import type { Middleware, MiddlewareContext } from "../src/middleware/middleware.js";
 import type { StreamChunk } from "../src/types/streams.js";
 import type { ProviderConfig } from "../src/types/providers.js";
+import { DEFAULT_CAPABILITIES } from "../src/types/models.js";
+import type { ModelCapabilities } from "../src/types/models.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Capabilities of the mock text-only provider below: chat completions with
+ * streaming and system prompts, no tools, no vision, no audio/embeddings.
+ */
+const TEXT_ONLY_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_CAPABILITIES,
+  tools: false,
+};
 
 function sse(payload: Record<string, unknown>): string {
   return `data: ${JSON.stringify(payload)}\n\n`;
@@ -42,7 +53,7 @@ const MOCK_PROVIDER: ProviderConfig = {
   baseUrl: "https://api.test.com/v1",
   authentication: { type: "bearer", apiKey: "sk-test-key" },
   adapter: "openai",
-  models: [{ id: "test-model", contextWindow: 4096, maxOutputTokens: 1024 }],
+  models: [{ id: "test-model", contextWindow: 4096, maxOutputTokens: 1024, capabilities: TEXT_ONLY_CAPABILITIES }],
 };
 
 // ─── BUG-04: Per-Client Tokenizer ─────────────────────────────────────────
@@ -146,7 +157,7 @@ describe("MiddlewareTransport", () => {
       abort() {},
     };
     const t = new MiddlewareTransport(inner, async (_ctx) => new Response("cached"));
-    const res = await t.request("https://x.com", {});
+    const res = await t.request("https://x.com", { method: "POST" });
     expect(await res.text()).toBe("cached");
   });
 
@@ -161,7 +172,7 @@ describe("MiddlewareTransport", () => {
       return new Response((await res.text()) + " [wrapped]");
     };
     const t = new MiddlewareTransport(inner, mw);
-    const res = await t.request("https://x.com", {});
+    const res = await t.request("https://x.com", { method: "POST" });
     expect(await res.text()).toBe("original [wrapped]");
   });
 
@@ -178,7 +189,7 @@ describe("MiddlewareTransport", () => {
       abort() {},
     };
     const t = new MiddlewareTransport(inner, async (ctx) => ctx.next());
-    const body = await t.stream("https://x.com", {});
+    const body = await t.stream("https://x.com", { method: "POST" });
     const reader = body.getReader();
     const { value } = await reader.read();
     expect(new TextDecoder().decode(value)).toBe("streamed");
@@ -191,7 +202,7 @@ describe("MiddlewareTransport", () => {
       abort() {},
     };
     const t = new MiddlewareTransport(inner, async (ctx) => ctx.next());
-    await expect(t.stream("https://x.com", {})).rejects.toThrow("body is null");
+    await expect(t.stream("https://x.com", { method: "POST" })).rejects.toThrow("body is null");
   });
 
   it("abort() delegates to inner", () => {
@@ -228,7 +239,7 @@ describe("MiddlewareTransport", () => {
     };
     const composed = composeMiddlewares(mw1, mw2);
     const t = new MiddlewareTransport(inner, composed);
-    await t.request("https://x.com", {});
+    await t.request("https://x.com", { method: "POST" });
     expect(order).toEqual(["1", "2", "inner", "2-end", "1-end"]);
   });
 });

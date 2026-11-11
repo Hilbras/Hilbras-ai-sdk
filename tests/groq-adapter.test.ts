@@ -10,7 +10,7 @@ const provider: ProviderConfig = {
   baseUrl: "https://api.groq.com/openai/v1",
   authentication: { type: "bearer", apiKey: "gsk_test" },
   adapter: "groq",
-  models: [{ id: "llama-3.3-70b-versatile", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: "llama-3.3-70b-versatile", contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 function sse(payload: Record<string, unknown>): string {

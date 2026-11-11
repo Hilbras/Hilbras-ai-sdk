@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HilbrasClient } from "../src/client/client.js";
+import { DEFAULT_CAPABILITIES } from "../src/types/models.js";
 import type { StreamChunk } from "../src/types/streams.js";
+import type { UIProtocolMessage } from "../src/types/ui-protocol.js";
 
 function createMockTransport(chunks: StreamChunk[]) {
   return {
@@ -23,7 +25,7 @@ describe("stream() integration", () => {
   });
 
   it("streams text deltas through the full pipeline", async () => {
-    const mockChunks: StreamChunk[] = [
+    const mockChunks: UIProtocolMessage[] = [
       { type: "text_delta", text: "Hello" },
       { type: "text_delta", text: " world" },
       { type: "text_delta", text: "!" },
@@ -34,7 +36,7 @@ describe("stream() integration", () => {
       baseUrl: "https://api.test.com/v1",
       authentication: { type: "bearer", apiKey: "test-key" },
       adapter: "openai",
-      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096 }],
+      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096, capabilities: DEFAULT_CAPABILITIES }],
     });
 
     // Mock the adapter's stream method
@@ -70,7 +72,7 @@ describe("stream() integration", () => {
       baseUrl: "https://api.test.com/v1",
       authentication: { type: "bearer", apiKey: "test-key" },
       adapter: "openai",
-      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096 }],
+      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096, capabilities: DEFAULT_CAPABILITIES }],
     });
 
     const mockAdapter = {
@@ -103,7 +105,7 @@ describe("stream() integration", () => {
       baseUrl: "https://api.test.com/v1",
       authentication: { type: "bearer", apiKey: "test-key" },
       adapter: "openai",
-      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096 }],
+      models: [{ id: "gpt-4", contextWindow: 8192, maxOutputTokens: 4096, capabilities: DEFAULT_CAPABILITIES }],
     });
 
     const mockAdapter = {

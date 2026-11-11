@@ -69,7 +69,7 @@ describe("Cohere /v2/chat request body", () => {
   it("keeps tool results in the history", async () => {
     const { body } = await bodyFor([
       { role: "user", content: "what is the weather?" },
-      { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "weather", arguments: "{}" } }] },
+      { role: "assistant", content: "", tool_calls: [{ id: "call_1", type: "function", function: { name: "weather", arguments: "{}" } }] },
       { role: "tool", content: '{"temp":21}', tool_call_id: "call_1" },
     ]);
 

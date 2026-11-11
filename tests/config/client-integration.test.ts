@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { HilbrasClient } from "../../src/client/client.js";
 import { createEnvironmentSource } from "../../src/config/sources/environment.js";
 import { resolveConfig } from "../../src/config/config-resolver.js";
+import type { ProviderConfig } from "../../src/types/providers.js";
 
-const provider = {
+const provider: ProviderConfig = {
   name: "configured-provider",
   baseUrl: "https://configured.example.com/v1",
   adapter: "openai",

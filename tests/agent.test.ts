@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { ToolLoopAgent } from "../src/features/agent/tool-loop.js";
 import { ReActAgent } from "../src/features/agent/react.js";
 import { PlanAndExecuteAgent } from "../src/features/agent/plan-and-execute.js";
-import type { AgentTool, AgentEvent, AgentStep } from "../src/types.js";
+import type { AgentTool, AgentEvent, AgentStep } from "../src/features/agent/index.js";
 
 // ─── Mock Tools ────────────────────────────────────────────────────────────
 

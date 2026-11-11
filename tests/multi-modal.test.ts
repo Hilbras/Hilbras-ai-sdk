@@ -34,6 +34,7 @@ function googleAdapter(transport?: any): GoogleGenAIAdapter {
       baseUrl: "https://generativelanguage.googleapis.com/v1beta",
       authentication: { type: "bearer", apiKey: "test-key" },
       adapter: "google-genai",
+      models: [],
     },
     transport: transport ?? mockTransport(),
   });
@@ -53,6 +54,7 @@ describe("Multi-Modal Reliability Pipeline", () => {
       baseUrl: "https://api.openai.com/v1",
       authentication: { type: "bearer", apiKey: "test" },
       adapter: "openai",
+      models: [],
     });
 
     const events: HookEvent[] = [];
@@ -78,6 +80,7 @@ describe("Multi-Modal Reliability Pipeline", () => {
       baseUrl: "https://generativelanguage.googleapis.com/v1beta",
       authentication: { type: "bearer", apiKey: "test" },
       adapter: "google-genai",
+      models: [],
     });
 
     const events: HookEvent[] = [];
@@ -100,6 +103,7 @@ describe("Multi-Modal Reliability Pipeline", () => {
       baseUrl: "https://api.anthropic.com",
       authentication: { type: "bearer", apiKey: "test" },
       adapter: "anthropic",
+      models: [],
     });
 
     await expect(client.embed({
@@ -133,6 +137,7 @@ describe("Multi-Modal Reliability Pipeline", () => {
       baseUrl: "https://api.openai.com/v1",
       authentication: { type: "bearer", apiKey: "test" },
       adapter: "openai",
+      models: [],
     });
 
     const events: HookEvent[] = [];
@@ -211,7 +216,7 @@ describe("GoogleGenAIAdapter multi-modal", () => {
     const result = await adapter.generateSpeech({
       model: "tts-1",
       input: "Hello world",
-      voice: "alloy" as any,
+      voice: "alloy",
     });
     expect(result.audio).toBeInstanceOf(Uint8Array);
     expect(result.format).toBeDefined();
@@ -224,7 +229,7 @@ describe("GoogleGenAIAdapter multi-modal", () => {
     await expect(adapter.generateSpeech({
       model: "tts-1",
       input: "test",
-      voice: "alloy" as any,
+      voice: "alloy",
     })).rejects.toThrow(ProviderRequestError);
   });
 

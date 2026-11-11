@@ -26,67 +26,67 @@ describe("Enhanced SSRF Validation", () => {
 
   describe("validateResolvedAddress", () => {
     it("allows public IPs", () => {
-      const result = validateResolvedAddress("203.0.113.1", "api.openai.com");
+      const result = validateResolvedAddress("203.0.113.1");
       expect(result.ok).toBe(true);
     });
 
     it("blocks 169.254.x.x (link-local / metadata)", () => {
-      const result = validateResolvedAddress("169.254.169.254", "metadata.aws.com");
+      const result = validateResolvedAddress("169.254.169.254");
       expect(result.ok).toBe(false);
     });
 
     it("blocks 10.x.x.x (private)", () => {
-      const result = validateResolvedAddress("10.0.0.1", "internal.corp");
+      const result = validateResolvedAddress("10.0.0.1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks IPv4 loopback resolved addresses", () => {
-      const result = validateResolvedAddress("127.0.0.1", "localhost");
+      const result = validateResolvedAddress("127.0.0.1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks 0.0.0.0 (unspecified)", () => {
-      const result = validateResolvedAddress("0.0.0.0", "example.com");
+      const result = validateResolvedAddress("0.0.0.0");
       expect(result.ok).toBe(false);
     });
 
     it("blocks multicast 224.x.x.x", () => {
-      const result = validateResolvedAddress("224.0.0.1", "example.com");
+      const result = validateResolvedAddress("224.0.0.1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks CGNAT 100.64.x.x", () => {
-      const result = validateResolvedAddress("100.64.0.1", "example.com");
+      const result = validateResolvedAddress("100.64.0.1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks benchmarking 198.18.x.x", () => {
-      const result = validateResolvedAddress("198.18.0.1", "example.com");
+      const result = validateResolvedAddress("198.18.0.1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks IPv6 link-local", () => {
-      const result = validateResolvedAddress("fe80::1", "example.com");
+      const result = validateResolvedAddress("fe80::1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks IPv6 unique-local", () => {
-      const result = validateResolvedAddress("fd00::1", "example.com");
+      const result = validateResolvedAddress("fd00::1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks IPv4-mapped IPv6 addresses", () => {
-      const result = validateResolvedAddress("::ffff:127.0.0.1", "example.com");
+      const result = validateResolvedAddress("::ffff:127.0.0.1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks 192.168.x.x (private)", () => {
-      const result = validateResolvedAddress("192.168.1.1", "example.com");
+      const result = validateResolvedAddress("192.168.1.1");
       expect(result.ok).toBe(false);
     });
 
     it("blocks 172.16-31.x.x (private)", () => {
-      const result = validateResolvedAddress("172.16.0.1", "example.com");
+      const result = validateResolvedAddress("172.16.0.1");
       expect(result.ok).toBe(false);
     });
   });

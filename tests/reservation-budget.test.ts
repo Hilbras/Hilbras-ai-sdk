@@ -27,7 +27,7 @@ function provider(name = "Test"): ProviderConfig {
   return {
     name, baseUrl: `https://${name.toLowerCase()}.com/v1`,
     authentication: { type: "none" }, adapter: "openai",
-    models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+    models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
   };
 }
 

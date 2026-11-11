@@ -443,7 +443,7 @@ describe('DevToolsDashboard', () => {
     it('renders cost breakdown', () => {
       const text = dashboard.renderText({
         timestamp: Date.now(),
-        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 1.5, remainingBudget: 3.2, budgetExceeded: false },
+        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 1.5, remainingBudget: 3.2 },
         providers: [],
         cost: { totalCost: 1.5, totalReserved: 0.3, committedCost: 1.8, remainingBudget: 3.2, budgetExceeded: false, byProvider: { openai: { estimated: 1.0, actual: 1.5, requests: 5 } }, byPhase: { estimate: 0.5, execute: 1.0 } },
         recentRequests: [],
@@ -464,7 +464,7 @@ describe('DevToolsDashboard', () => {
     it('renders routing decisions', () => {
       const text = dashboard.renderText({
         timestamp: Date.now(),
-        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null, budgetExceeded: false },
+        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null },
         providers: [],
         cost: { totalCost: 0, totalReserved: 0, committedCost: 0, remainingBudget: null, budgetExceeded: false, byProvider: {}, byPhase: {} },
         recentRequests: [],
@@ -485,7 +485,7 @@ describe('DevToolsDashboard', () => {
     it('renders retries', () => {
       const text = dashboard.renderText({
         timestamp: Date.now(),
-        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null, budgetExceeded: false },
+        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null },
         providers: [],
         cost: { totalCost: 0, totalReserved: 0, committedCost: 0, remainingBudget: null, budgetExceeded: false, byProvider: {}, byPhase: {} },
         recentRequests: [],
@@ -505,7 +505,7 @@ describe('DevToolsDashboard', () => {
     it('renders fallbacks', () => {
       const text = dashboard.renderText({
         timestamp: Date.now(),
-        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null, budgetExceeded: false },
+        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null },
         providers: [],
         cost: { totalCost: 0, totalReserved: 0, committedCost: 0, remainingBudget: null, budgetExceeded: false, byProvider: {}, byPhase: {} },
         recentRequests: [],
@@ -526,7 +526,7 @@ describe('DevToolsDashboard', () => {
     it('renders validation failures', () => {
       const text = dashboard.renderText({
         timestamp: Date.now(),
-        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null, budgetExceeded: false },
+        summary: { totalRequests: 0, activeRequests: 0, completedRequests: 0, failedRequests: 0, errorRate: 0, avgLatencyMs: 0, p95LatencyMs: 0, p99LatencyMs: 0, avgTtftMs: 0, totalTokens: 0, totalCost: 0, remainingBudget: null },
         providers: [],
         cost: { totalCost: 0, totalReserved: 0, committedCost: 0, remainingBudget: null, budgetExceeded: false, byProvider: {}, byPhase: {} },
         recentRequests: [],

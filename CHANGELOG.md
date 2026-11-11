@@ -36,6 +36,11 @@ this doubles as the finding-to-fix map. Full inventory:
 - **The framework client pool retained a client per failed request (E2)**, and
   `onRequest` ran after client construction, so an unauthenticated caller could
   force it.
+- **Short credentials were not redacted.** `redact()` matches
+  `\bsk-[A-Za-z0-9\-_]{20,}`, so a key with fewer than 20 characters after the
+  prefix reached error messages and logs verbatim. The SDK now registers the
+  credentials it is configured with and scrubs them by exact value — no pattern,
+  so no length floor and no false positives.
 
 ### Fixed
 

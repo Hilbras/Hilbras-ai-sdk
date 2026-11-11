@@ -20,8 +20,20 @@ import type { SchemaValidator } from "../src/types/schema.js";
 import type { Transport } from "../src/transport/transport.js";
 import type { ProviderConfig } from "../src/types/providers.js";
 import type { StreamChunk } from "../src/types/streams.js";
+import type { TaskRequirement } from "../src/types/router.js";
+import { DEFAULT_CAPABILITIES } from "../src/types/models.js";
+import type { ModelCapabilities } from "../src/types/models.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Capabilities of the mock text-only providers below: chat completions with
+ * streaming and system prompts, no tools, no vision, no audio/embeddings.
+ */
+const TEXT_ONLY_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_CAPABILITIES,
+  tools: false,
+};
 
 function mockTransport(responseBody: string, status = 200): Transport {
   return {
@@ -79,7 +91,7 @@ describe("Phase 3: Client Edge Cases", () => {
       baseUrl: "https://test.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "existing", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "existing", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
     await expect(client.complete({
       provider: "TestProvider",
@@ -108,7 +120,7 @@ describe("Phase 3: Client Edge Cases", () => {
       baseUrl: "https://test.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
       timeout: 1000,
     });
     // Empty messages should not throw (provider will handle it)
@@ -136,7 +148,7 @@ describe("Phase 3: Client Edge Cases", () => {
       baseUrl: "https://test.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
     expect(client.getProvider("Temp")).toBeDefined();
     client.removeProvider("Temp");
@@ -155,7 +167,7 @@ describe("Phase 3: Client Edge Cases", () => {
       async stream() { throw new Error("unused"); },
       abort() {},
     };
-    const config: ProviderConfig = {
+    const config = {
       name: "Safe",
       baseUrl: "https://safe.example.com/v1",
       authentication: { type: "bearer", apiKey: "original-key" },
@@ -163,14 +175,9 @@ describe("Phase 3: Client Edge Cases", () => {
       models: [{
         id: "safe-model",
         contextWindow: 1000,
-        capabilities: {
-          streaming: true, tools: false, vision: false, reasoning: false,
-          structuredOutput: false, parallelTools: false, systemPrompts: true,
-          embeddings: false, imageGeneration: false, speech: false,
-          transcription: false, reranking: false,
-        },
+        capabilities: TEXT_ONLY_CAPABILITIES,
       }],
-    };
+    } satisfies ProviderConfig;
     const client = new HilbrasClient({ transport });
     client.addProvider(config);
 
@@ -190,7 +197,7 @@ describe("Phase 3: Client Edge Cases", () => {
       baseUrl: "https://test.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
     await client.dispose();
     expect(client.listProviders()).toHaveLength(0);
@@ -547,7 +554,7 @@ describe("Phase 20: Concurrency", () => {
       baseUrl: "https://test.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
 
     // Override the adapter to return unique responses
@@ -623,7 +630,7 @@ describe("Phase 22: Security / Robustness", () => {
       baseUrl: "https://secret-test.com",
       authentication: { type: "bearer", apiKey: "sk-super-secret-key-12345" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
 
     const err = await client
@@ -719,7 +726,7 @@ describe("Phase 27: Fuzz Testing", () => {
 describe("Phase 8: Router Explainability Audit", () => {
   it("explain() and best() return the same model", () => {
     const router = new ModelRouter();
-    const req = { task: "coding", needsTools: true };
+    const req: TaskRequirement = { task: "coding", needsTools: true };
     const best = router.best(req);
     const explained = router.explain(req);
     expect(best?.model).toBe(explained?.model);
@@ -747,8 +754,9 @@ describe("Phase 8: Router Explainability Audit", () => {
     const result = router.explain({ needsVision: true });
     if (result?.candidates) {
       for (const c of result.candidates) {
-        expect(typeof c.rejectionReason).toBe("string");
-        expect(c.rejectionReason.length).toBeGreaterThan(0);
+        const { rejectionReason } = c;
+        expect(typeof rejectionReason).toBe("string");
+        expect(rejectionReason!.length).toBeGreaterThan(0);
       }
     }
   });
@@ -795,7 +803,7 @@ describe("State Isolation", () => {
       baseUrl: "https://a.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
     expect(c1.listProviders()).toHaveLength(1);
     expect(c2.listProviders()).toHaveLength(0);
@@ -820,14 +828,14 @@ describe("State Isolation", () => {
       baseUrl: "https://a.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m1", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m1", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
     client.addProvider({
       name: "B",
       baseUrl: "https://b.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m2", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m2", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
     client.removeProvider("A");
     expect(client.getProvider("A")).toBeUndefined();
@@ -861,7 +869,7 @@ describe("Phase 28: Error body redaction (v0.9.3 hardening)", () => {
       baseUrl: "https://r.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
 
     try {
@@ -884,7 +892,7 @@ describe("Phase 28: Error body redaction (v0.9.3 hardening)", () => {
       baseUrl: "https://ant.com",
       authentication: { type: "none" },
       adapter: "anthropic",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
 
     try {
@@ -904,7 +912,7 @@ describe("Phase 28: Error body redaction (v0.9.3 hardening)", () => {
       baseUrl: "https://b.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
 
     try {
@@ -925,7 +933,7 @@ describe("Phase 28: Error body redaction (v0.9.3 hardening)", () => {
       baseUrl: "https://j.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
 
     try {
@@ -945,7 +953,7 @@ describe("Phase 28: Error body redaction (v0.9.3 hardening)", () => {
       baseUrl: "https://n.com",
       authentication: { type: "none" },
       adapter: "openai",
-      models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "m", contextWindow: 1000, capabilities: TEXT_ONLY_CAPABILITIES }],
     });
 
     try {

@@ -69,6 +69,25 @@ import type { AdapterName } from "../types/providers.js";
 import type { ModelCapabilities } from "../types/models.js";
 import { PluginRegistry } from "../plugin/registry.js";
 import type { Plugin } from "../plugin/types.js";
+import { registerKnownSecret } from "../security/known-secrets.js";
+
+/**
+ * Credential material a provider config carries, so it can be registered for
+ * value-based redaction. Covers bearer keys, header auth values, and any extra
+ * header whose name looks credential-ish — Bedrock passes its access key id
+ * that way.
+ */
+function credentialsOf(provider: ProviderConfig): string[] {
+  const credentials: string[] = [];
+  const authentication = provider.authentication;
+  if (authentication.type === "bearer") credentials.push(authentication.apiKey);
+  if (authentication.type === "header") credentials.push(authentication.value);
+
+  for (const [name, value] of Object.entries(provider.extraHeaders ?? {})) {
+    if (/key|token|secret|auth/i.test(name)) credentials.push(value);
+  }
+  return credentials;
+}
 
 export interface HilbrasClientConfig {
   /** Custom transport (default: FetchTransport) */
@@ -385,6 +404,10 @@ export class HilbrasClient implements AsyncDisposable {
 
   addProvider(config: ProviderConfig): void {
     const ownedConfig = cloneProviderConfig(config);
+    // Remember the credentials so they can be scrubbed by exact value from any
+    // error or log line. Pattern matching alone misses short keys: `sk-` needs
+    // 20 characters after the prefix.
+    for (const secret of credentialsOf(ownedConfig)) registerKnownSecret(secret);
     // v0.9.3: SSRF guard. Per-provider `allowInsecure` overrides client-wide
     // `allowInsecureUrls`; local targets require explicit opt-in.
     const guard = validateBaseUrl(ownedConfig.baseUrl, {

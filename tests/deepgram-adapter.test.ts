@@ -95,7 +95,7 @@ describe("DeepgramAdapter", () => {
 
   it("throws on embed/complete/stream calls", async () => {
     const adapter = new DeepgramAdapter({ provider, transport: {} as Transport });
-    await expect(adapter.embed({ model: "x", input: "x" })).rejects.toThrow("does not support embeddings");
-    await expect(adapter.complete({ model: "x", messages: [] })).rejects.toThrow("does not support chat");
+    await expect(adapter.embed()).rejects.toThrow("does not support embeddings");
+    await expect(adapter.complete()).rejects.toThrow("does not support chat");
   });
 });

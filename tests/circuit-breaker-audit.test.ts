@@ -44,7 +44,7 @@ const MINIMAL_PROVIDER: ProviderConfig = {
   baseUrl: "https://test.com/v1",
   authentication: { type: "none" },
   adapter: "openai",
-  models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -102,10 +102,10 @@ describe("Phase 3: Client Isolation — Global Sharing", () => {
   it("failure through Client A affects Client B (global sharing by design)", async () => {
     // NOTE: getOrCreate only applies config on FIRST creation.
     // The default failureThreshold is 5, so we need 5 failures.
-    const c1 = new HilbrasClient({ policy: { circuitBreaker: { enabled: true } } });
-    const c2 = new HilbrasClient({ policy: { circuitBreaker: { enabled: true } } });
-    c1.addProvider({ ...MINIMAL_PROVIDER, name: "SharedProvider", transport: failingTransport() });
-    c2.addProvider({ ...MINIMAL_PROVIDER, name: "SharedProvider", transport: failingTransport() });
+    const c1 = new HilbrasClient({ transport: failingTransport(), policy: { circuitBreaker: { enabled: true } } });
+    const c2 = new HilbrasClient({ transport: failingTransport(), policy: { circuitBreaker: { enabled: true } } });
+    c1.addProvider({ ...MINIMAL_PROVIDER, name: "SharedProvider" });
+    c2.addProvider({ ...MINIMAL_PROVIDER, name: "SharedProvider" });
 
     // Cause 5 failures through c1 (default threshold = 5)
     for (let i = 0; i < 5; i++) {
@@ -372,9 +372,9 @@ describe("Phase 10: Recovery", () => {
 
 describe("Phase 11: Fallback Interaction", () => {
   it("all candidates OPEN → execution fails cleanly", async () => {
-    const c = new HilbrasClient({ policy: { allowFallback: true } });
-    c.addProvider({ ...MINIMAL_PROVIDER, name: "P1", transport: failingTransport() });
-    c.addProvider({ ...MINIMAL_PROVIDER, name: "P2", transport: failingTransport() });
+    const c = new HilbrasClient({ transport: failingTransport(), policy: { allowFallback: true } });
+    c.addProvider({ ...MINIMAL_PROVIDER, name: "P1" });
+    c.addProvider({ ...MINIMAL_PROVIDER, name: "P2" });
 
     // Open both providers (default threshold = 5)
     for (let i = 0; i < 5; i++) {
@@ -403,8 +403,8 @@ describe("Phase 12: Retry Interaction", () => {
   it("retries count as ONE logical failure (not per-attempt)", async () => {
     // DOCUMENTED BEHAVIOR: retries are part of one logical request.
     // The circuit breaker records only the final failure when retries exhaust.
-    const c = new HilbrasClient();
-    c.addProvider({ ...MINIMAL_PROVIDER, name: "retrytest", transport: failingTransport() });
+    const c = new HilbrasClient({ transport: failingTransport() });
+    c.addProvider({ ...MINIMAL_PROVIDER, name: "retrytest" });
 
     try {
       await c.complete({
@@ -630,7 +630,7 @@ describe("Phase 22: API Review", () => {
         });
       } catch (err) {
         // Should be a regular error, not CircuitBreakerOpenError
-        expect(err.constructor.name).not.toBe("CircuitBreakerOpenError");
+        expect(err).not.toBeInstanceOf(CircuitBreakerOpenError);
       }
     }
   });

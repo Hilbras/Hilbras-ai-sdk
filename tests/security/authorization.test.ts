@@ -119,7 +119,7 @@ describe("config resolver integration", () => {
   it("rejects a malformed rbac block in strict mode", () => {
     expect(() =>
       resolveConfig({
-        sources: [createRuntimeSource({ rbac: { roles: { v: { name: "v", allowedModels: "gpt-4o" } } } })],
+        sources: [createRuntimeSource({ rbac: { roles: { v: { name: "v", allowedModels: "gpt-4o" as never } } } })],
         strict: true,
       }),
     ).toThrow(ConfigurationError);

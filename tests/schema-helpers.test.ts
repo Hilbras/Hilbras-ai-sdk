@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { zodSchema, jsonSchema } from "../src/output/schema-helpers.js";
+import type { SchemaValidator } from "../src/types/schema.js";
 
 describe("zodSchema", () => {
   it("wraps a schema validator with options", () => {
-    const schema = {
+    const schema: SchemaValidator = {
       safeParse: (data: unknown) => {
         if (typeof data === "object" && data !== null && "name" in data) {
           return { success: true, data };
@@ -23,7 +24,7 @@ describe("zodSchema", () => {
   });
 
   it("wraps a schema validator without options", () => {
-    const schema = {
+    const schema: SchemaValidator = {
       safeParse: (data: unknown) => ({ success: true, data }),
     };
 

@@ -14,8 +14,9 @@ import { ToolLoopAgent } from "../../src/features/agent/tool-loop.js";
 import { ConfigurationError } from "../../src/errors/index.js";
 import type { AgentTool } from "../../src/features/agent/types.js";
 import type { Transport } from "../../src/transport/transport.js";
+import type { ProviderConfig } from "../../src/types/providers.js";
 
-const provider = (name: string, baseUrl: string) => ({
+const provider = (name: string, baseUrl: string): ProviderConfig => ({
   name,
   baseUrl,
   adapter: "openai",
@@ -161,7 +162,7 @@ describe("client tool policy", () => {
       config: { providers: [provider("p", "https://p.test/v1")], allowedTools: ["allowed"] },
     });
     const complete = vi.fn();
-    client._adapters.set("p", { id: "openai", complete } as never);
+    (client as unknown as { _adapters: Map<string, unknown> })._adapters.set("p", { id: "openai", complete });
 
     await expect(client.complete({
       provider: "p",
@@ -314,7 +315,7 @@ describe("client rbac wiring", () => {
 
   it("rejects a malformed rbac block at construction", () => {
     expect(() => new HilbrasClient({
-      config: { rbac: { roles: { v: { name: "v", allowedModels: "gpt-4o" } } } },
+      config: { rbac: { roles: { v: { name: "v", allowedModels: "gpt-4o" as never } } } },
     })).toThrow(ConfigurationError);
   });
 

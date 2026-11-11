@@ -32,6 +32,7 @@ function makeProvider(): ProviderConfig {
       capabilities: {
         streaming: true, tools: true, vision: false, reasoning: false,
         structuredOutput: true, parallelTools: false, systemPrompts: true,
+        embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false,
       },
     }],
   };

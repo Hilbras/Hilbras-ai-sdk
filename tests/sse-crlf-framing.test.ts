@@ -104,7 +104,6 @@ describe("adapter over a CRLF stream", () => {
     for await (const chunk of adapter.stream({
       model: "test",
       messages: [{ role: "user", content: "go" }],
-      stream: true,
     })) {
       chunks.push(chunk);
     }

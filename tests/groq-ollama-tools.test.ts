@@ -11,10 +11,11 @@ import { describe, expect, it } from "vitest";
 import { GroqAdapter } from "../src/adapters/groq.js";
 import { OllamaAdapter } from "../src/adapters/ollama.js";
 import type { Transport } from "../src/transport/transport.js";
-import type { ProviderConfig } from "../src/types/providers.js";
+import type { AdapterName, ProviderConfig } from "../src/types/providers.js";
+import type { Tool } from "../src/types/tools.js";
 
-const TOOL = {
-  type: "function" as const,
+const TOOL: Tool = {
+  type: "function",
   function: {
     name: "get_weather",
     description: "Get the weather",
@@ -22,7 +23,7 @@ const TOOL = {
   },
 };
 
-const provider = (name: string, baseUrl: string): ProviderConfig => ({
+const provider = (name: AdapterName, baseUrl: string): ProviderConfig => ({
   name,
   baseUrl,
   authentication: { type: "none" },
@@ -73,7 +74,6 @@ describe("Groq tool calling", () => {
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: "weather?" }],
       tools: [TOOL],
-      stream: true,
     })) {
       void _chunk;
     }
@@ -94,7 +94,6 @@ describe("Groq tool calling", () => {
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: "weather?" }],
       tools: [TOOL],
-      stream: true,
     })) {
       chunks.push(chunk);
     }
@@ -117,7 +116,6 @@ describe("Ollama tool calling", () => {
       model: "llama3.1",
       messages: [{ role: "user", content: "weather?" }],
       tools: [TOOL],
-      stream: true,
     })) {
       void _chunk;
     }
@@ -138,7 +136,6 @@ describe("Ollama tool calling", () => {
       model: "llama3.1",
       messages: [{ role: "user", content: "weather?" }],
       tools: [TOOL],
-      stream: true,
     })) {
       chunks.push(chunk);
     }

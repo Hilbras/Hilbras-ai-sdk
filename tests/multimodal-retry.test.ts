@@ -57,7 +57,7 @@ function countingTransport(status: number, calls: { n: number }): Transport {
 }
 
 function clientWith(status: number, calls: { n: number }): HilbrasClient {
-  const client = new HilbrasClient({ transport: countingTransport(status, calls), maxRetries: 1 });
+  const client = new HilbrasClient({ transport: countingTransport(status, calls), policy: { retry: { maxRetries: 1 } } });
   client.addProvider(provider());
   return client;
 }

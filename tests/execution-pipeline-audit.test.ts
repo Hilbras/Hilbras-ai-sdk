@@ -50,7 +50,7 @@ const MODEL = "gpt-5.6-sol";
 const MODEL_PROVIDER: ProviderConfig = {
   name: "Test", baseUrl: "https://test.com/v1",
   authentication: { type: "none" }, adapter: "openai",
-  models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true } }],
+  models: [{ id: MODEL, contextWindow: 128_000, capabilities: { streaming: true, tools: true, vision: false, reasoning: false, structuredOutput: true, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
 };
 
 function assertBudgetInvariant(t: BudgetTracker) {

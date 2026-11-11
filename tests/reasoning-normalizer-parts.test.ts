@@ -83,7 +83,6 @@ describe("adapter surfaces both parts of a mixed delta", () => {
     for await (const chunk of adapter.stream({
       model: "test",
       messages: [{ role: "user", content: "go" }],
-      stream: true,
     })) {
       chunks.push(chunk);
     }

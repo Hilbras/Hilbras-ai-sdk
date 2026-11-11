@@ -193,7 +193,7 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
     expect(() =>
       resolveConfig({
         sources: [createRuntimeSource({
-          rbac: { roles: { viewer: { name: "viewer", allowedModels: "gpt-4o" } } },
+          rbac: { roles: { viewer: { name: "viewer", allowedModels: "gpt-4o" as never } } },
         })],
         strict: true,
       }),
@@ -217,7 +217,7 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
         defaultRole: "viewer",
       },
       () => "user-1",
-      { onDiagnostic: (d) => diagnostics.push(d.code) } as never,
+      { onDiagnostic: (d) => diagnostics.push(d.code) },
     );
     await mw(makeCtx({ body: { provider: "openai", model: "gpt-4o", max_tokens: 100_000 } }));
     expect(diagnostics.length).toBeGreaterThan(0);

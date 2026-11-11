@@ -39,6 +39,7 @@ describe("CohereRerankAdapter", () => {
 
     const adapter = new CohereRerankAdapter({ provider, transport });
     const result = await adapter.rerank({
+      model: "rerank-english-v3.0",
       query: "What is machine learning?",
       documents: ["ML is a subset of AI.", "The weather is nice."],
     });
@@ -96,6 +97,7 @@ describe("CohereRerankAdapter", () => {
 
     const adapter = new CohereRerankAdapter({ provider, transport });
     await adapter.rerank({
+      model: "rerank-english-v3.0",
       query: "test",
       documents: ["a", "b", "c", "d", "e"],
       topN: 3,
@@ -115,12 +117,12 @@ describe("CohereRerankAdapter", () => {
     };
 
     const adapter = new CohereRerankAdapter({ provider, transport });
-    await expect(adapter.rerank({ query: "test", documents: ["a"] })).rejects.toThrow(ProviderRequestError);
+    await expect(adapter.rerank({ model: "rerank-english-v3.0", query: "test", documents: ["a"] })).rejects.toThrow(ProviderRequestError);
   });
 
   it("throws on embed/complete/stream calls", async () => {
     const adapter = new CohereRerankAdapter({ provider, transport: {} as Transport });
-    await expect(adapter.embed({ model: "x", input: "x" })).rejects.toThrow("does not support embeddings");
-    await expect(adapter.complete({ model: "x", messages: [] })).rejects.toThrow("does not support chat");
+    await expect(adapter.embed()).rejects.toThrow("does not support embeddings");
+    await expect(adapter.complete()).rejects.toThrow("does not support chat");
   });
 });

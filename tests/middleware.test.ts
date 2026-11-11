@@ -41,7 +41,7 @@ describe("composeMiddlewares", () => {
 
 describe("authMiddleware", () => {
   it("adds Authorization header from token function", async () => {
-    let capturedHeaders: Record<string, string> = {};
+    let capturedHeaders: Record<string, string | undefined> = {};
     const mw = authMiddleware(() => "my-token");
     const ctx = mockCtx({
       next: async () => { return new Response("ok"); },

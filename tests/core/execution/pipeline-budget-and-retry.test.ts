@@ -169,6 +169,7 @@ describe("structured retry classification (C6)", () => {
       estimatedCost: 0.5,
       policy: {},
       fallbackCandidates: () => [],
+      estimateFallbackCost: () => 0,
       getProviderTimeout: () => 0,
     });
 

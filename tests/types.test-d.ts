@@ -71,7 +71,7 @@ describe("Client types", () => {
 
   it("complete() without provider is typed as Promise<string>", () => {
     const client = new HilbrasClient();
-    type CompleteReturn = ReturnType<typeof client.complete>;
+    type CompleteReturn = ReturnType<typeof client.complete<string>>;
     expectTypeOf<CompleteReturn>().resolves.toBeString();
   });
 });
@@ -93,10 +93,10 @@ describe("Tool builder types", () => {
       },
     });
 
-    expectTypeOf(myTool).toMatchObjectType<DefinedTool>();
-    expectTypeOf(myTool.definition).toMatchObjectType<Tool>();
+    expectTypeOf(myTool).toEqualTypeOf<DefinedTool<Record<string, unknown>, { temp: number; condition: string }>>();
+    expectTypeOf(myTool.definition).toEqualTypeOf<Tool>();
     expectTypeOf(myTool.execute).toBeFunction();
-    expectTypeOf(myTool.inputSchema).toMatchObjectType<ParameterSchema>();
+    expectTypeOf(myTool.inputSchema).toEqualTypeOf<ParameterSchema>();
     expectTypeOf(myTool.required).toEqualTypeOf<string[]>();
   });
 
@@ -107,7 +107,7 @@ describe("Tool builder types", () => {
       parameters: { query: { type: "string" } },
       required: ["query"],
     });
-    expectTypeOf(def).toMatchObjectType<Tool>();
+    expectTypeOf(def).toEqualTypeOf<Tool>();
   });
 
   it("dynamicTool() returns Tool | DefinedTool", () => {
@@ -117,7 +117,7 @@ describe("Tool builder types", () => {
       parameters: { type: "object", properties: {}, required: [] },
     });
     // Could be either Tool or DefinedTool depending on execute
-    expectTypeOf(result).toMatchObjectType<Tool>();
+    expectTypeOf(result).toEqualTypeOf<Tool | DefinedTool>();
   });
 });
 
@@ -156,7 +156,7 @@ describe("Multi-modal types", () => {
       segments: [{ start: 0, end: 10, text: "hello" }],
     };
     expectTypeOf(result.text).toBeString();
-    expectTypeOf(result.segments).toEqualTypeOf<Array<{ start: number; end: number; text: string }>>();
+    expectTypeOf(result.segments).toEqualTypeOf<Array<{ start: number; end: number; text: string }> | undefined>();
   });
 
   it("RerankResult has correct shape", () => {
@@ -193,11 +193,13 @@ describe("Provider types", () => {
       baseUrl: "https://api.openai.com/v1",
       authentication: { type: "bearer", apiKey: "sk-test" },
       adapter: "openai",
-      models: [{ id: "gpt-4o", contextWindow: 128000, capabilities: { streaming: true, tools: true, vision: true, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
+      models: [{ id: "gpt-4o", contextWindow: 128000, capabilities: { streaming: true, tools: true, vision: true, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true, embeddings: false, imageGeneration: false, speech: false, transcription: false, reranking: false } }],
     };
     expectTypeOf(config.name).toBeString();
     expectTypeOf(config.baseUrl).toBeString();
-    expectTypeOf(config.authentication).toMatchObjectType<{ type: string; apiKey: string }>();
+    if (config.authentication.type === "bearer") {
+      expectTypeOf(config.authentication).toMatchObjectType<{ type: "bearer"; apiKey: string }>();
+    }
   });
 
   it("AIProvider interface has expected methods", () => {
@@ -207,7 +209,7 @@ describe("Provider types", () => {
       stream(params: GenerateParams): AsyncGenerator<StreamChunk>;
       complete(params: GenerateParams): Promise<string>;
     };
-    expectTypeOf<AIProvider>().toMatchObjectType<ProviderShape>();
+    expectTypeOf<AIProvider>().toExtend<ProviderShape>();
   });
 });
 
@@ -220,7 +222,7 @@ describe("Schema helper types", () => {
       properties: { name: { type: "string" }, age: { type: "number" } },
       required: ["name", "age"],
     });
-    expectTypeOf(config).toMatchObjectType<StructuredOutputConfig<{ name: string; age: number }>>();
+    expectTypeOf(config).toEqualTypeOf<StructuredOutputConfig<{ name: string; age: number }>>();
   });
 
   it("zodSchema() accepts any SchemaValidator", () => {
@@ -229,7 +231,7 @@ describe("Schema helper types", () => {
       safeParse: (data: unknown) => ({ success: true, data: data as { name: string } }),
     };
     const config = zodSchema<{ name: string }>(mockValidator);
-    expectTypeOf(config).toMatchObjectType<StructuredOutputConfig<{ name: string }>>();
+    expectTypeOf(config).toEqualTypeOf<StructuredOutputConfig<{ name: string }>>();
   });
 });
 
