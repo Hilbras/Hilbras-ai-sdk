@@ -2,6 +2,9 @@
 
 ## Setup
 
+Requires **Node 22.12+** for development — vitest 5 needs it. (The published
+package still runs on Node 18+; that is a separate, runtime constraint.)
+
 ```bash
 git clone https://github.com/Hilbras/Hilbras-ai-sdk.git
 cd Hilbras-ai-sdk
@@ -19,6 +22,7 @@ npm test
 | `npm test` | Run all tests (automatically builds packages that need compiled output first) |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run lint` | Lint source with oxlint |
+| `npm run typecheck:tests` | Typecheck `tests/` (`tsc --noEmit` covers `src` only) |
 
 ## Project Structure
 
