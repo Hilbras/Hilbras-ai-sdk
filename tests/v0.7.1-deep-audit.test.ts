@@ -613,18 +613,28 @@ describe("Phase 16: Observability Integrity", () => {
 
 describe("Phase 17: Security Audit", () => {
   it("API key not in error messages", async () => {
-    const client = new HilbrasClient();
+    // Hermetic: a stub transport rather than a real request to test.com, and a
+    // real assertion — the old form passed vacuously if no error was thrown.
+    const client = new HilbrasClient({
+      transport: {
+        async request() { return new Response('{"error":"boom"}', { status: 401 }); },
+        async stream() { throw new Error("unused"); },
+        abort() {},
+      },
+    });
     client.addProvider({
       name: "Secret", baseUrl: "https://test.com",
       authentication: { type: "bearer", apiKey: "sk-secret-12345" },
       adapter: "openai",
       models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
     });
-    try {
-      await client.complete({ provider: "Secret", model: "m", messages: [{ role: "user", content: "hi" }] });
-    } catch (err) {
-      expect(String(err)).not.toContain("sk-secret-12345");
-    }
+
+    const err = await client
+      .complete({ provider: "Secret", model: "m", messages: [{ role: "user", content: "hi" }] })
+      .then(() => null, (error: unknown) => error);
+
+    expect(err).not.toBeNull();
+    expect(String(err)).not.toContain("sk-secret-12345");
   });
 
   it("API key not in routing reasons", () => {

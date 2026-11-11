@@ -305,8 +305,17 @@ six breaking changes arriving at once would be least reviewable.
   and `node:crypto`; `import "@hilbras/sdk"` therefore does not load in a
   browser or edge bundle without shims. 3.8.0 corrected the README and pointed
   it here. The breaking-change decision in this item is untouched.
-- **Item 4 (framework hooks) — one blocker removed, one confirmed.** The hooks
-  now abort in-flight streams on unmount, but the React and Vue lifecycle wiring
-  has **no automated test**: the repo has no DOM environment or test renderer, so
-  `useEffect` cleanup and `onUnmounted` cannot be exercised. Adding jsdom for
-  these hooks is unblocked work, and would also cover the React-client paths.
+- **Item 4 (framework hooks) — blocker removed, and closed.** The hooks now
+  abort in-flight streams on unmount, and the React and Vue lifecycle wiring is
+  covered by real tests (`tests/frameworks/react-unmount-abort.test.ts`,
+  `vue-unmount-abort.test.ts`). That needed a DOM: **`jsdom` was added as a
+  devDependency** and those files opt in with
+  `// @vitest-environment jsdom`, so no global test environment changed. The
+  published package still has zero runtime dependencies. Svelte remains the one
+  hook that cannot self-register a destroy handler — it imports nothing from
+  `svelte` so the module stays loadable without the peer dependency — and
+  exposes `dispose()` for `onDestroy` instead.
+- **New: `tests/` is not typechecked.** `tsconfig.json` includes `src` only, so
+  `npx tsc --noEmit` silently skips the test suite. Compiling it for the first
+  time surfaces 283 errors, mostly loose mock fixtures. Worth its own pass —
+  it is the kind of gap that hides real breakage in test-only code.

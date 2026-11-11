@@ -98,8 +98,11 @@ describe("Phase 3: Client Edge Cases", () => {
     await expect(gen.next()).rejects.toThrow("Provider 'Nonexistent' not found");
   });
 
-  it("complete() with empty messages does not crash", { timeout: 30_000 }, async () => {
-    const client = new HilbrasClient();
+  it("complete() with empty messages does not crash", async () => {
+    // Hermetic, and a non-retryable status so no retry backoff is spent:
+    // 10 real requests to test.com took ~26s and made this the suite's most
+    // load-sensitive test.
+    const client = new HilbrasClient({ transport: mockTransport('{"error":"boom"}', 401) });
     client.addProvider({
       name: "Test",
       baseUrl: "https://test.com",
@@ -535,8 +538,10 @@ describe("Phase 18: Observability Attack", () => {
 // ─── Phase 20: Concurrency Testing ────────────────────────────────────────
 
 describe("Phase 20: Concurrency", () => {
-  it("10 concurrent complete() calls on same client do not corrupt state", { timeout: 30_000 }, async () => {
-    const client = new HilbrasClient();
+  it("10 concurrent complete() calls on same client do not corrupt state", async () => {
+    // Hermetic, and a non-retryable status: the network dependency plus 500's
+    // retry backoff is what made this load-sensitive.
+    const client = new HilbrasClient({ transport: mockTransport('{"error":"boom"}', 401) });
     client.addProvider({
       name: "ConcurrentTest",
       baseUrl: "https://test.com",
@@ -603,8 +608,16 @@ describe("Phase 20: Concurrency", () => {
 // ─── Phase 22: Security / Robustness ──────────────────────────────────────
 
 describe("Phase 22: Security / Robustness", () => {
-  it("API keys are not exposed in error messages", { timeout: 30_000 }, async () => {
-    const client = new HilbrasClient();
+  it("API keys are not exposed in error messages", async () => {
+    // Hermetic, and the stub body deliberately echoes the key: the assertion
+    // now covers redaction of upward error text. Previously this ran against
+    // secret-test.com and passed vacuously whenever no error was thrown.
+    const client = new HilbrasClient({
+      transport: mockTransport(
+        '{"error":{"message":"invalid api key sk-super-secret-key-12345"}}',
+        401,
+      ),
+    });
     client.addProvider({
       name: "SecretTest",
       baseUrl: "https://secret-test.com",
@@ -613,16 +626,20 @@ describe("Phase 22: Security / Robustness", () => {
       models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
     });
 
-    try {
-      await client.complete({
+    const err = await client
+      .complete({
         provider: "SecretTest",
         model: "m",
         messages: [{ role: "user", content: "hi" }],
-      });
-    } catch (err) {
-      // Error message should not contain the API key
-      expect(String(err)).not.toContain("sk-super-secret-key-12345");
-    }
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(err).not.toBeNull();
+    // Error message should not contain the API key
+    expect(String(err)).not.toContain("sk-super-secret-key-12345");
   });
 
   it("malformed provider config does not crash router", () => {

@@ -292,17 +292,32 @@ describe("Security", () => {
   });
 
   it("API keys not exposed in errors", async () => {
-    const client = new HilbrasClient();
+    // Hermetic. The stub body echoes the key, so this now covers redaction of
+    // upward error text rather than passing vacuously when no error was thrown.
+    //
+    // The key is >= 20 characters after `sk-` because that is the floor the
+    // credential pattern matches on; shorter `sk-` values are not redacted (see
+    // the note in SPEC-v3.8.0-audit-fixes.md).
+    const key = "sk-super-secret-key-12345";
+    const client = new HilbrasClient({
+      transport: {
+        async request() { return new Response(`{"error":{"message":"bad key ${key}"}}`, { status: 401 }); },
+        async stream() { throw new Error("unused"); },
+        abort() {},
+      },
+    });
     client.addProvider({
       name: "Test", baseUrl: "https://test.com",
-      authentication: { type: "bearer", apiKey: "sk-super-secret-12345" },
+      authentication: { type: "bearer", apiKey: key },
       adapter: "openai",
       models: [{ id: "m", contextWindow: 1000, capabilities: { streaming: true, tools: false, vision: false, reasoning: false, structuredOutput: false, parallelTools: false, systemPrompts: true } }],
     });
-    try {
-      await client.complete({ provider: "Test", model: "m", messages: [{ role: "user", content: "hi" }] });
-    } catch (err) {
-      expect(String(err)).not.toContain("sk-super-secret-12345");
-    }
+
+    const err = await client
+      .complete({ provider: "Test", model: "m", messages: [{ role: "user", content: "hi" }] })
+      .then(() => null, (error: unknown) => error);
+
+    expect(err).not.toBeNull();
+    expect(String(err)).not.toContain(key);
   });
 });
