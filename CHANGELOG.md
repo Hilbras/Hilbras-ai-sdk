@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.8.1] - 2026-11-12
+
+A patch release for a denial-of-service fix. Code scanning was enabled on this
+repository for the first time as part of this work, and it found this in shipped
+code.
+
+### Security
+
+- **Quadratic backtracking in `extractJson`.** The markdown-fence pattern
+  `/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/` can partition its leading
+  whitespace ambiguously, so a response that opens a fence and then runs on in
+  newlines without ever closing it makes the regex engine backtrack
+  super-linearly. Measured against `"```" + "\n".repeat(N) + "x"`: **500
+  newlines took ~4 s and 2 000 did not finish within 20 s.** `extractJson`
+  parses model output — including on the `stream({ output: schema })` path — so
+  a long enough upstream response could hang the process. Fence stripping now
+  uses string operations instead of a regex. Output is unchanged for valid
+  input; all 28 existing `extractJson` cases pass untouched.
+- The doc-example extractor's script-tag pattern now tolerates attributes in the
+  closing tag (`</script >`, `</script\t\n bar>`), which a plain `</script>`
+  misses. Tooling only.
+
+### Changed
+
+- Two test fixtures used `url.includes("openai.com")` for
+  `resolveProviderByUrl` / `resolveRequestFromContext` — both public API entry
+  points. They now compare `new URL(url).hostname`, so the fixtures no longer
+  demonstrate a substring check that also matches `evil-openai.com`.
+
+---
+
 ## [3.8.0] - 2026-11-11
 
 A correctness and safety release built from a whole-repo audit of 3.7.0. Every
