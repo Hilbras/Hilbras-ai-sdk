@@ -153,7 +153,9 @@ describe("resolveRequestFromContext", () => {
   it("derives the provider from the URL and the model from the body", () => {
     const resolved = resolveRequestFromContext(
       ctx("https://api.openai.com/v1/chat/completions", { model: "gpt-4o", max_tokens: 128 }),
-      (url) => (url.includes("openai.com") ? "openai" : null),
+      // Hostname equality, not substring: `includes("openai.com")` also matches
+      // `evil-openai.com`, and this callback is a user-supplied entry point.
+      (url) => (new URL(url).hostname === "api.openai.com" ? "openai" : null),
     );
     expect(resolved).toEqual({ provider: "openai", model: "gpt-4o", tokenCount: 128, toolName: undefined });
   });

@@ -58,7 +58,10 @@ for (const match of markdown.matchAll(fence)) {
 }
 
 for (const match of markdown.matchAll(componentFence)) {
-  const script = /<script[^>]*>([\s\S]*?)<\/script>/.exec(match[2]);
+  // Tolerant of attributes and whitespace in the closing tag. CodeQL's
+  // js/bad-tag-filter specifically wants end tags like `</script\t\n bar>`
+  // covered, which a plain `</script>` (or `</script\s*>`) misses.
+  const script = /<script\b[^>]*>([\s\S]*?)<\/script\s*[^>]*>/i.exec(match[2]);
   if (!script) continue;
   writeFileSync(`${outDir}/ex${count}.ts`, script[1]);
   count++;

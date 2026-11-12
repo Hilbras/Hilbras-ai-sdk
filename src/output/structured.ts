@@ -67,9 +67,18 @@ export function extractJson(raw: string): string {
   }
 
   // Strip markdown code fences: ```json ... ``` or ``` ... ```
-  const fenceMatch = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
-  if (fenceMatch) {
-    return fenceMatch[1].trim();
+  //
+  // String operations rather than a regex. The equivalent pattern
+  // (`^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$`) partitions the leading
+  // whitespace ambiguously, so a response that opens a fence and then runs on
+  // in spaces without ever closing it makes the engine backtrack
+  // quadratically — tens of thousands of spaces is enough to hang the process.
+  // `extractJson` runs on model output, so an upstream response could trigger
+  // it.
+  if (text.length >= 6 && text.startsWith("```") && text.endsWith("```")) {
+    // Drop the opening fence and its optional language token (```json).
+    const body = text.slice(3, -3).replace(/^(?:json)?[ \t]*\r?\n?/, "");
+    return body.trim();
   }
 
   // Try to find a JSON object or array in the text by bracket matching
