@@ -150,7 +150,10 @@ describe("B. RBAC defects (red on v3.3.0, fixed in v3.4.0)", () => {
     const mw = createRBACMiddleware(
       { roles: { viewer: { name: "viewer", allowedProviders: ["anthropic"] } }, defaultRole: "viewer" },
       () => "user-1",
-      { resolveProviderByUrl: (url) => (url.includes("openai.com") ? "openai" : null) },
+      // Hostname equality, not substring: `includes("openai.com")` also matches
+      // `evil-openai.com`. This callback is public API, so the fixture should
+      // show the safe form.
+      { resolveProviderByUrl: (url) => (new URL(url).hostname === "api.openai.com" ? "openai" : null) },
     );
     // No `provider` in the body (adapters never send one); the provider is
     // implied by the request URL. Before v3.4.0 the check was skipped entirely.

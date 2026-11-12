@@ -58,7 +58,9 @@ for (const match of markdown.matchAll(fence)) {
 }
 
 for (const match of markdown.matchAll(componentFence)) {
-  const script = /<script[^>]*>([\s\S]*?)<\/script>/.exec(match[2]);
+  // Tolerant of attributes and of whitespace in the closing tag (`</script >`),
+  // which a bare `<script[^>]*>...</script>` filter misses.
+  const script = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/i.exec(match[2]);
   if (!script) continue;
   writeFileSync(`${outDir}/ex${count}.ts`, script[1]);
   count++;

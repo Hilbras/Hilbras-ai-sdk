@@ -145,6 +145,24 @@ describe("buildJsonModeParams", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("Phase 12: extractJson robustness (v0.9.3 hardening)", () => {
+  it("does not backtrack catastrophically on an unclosed fence", () => {
+    // The fence-stripping pattern used to be
+    // `^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$`, whose leading whitespace can be
+    // partitioned ambiguously. A response that opens a fence and then runs on in
+    // newlines without ever closing it made the engine backtrack
+    // super-linearly: 500 newlines took ~4s, 2000 exceeded 20s. extractJson
+    // parses model output, so an upstream response could hang the process.
+    const raw = "```" + "\n".repeat(5000) + "x";
+
+    const started = Date.now();
+    const result = extractJson(raw);
+    const elapsed = Date.now() - started;
+
+    expect(elapsed).toBeLessThan(1000);
+    // No JSON in it, so the input comes back unchanged.
+    expect(result).toBe(raw);
+  });
+
   it("extracts JSON with escaped quotes", () => {
     const input = '{"msg":"He said \\"hello\\""}';
     expect(extractJson(input)).toBe(input);
