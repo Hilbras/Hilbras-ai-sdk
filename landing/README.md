@@ -61,7 +61,14 @@ so the card is the mark alone until that can be generated with the real font.
 
 ## Deploying
 
-GitHub Pages is **not** configured for this repository yet, so nothing publishes
-this automatically. Once Pages is enabled, either point it at a branch folder
-containing `landing/`, or add a workflow that publishes that directory — the page
-needs no build step.
+Live at **https://hilbras-sdk.vercel.app**, as the `hilbras-sdk` project. It is
+connected to `Hilbras/Hilbras-ai-sdk` with the root directory set to `landing`,
+and `main` as the production branch — so the page ships with the rest of the
+repository rather than being uploaded by hand. There is no build: Vercel detects
+no framework and serves the folder as it stands.
+
+Local runs of the Vercel CLI create `landing/.vercel/` and `landing/.env.local`;
+`landing/.gitignore` keeps both out of the repository.
+
+GitHub Pages is **not** configured for this repository, so nothing publishes from
+there.
