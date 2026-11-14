@@ -9,6 +9,18 @@ updates:
         update-types:
           - minor
           - patch
+  # The marketing page is a separate package with its own lockfile, so the root
+  # entry does not cover it. The landing CI job builds it on every pull request,
+  # so an update that breaks it fails the check rather than shipping.
+  - package-ecosystem: npm
+    directory: /landing
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: github-actions
     directory: /
     schedule:
