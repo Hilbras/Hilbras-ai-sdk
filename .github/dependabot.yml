@@ -21,6 +21,14 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # @astrojs/check declares its peer range as ^5 || ^6, so TypeScript 7
+      # cannot be installed here at all: `npm ci` fails with ERESOLVE and the
+      # build never starts. Dependabot proposed it twice. Revisit when that
+      # peer range moves.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
   - package-ecosystem: github-actions
     directory: /
     schedule:
