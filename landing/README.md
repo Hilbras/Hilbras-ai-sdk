@@ -87,11 +87,29 @@ that never runs leaves the content in place. Everything sits behind
 class set before first paint, so the page reads correctly with scripting off.
 
 The continuous animations — marquee, glow, shimmer, caret, heartbeat — start paused and
-are started by `interactions.ts` only while their element is on screen. That is not
-fussiness: with them running unconditionally, Lighthouse measured **3.0 s of blocking
-time on a throttled phone**, because a mid-range CPU cannot repaint a shimmering
-headline and a 36-item marquee for free. Paused is also the no-script default, which is
-why a page without JavaScript simply holds still instead of looking broken.
+are started by `interactions.ts` only while their element is on screen, so a phone is
+never repainting a headline or scrolling a marquee that nobody is looking at. Paused is
+also the no-script default, which is why a page without JavaScript simply holds still
+instead of looking broken.
+
+### A note on the measurements
+
+Lighthouse runs against this page varied by up to **35 performance points between
+identical runs of the same build** — more than any difference measured between the old
+page and this one. A scored number from a single run is therefore not evidence, and
+nothing in this file rests on one.
+
+What is stable, and structural rather than scored:
+
+- render-blocking resources: 604 ms → **0**, verified and explained by the third-party
+  stylesheet being gone;
+- third-party font origins contacted: 2 → **0**, verifiable by grepping the built HTML;
+- the canonical, robots.txt and sitemap defects below, all verifiable with curl.
+
+Measured honestly, the two builds trade places: this one reaches first paint sooner
+(FCP and LCP both lower, consistently), while the old hand-written page did *less*
+main-thread work and varied much less between runs. Main-thread cost is the open item
+here, not first paint — it is what a follow-up should target.
 
 The hero lift uses `translate` rather than `transform`, because the reveal animation
 owns `transform` and one shorthand would have the two overwriting each other's
