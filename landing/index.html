@@ -37,6 +37,9 @@
     <link rel="stylesheet" href="styles.css" />
     <script>
       (function () {
+        // Set before the first paint, so the scroll-reveal state is never a flash
+        // of visible-then-hidden. Absent this class the CSS keeps content visible.
+        document.documentElement.classList.add('js');
         try {
           var stored = localStorage.getItem('hilbras-sdk-theme');
           var theme =
@@ -70,6 +73,7 @@
     </script>
   </head>
   <body>
+    <div class="progress" id="progress" aria-hidden="true"></div>
     <a class="skip-link" href="#main">Skip to content</a>
 
     <header class="nav-blur">
@@ -348,28 +352,63 @@ client.addProvider({ name: <span class="code-str">'anthropic'</span>, apiKey: pr
         }
       });
 
-      // Reveal on scroll. Content is visible without this if the observer never fires.
+      // Reveal on scroll. The hidden state exists only under `.js` and only for
+      // readers who have not asked for reduced motion, so this is purely
+      // additive — and anything that fails here reveals the content rather than
+      // leaving it invisible.
       var reveals = document.querySelectorAll('.reveal');
-      if ('IntersectionObserver' in window) {
-        var observer = new IntersectionObserver(
-          function (entries) {
-            entries.forEach(function (entry) {
-              if (entry.isIntersecting) {
-                entry.target.classList.add('in');
-                observer.unobserve(entry.target);
-              }
-            });
-          },
-          { rootMargin: '0px 0px -10% 0px' },
-        );
-        reveals.forEach(function (node) {
-          observer.observe(node);
-        });
-      } else {
+      var showAll = function () {
         reveals.forEach(function (node) {
           node.classList.add('in');
         });
+      };
+      try {
+        if ('IntersectionObserver' in window) {
+          var observer = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add('in');
+                  observer.unobserve(entry.target);
+                }
+              });
+            },
+            { rootMargin: '0px 0px -10% 0px' },
+          );
+          reveals.forEach(function (node) {
+            observer.observe(node);
+          });
+        } else {
+          showAll();
+        }
+      } catch (error) {
+        showAll();
       }
+
+      // Progress hairline. The ratio is handed to CSS through a custom property,
+      // and scroll events are coalesced through rAF so a fast flick cannot queue
+      // up a frame per event.
+      var progress = document.getElementById('progress');
+      var queued = false;
+      var paintProgress = function () {
+        queued = false;
+        var scrollable = document.documentElement.scrollHeight - window.innerHeight;
+        var ratio = scrollable > 0 ? window.scrollY / scrollable : 0;
+        progress.style.setProperty('--progress', String(Math.min(1, Math.max(0, ratio))));
+      };
+      window.addEventListener(
+        'scroll',
+        function () {
+          if (!queued) {
+            queued = true;
+            requestAnimationFrame(paintProgress);
+          }
+        },
+        { passive: true },
+      );
+      window.addEventListener('resize', paintProgress, { passive: true });
+      progress.classList.add('live');
+      paintProgress();
 
       document.getElementById('year').textContent = String(new Date().getFullYear());
     </script>

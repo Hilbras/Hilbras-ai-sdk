@@ -207,13 +207,19 @@ a {
   box-shadow: var(--shadow);
 }
 
+/*
+ * The hover lift moves the card with `translate` rather than `transform`. The
+ * scroll reveal animates `transform`, and one shorthand would have the two
+ * overwriting each other's transition — `translate` is a separate property, so
+ * they compose.
+ */
 .lift {
-  transition: transform var(--motion-base) var(--motion-ease), border-color var(--motion-base) var(--motion-ease),
+  transition: translate var(--motion-base) var(--motion-ease), border-color var(--motion-base) var(--motion-ease),
     box-shadow var(--motion-base) var(--motion-ease);
 }
 
 .lift:hover {
-  transform: translateY(-4px);
+  translate: 0 -4px;
   border-color: color-mix(in srgb, var(--gold) 38%, var(--line));
   box-shadow: 0 18px 48px color-mix(in srgb, var(--glow) 80%, transparent);
 }
@@ -235,6 +241,9 @@ a {
 }
 
 .btn-gold {
+  /* Clips the hover shine, which lives in the motion section at the end. */
+  position: relative;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--gold) 70%, #000 30%);
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold-bright) 55%, var(--gold) 100%);
   box-shadow: 0 6px 24px var(--glow);
@@ -270,6 +279,15 @@ a {
   border-radius: 12px;
   background: var(--gold-soft);
   color: var(--gold-text);
+  transition: rotate var(--motion-base) var(--motion-ease), scale var(--motion-base) var(--motion-ease),
+    border-color var(--motion-base) var(--motion-ease);
+}
+
+/* The tile leans a little when its card lifts. */
+.lift:hover .icon-tile {
+  rotate: -6deg;
+  scale: 1.06;
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
 }
 
 .code-window {
@@ -362,6 +380,7 @@ a {
 }
 
 .nav-links a {
+  position: relative;
   border-radius: 8px;
   color: var(--muted);
   font-size: 13px;
@@ -371,9 +390,29 @@ a {
   transition: color 150ms ease, background 150ms ease;
 }
 
-.nav-links a:hover {
+/* Underline draws in from the left on hover and on keyboard focus. */
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  right: 11px;
+  bottom: 5px;
+  left: 11px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+
+.nav-links a:hover,
+.nav-links a:focus-visible {
   background: var(--gold-soft);
   color: var(--gold-text);
+}
+
+.nav-links a:hover::after,
+.nav-links a:focus-visible::after {
+  transform: scaleX(1);
 }
 
 .theme-toggle {
@@ -729,22 +768,224 @@ section.band {
   color: var(--gold-text);
 }
 
-/* Reveal on scroll, without a JS dependency for the content itself. */
-.reveal {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 560ms var(--motion-ease), transform 560ms var(--motion-ease);
+/* ─── Motion ─────────────────────────────────────────────────────────────── */
+
+/*
+ * Every movement on the page sits behind `no-preference`, so a reader who has
+ * turned motion down gets the page with none of it and no half-applied state to
+ * get stuck in. The entrance animations fill `backwards`, which makes the
+ * resting state the visible one: if an animation never runs, the content is
+ * simply there.
+ */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.reveal.in {
-  opacity: 1;
-  transform: none;
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+  50% {
+    opacity: 0.45;
+    scale: 0.8;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-130%);
+  }
+  to {
+    transform: translateX(130%);
+  }
+}
+
+/* Progress hairline. `--progress` is written by the scroll handler; the paint
+   stays here. */
+.progress {
+  position: fixed;
+  z-index: 200;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  opacity: 0;
+  transform: scaleX(var(--progress, 0));
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+.progress.live {
+  opacity: 0.9;
+}
+
+/* Anchor targets clear the sticky navbar instead of landing under it. */
+[id] {
+  scroll-margin-top: 78px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Hero: the blocks rise in reading order. */
+  .hero-inner > * {
+    animation: rise 680ms var(--motion-ease) backwards;
+  }
+
+  .hero-inner > *:nth-child(2) {
+    animation-delay: 90ms;
+  }
+
+  .hero-inner > *:nth-child(3) {
+    animation-delay: 170ms;
+  }
+
+  .hero-inner > *:nth-child(4) {
+    animation-delay: 250ms;
+  }
+
+  .hero-inner > *:nth-child(5) {
+    animation-delay: 330ms;
+  }
+
+  .hero-inner > *:nth-child(6) {
+    animation-delay: 430ms;
+  }
+
+  /* The wash behind the hero breathes. Opacity and transform only, both
+     composited, so this does not repaint a 620px band every frame. */
+  .hero-glow {
+    animation: breathe 11s ease-in-out infinite;
+  }
+
+  /* A slow heartbeat on the eyebrow dot. */
+  .eyebrow-dot {
+    animation: pulse 2.8s ease-in-out infinite;
+  }
+
+  /* The gradient sweeps across the headline. */
+  .gold-text {
+    background-size: 240% 100%;
+    animation: shimmer 8s linear infinite;
+  }
+
+  /* A caret waiting at the end of the hero snippet. */
+  .hero-window pre::after {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 13px;
+    margin-left: 5px;
+    background: #f3d789;
+    vertical-align: -2px;
+    animation: blink 1.1s steps(1, end) infinite;
+  }
+
+  /* Light sweeping across the primary button. */
+  .btn-gold::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 32%, rgba(255, 255, 255, 0.5) 50%, transparent 68%);
+    transform: translateX(-130%);
+    pointer-events: none;
+  }
+
+  .btn-gold:hover::after,
+  .btn-gold:focus-visible::after {
+    animation: sweep 720ms var(--motion-ease);
+  }
+
+  /* Reveal on scroll. `--reveal-delay` staggers the items of a grid, and feeds
+     only the opacity and transform transitions — so it cannot slow the hover
+     lift down with it. */
+  .js .reveal {
+    opacity: 0;
+    transform: translateY(22px);
+    transition: opacity 620ms var(--motion-ease) var(--reveal-delay, 0ms),
+      transform 620ms var(--motion-ease) var(--reveal-delay, 0ms);
+  }
+
+  .js .reveal.in {
+    opacity: 1;
+    transform: none;
+  }
+
+  .grid-3 > :nth-child(2),
+  .grid-4 > :nth-child(2),
+  .grid-4 > :nth-child(6) {
+    --reveal-delay: 70ms;
+  }
+
+  .grid-3 > :nth-child(3),
+  .grid-4 > :nth-child(3),
+  .grid-4 > :nth-child(7) {
+    --reveal-delay: 140ms;
+  }
+
+  .grid-4 > :nth-child(4),
+  .grid-4 > :nth-child(8) {
+    --reveal-delay: 210ms;
+  }
+
+  /* The provider strip holds still while it is being read. */
+  .marquee:hover {
+    animation-play-state: paused;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1;
-    transform: none;
+  html {
+    scroll-behavior: auto;
+  }
+
+  .marquee {
+    animation: none;
+  }
+
+  .progress {
     transition: none;
   }
 }
