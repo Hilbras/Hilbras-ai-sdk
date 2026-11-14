@@ -1,9 +1,13 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.7.0-blue" alt="version">
+  <img src="./brand/logo.svg" alt="@hilbras/sdk" width="96" height="96">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-3.8.1-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/types-strict-blueviolet" alt="types">
-  <img src="https://img.shields.io/badge/tests-2070%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-2078%20passing-brightgreen" alt="tests">
   <img src="https://img.shields.io/badge/runtime%20deps-zero-brightgreen" alt="zero deps">
 </p>
 
