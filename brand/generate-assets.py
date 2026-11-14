@@ -5,8 +5,10 @@ The mark is pure geometry — no text — so it rasterises exactly at any size. 
 
 Run from the repository root:  python3 brand/generate-assets.py
 
-The landing page's own icons are copied from here into `landing/assets/` by the same
-run, so the page stays deployable as a self-contained folder.
+The landing page's own icons are copied from here into `landing/public/` by the same
+run. That is Astro's static folder: files there are served as they are, without being
+processed, so the icons ship byte-for-byte and the page stays deployable as a
+self-contained folder.
 
 Note: `og-image.png` deliberately has no wordmark text. The brand face is Geist, which
 is a webfont and is not available to this script; rendering the wordmark in a
@@ -83,16 +85,18 @@ def main() -> None:
     hairline.rectangle([450, 470, 750, 472], fill="#7a6633")
     card.save(brand / "og-image.png")
 
-    # The landing page is deployed as a folder, so it carries its own copy of the icons.
-    assets = root / "landing" / "assets"
+    # The landing page deploys as a folder, so it carries its own copy of the
+    # icons. `public/` is Astro's static directory: served as-is, unprocessed.
+    assets = root / "landing" / "public"
     assets.mkdir(parents=True, exist_ok=True)
     draw_mark(192).save(assets / "icon-192.png")
     draw_mark(512).save(assets / "icon-512.png")
+    draw_mark(512, rounded=False, mark_scale=0.78).save(assets / "icon-maskable-512.png")
     draw_mark(180).save(assets / "apple-touch-icon.png")
     draw_mark(32).save(assets / "favicon-32.png")
     card.save(assets / "og-image.png")
 
-    print(f"wrote {len(list(brand.glob('*.png')))} PNGs to brand/ and the landing page icons to landing/assets/")
+    print(f"wrote {len(list(brand.glob('*.png')))} PNGs to brand/ and the landing page assets to landing/public/")
 
 
 if __name__ == "__main__":

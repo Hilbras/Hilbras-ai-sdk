@@ -1,0 +1,27 @@
+{
+  "name": "@hilbras/sdk-landing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The @hilbras/sdk marketing page. Not published; the SDK itself ships from the repository root.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "check:facts": "node scripts/check-facts.mjs"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.5",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "astro": "^7.4.12"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.23.4"
+  }
+}

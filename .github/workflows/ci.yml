@@ -104,3 +104,26 @@ jobs:
       - run: npm ci
       - run: npm run test:coverage
 
+  landing:
+    # The marketing page is a separate Astro package. It is not published, but it
+    # deploys on every push to main, so it gets the same treatment as the library:
+    # if it cannot build, or if the numbers it prints have drifted from the
+    # repository, CI says so instead of the site quietly going wrong.
+    name: landing page build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+      - run: npm ci
+        working-directory: landing
+      - run: npm run check:facts
+        working-directory: landing
+      - run: npm run check
+        working-directory: landing
+      - run: npm run build
+        working-directory: landing
+
