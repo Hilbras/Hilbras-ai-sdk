@@ -1,0 +1,23 @@
+---
+/**
+ * The check mark. Used twelve times across the trust chips and the capability
+ * grid, which is why it is a component rather than twelve copies of the same
+ * nine attributes.
+ */
+interface Props {
+  size?: number;
+}
+
+const { size = 16 } = Astro.props;
+---
+
+<svg
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2.5"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>

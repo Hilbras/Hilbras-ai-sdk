@@ -1,2 +1,7 @@
+# Written by the Vercel CLI on `vercel link`, and kept out of the repository on
+# purpose — .vercel holds the project id, .env.local holds a local OIDC token.
 .vercel
 .env*
+node_modules/
+dist/
+.astro/

@@ -1,0 +1,27 @@
+---
+interface Props {
+  size?: number;
+}
+
+const { size = 28 } = Astro.props;
+---
+
+<!--
+  The mark is pure geometry on its own ink tile, so it keeps the fixed brand
+  golds rather than the theme tokens — it reads the same on either theme, which
+  is the point of a tile.
+-->
+<svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+  <rect width="64" height="64" rx="16" fill="#0c0b09"></rect>
+  <polygon points="32,5 54,18.5 45,24.5 32,17" fill="#e2bd52"></polygon>
+  <polygon points="54,18.5 54,45.5 45,39.5 45,24.5" fill="#f3d789"></polygon>
+  <polygon points="54,45.5 32,59 32,47 45,39.5" fill="#e2bd52"></polygon>
+  <polygon points="32,59 10,45.5 19,39.5 32,47" fill="#f3d789"></polygon>
+  <polygon points="10,45.5 10,18.5 19,24.5 19,39.5" fill="#e2bd52"></polygon>
+  <polygon points="10,18.5 32,5 32,17 19,24.5" fill="#f3d789"></polygon>
+  <polygon points="24,23 40,23 40,27 24,27" fill="#f3d789"></polygon>
+  <polygon points="24,27 28,27 28,30 24,30" fill="#f3d789"></polygon>
+  <polygon points="24,30 40,30 40,34 24,34" fill="#f3d789"></polygon>
+  <polygon points="36,34 40,34 40,37 36,37" fill="#f3d789"></polygon>
+  <polygon points="24,37 40,37 40,41 24,41" fill="#f3d789"></polygon>
+</svg>

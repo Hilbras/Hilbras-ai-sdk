@@ -1,0 +1,148 @@
+---
+// Fonts are self-hosted through Fontsource, so no third-party origin sits in the
+// critical path. The stylesheet declares five subsets, each with its own
+// unicode-range; the browser downloads only the one it needs.
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+import '../styles/global.css';
+
+import geistLatin from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
+
+import { site } from '../data/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title = site.title, description = site.description } = Astro.props;
+
+/*
+ * Absolute URLs, derived from `site` in astro.config.mjs. Both of these were
+ * wrong before the move to a build step: the canonical pointed at a GitHub Pages
+ * address that does not exist, and og:image was a relative path, which most
+ * social scrapers refuse to resolve.
+ */
+const canonical = new URL(Astro.url.pathname, site.url).href;
+const socialImage = new URL('/og-image.png', site.url).href;
+
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${site.url}/#organization`,
+      name: site.brand,
+      url: site.organization,
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${site.url}/#website`,
+      url: site.url,
+      name: site.product,
+      description: site.description,
+      inLanguage: 'en',
+      publisher: { '@id': `${site.url}/#organization` },
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': `${site.url}/#software`,
+      name: site.name,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Node.js 18+, Bun, Deno',
+      description: site.description,
+      url: site.url,
+      softwareVersion: site.version,
+      programmingLanguage: 'TypeScript',
+      codeRepository: site.repository,
+      installUrl: site.npm,
+      license: site.licenseUrl,
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      publisher: { '@id': `${site.url}/#organization` },
+    },
+  ],
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--
+      The largest text on the page is set in Geist, so the file is announced
+      before the stylesheet that references it has been parsed. Discovered only
+      through the CSS, it arrives late and paints late with it.
+    -->
+    <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin="anonymous" />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <meta name="author" content={site.brand} />
+
+    <!-- One per scheme, so the browser chrome matches the page it is framing. -->
+    <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c0b09" media="(prefers-color-scheme: dark)" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={site.product} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`The ${site.name} logo`} />
+    <meta property="og:locale" content="en" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content={`The ${site.name} logo`} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+
+    <script is:inline>
+      (function () {
+        // Runs before the first paint, for two reasons: the reveal state must
+        // never flash visible-then-hidden, and the theme must never flash in the
+        // wrong scheme. `is:inline` keeps this out of the bundle on purpose —
+        // the whole point is that it has run before any other script does.
+        document.documentElement.classList.add('js');
+        try {
+          var stored = localStorage.getItem('hilbras-sdk-theme');
+          document.documentElement.dataset.theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+        } catch (error) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <slot />
+
+    <script>
+      import '../scripts/interactions';
+    </script>
+  </body>
+</html>

@@ -53,8 +53,11 @@
 }
 
 :root {
-  --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Fontsource registers its variable families with a ` Variable` suffix. The
+     files are self-hosted, so there is no third-party font origin in the
+     critical path — see the imports in src/layouts/Base.astro. */
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
   --motion-fast: 140ms;
   --motion-base: 220ms;
   --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -689,6 +692,9 @@ section.band {
   align-items: center;
   gap: 40px;
   animation: marquee 34s linear infinite;
+  /* Starts paused. `interactions.ts` starts it while the strip is on screen —
+     see the gating note in the motion section. */
+  animation-play-state: paused;
 }
 
 .marquee span {
@@ -790,14 +796,14 @@ section.band {
 }
 
 @keyframes breathe {
+  /* Opacity only. A `scale` here would re-rasterise the whole 620px gradient
+     layer every frame, which is what made this expensive on a throttled phone. */
   0%,
   100% {
-    opacity: 0.55;
-    transform: scale(1);
+    opacity: 0.5;
   }
   50% {
-    opacity: 0.9;
-    transform: scale(1.08);
+    opacity: 0.85;
   }
 }
 
@@ -894,21 +900,31 @@ section.band {
     animation-delay: 430ms;
   }
 
-  /* The wash behind the hero breathes. Opacity and transform only, both
-     composited, so this does not repaint a 620px band every frame. */
+  /*
+   * Everything below runs forever, so each starts paused and `interactions.ts`
+   * adds `.in-view` only while the element is on screen. Lighthouse measured 3.0s
+   * of blocking on a throttled phone with these running unconditionally — a
+   * phone should not spend battery animating a marquee nobody is looking at.
+   * `.marquee` carries the same default in the strip's own rule. With scripting
+   * off the page simply holds still, which is why paused is the default rather
+   * than running.
+   */
   .hero-glow {
     animation: breathe 11s ease-in-out infinite;
+    animation-play-state: paused;
   }
 
   /* A slow heartbeat on the eyebrow dot. */
   .eyebrow-dot {
     animation: pulse 2.8s ease-in-out infinite;
+    animation-play-state: paused;
   }
 
   /* The gradient sweeps across the headline. */
   .gold-text {
     background-size: 240% 100%;
     animation: shimmer 8s linear infinite;
+    animation-play-state: paused;
   }
 
   /* A caret waiting at the end of the hero snippet. */
@@ -921,6 +937,14 @@ section.band {
     background: #f3d789;
     vertical-align: -2px;
     animation: blink 1.1s steps(1, end) infinite;
+    animation-play-state: paused;
+  }
+
+  .hero-glow.in-view,
+  .eyebrow-dot.in-view,
+  .gold-text.in-view,
+  .hero-window.in-view pre::after {
+    animation-play-state: running;
   }
 
   /* Light sweeping across the primary button. */
@@ -970,7 +994,12 @@ section.band {
     --reveal-delay: 210ms;
   }
 
-  /* The provider strip holds still while it is being read. */
+  /* Reading the strip holds it still. Declared after `.marquee.in-view` on
+     purpose — same specificity, so source order is what decides. */
+  .marquee.in-view {
+    animation-play-state: running;
+  }
+
   .marquee:hover {
     animation-play-state: paused;
   }

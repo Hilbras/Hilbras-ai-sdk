@@ -1,0 +1,18 @@
+---
+/**
+ * The centred heading block used by three sections: an eyebrow, a title, and an
+ * optional lede passed as children so it can carry inline `<code>`.
+ */
+interface Props {
+  eyebrow: string;
+  title: string;
+}
+
+const { eyebrow, title } = Astro.props;
+---
+
+<div class="section-head reveal">
+  <span class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>{eyebrow}</span>
+  <h2 class="section-title">{title}</h2>
+  <slot />
+</div>
