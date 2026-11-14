@@ -23,6 +23,18 @@ brand/
   generate-assets.py  regenerates every PNG above
 ```
 
+## Motion
+
+All of it sits behind `prefers-reduced-motion: no-preference`, and the entrance
+animations fill `backwards`, so the resting state is the visible one: if an
+animation never runs, the content is simply there. The scroll-reveal state is
+gated on a `.js` class set before first paint, so the page also reads correctly
+with scripting off.
+
+The hover lift moves cards with `translate` rather than `transform`, because the
+reveal animation owns `transform` and a single shorthand would have the two
+overwriting each other's transition.
+
 ## Preview
 
 ```bash
